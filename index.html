@@ -4,16 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DMC Inventory System</title>
+
   <style>
     :root {
       --bg: #11100d;
+      --sidebar: #080704;
       --surface: #17140f;
       --surface-2: #201b13;
       --border: #3b2f1f;
       --gold: #d6a84f;
+      --gold-soft: rgba(214, 168, 79, 0.14);
       --text: #f5efe3;
       --text-muted: #c9bda8;
-      --text-soft: #a99b86;
+      --text-soft: #928879;
     }
 
     * {
@@ -33,14 +36,17 @@
     }
 
     .sidebar {
-      width: 260px;
-      background: #0f0d09;
+      width: 300px;
+      min-height: 100vh;
+      background: var(--sidebar);
       border-right: 1px solid var(--border);
       padding: 24px 18px;
+      overflow-y: auto;
     }
 
     .brand {
-      margin-bottom: 32px;
+      margin-bottom: 28px;
+      padding: 0 12px;
     }
 
     .brand small {
@@ -54,51 +60,98 @@
     .brand h1 {
       font-size: 22px;
       margin: 10px 0 0;
+      color: var(--text);
     }
 
     .nav-section {
-      margin-bottom: 24px;
+      margin-bottom: 26px;
     }
 
     .nav-title {
-      color: var(--text-soft);
+      color: #5f574c;
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: 10px;
+      letter-spacing: 0.35em;
+      margin: 0 0 12px 14px;
     }
 
     .nav-link {
-      display: block;
-      padding: 11px 12px;
-      margin-bottom: 6px;
-      border-radius: 12px;
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 14px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 14px;
+      margin-bottom: 4px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text-soft);
+      text-align: left;
+      font-size: 16px;
+      cursor: pointer;
     }
 
-    .nav-link.active,
     .nav-link:hover {
-      background: var(--surface-2);
+      background: rgba(214, 168, 79, 0.08);
       color: var(--text);
+    }
+
+    .nav-link.active {
+      background: linear-gradient(90deg, rgba(214, 168, 79, 0.17), rgba(214, 168, 79, 0.04));
+      color: var(--gold);
+    }
+
+    .nav-icon {
+      width: 24px;
+      text-align: center;
+      font-size: 18px;
+      opacity: 0.95;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--gold);
+      color: #11100d;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
     }
 
     .main {
       flex: 1;
       padding: 28px;
+      overflow-x: hidden;
     }
 
     .topbar {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
+      gap: 16px;
       margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      font-size: 12px;
+      font-weight: bold;
+      margin: 0 0 8px;
     }
 
     .topbar h2 {
       margin: 0;
-      font-size: 28px;
+      font-size: 34px;
+      color: white;
+    }
+
+    .topbar p {
+      color: var(--text-muted);
+      margin: 8px 0 0;
+      max-width: 720px;
+      line-height: 1.6;
     }
 
     .status-pill {
@@ -108,6 +161,7 @@
       border-radius: 999px;
       font-size: 13px;
       background: var(--surface);
+      white-space: nowrap;
     }
 
     .grid {
@@ -142,11 +196,13 @@
       border: 1px solid var(--border);
       border-radius: 20px;
       padding: 22px;
+      margin-bottom: 20px;
     }
 
     .panel h3 {
       margin-top: 0;
       margin-bottom: 14px;
+      color: white;
     }
 
     table {
@@ -178,19 +234,46 @@
       display: inline-block;
       padding: 5px 9px;
       border-radius: 999px;
-      background: rgba(214, 168, 79, 0.12);
+      background: var(--gold-soft);
       color: var(--gold);
       font-size: 12px;
       font-weight: bold;
     }
 
-    @media (max-width: 900px) {
+    .coming-soon {
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: radial-gradient(circle at top, rgba(214, 168, 79, 0.08), transparent 35%), var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+    }
+
+    .coming-soon h3 {
+      font-size: 30px;
+      margin: 0 0 12px;
+      color: white;
+    }
+
+    .coming-soon p {
+      color: var(--text-muted);
+      line-height: 1.7;
+      margin: 0 auto;
+      max-width: 620px;
+    }
+
+    @media (max-width: 980px) {
       .app {
         flex-direction: column;
       }
 
       .sidebar {
         width: 100%;
+        min-height: auto;
+        max-height: 420px;
       }
 
       .grid {
@@ -198,19 +281,22 @@
       }
     }
 
-    @media (max-width: 600px) {
+    @media (max-width: 620px) {
+      .main {
+        padding: 20px;
+      }
+
       .grid {
         grid-template-columns: 1fr;
       }
 
       .topbar {
-        align-items: flex-start;
         flex-direction: column;
-        gap: 12px;
       }
     }
   </style>
 </head>
+
 <body>
   <div class="app">
     <aside class="sidebar">
@@ -221,28 +307,102 @@
 
       <nav>
         <div class="nav-section">
-          <div class="nav-title">Main</div>
-          <a class="nav-link active" href="#">Dashboard</a>
+          <div class="nav-title">Overview</div>
+          <button class="nav-link active" data-page="dashboard">
+            <span class="nav-icon">▦</span>
+            <span>Dashboard</span>
+            <span class="nav-badge">3</span>
+          </button>
+          <button class="nav-link" data-page="activity-log">
+            <span class="nav-icon">◷</span>
+            <span>Activity Log</span>
+          </button>
+          <button class="nav-link" data-page="reports">
+            <span class="nav-icon">≡</span>
+            <span>Reports</span>
+          </button>
         </div>
 
         <div class="nav-section">
-          <div class="nav-title">Inventory</div>
-          <a class="nav-link" href="#">Master List</a>
-          <a class="nav-link" href="#">Commissary Stock</a>
-          <a class="nav-link" href="#">Branch Stock</a>
-          <a class="nav-link" href="#">Ledger</a>
+          <div class="nav-title">Commissary</div>
+          <button class="nav-link" data-page="master-list">
+            <span class="nav-icon">▥</span>
+            <span>Master List</span>
+          </button>
+          <button class="nav-link" data-page="commissary-stock">
+            <span class="nav-icon">▧</span>
+            <span>Commissary Stock</span>
+          </button>
+          <button class="nav-link" data-page="commissary-log-transaction">
+            <span class="nav-icon">↕</span>
+            <span>Log Transaction</span>
+            <span class="nav-badge">New</span>
+          </button>
+          <button class="nav-link" data-page="production">
+            <span class="nav-icon">⌁</span>
+            <span>Production</span>
+          </button>
+          <button class="nav-link" data-page="branch-orders">
+            <span class="nav-icon">▭</span>
+            <span>Branch Orders</span>
+          </button>
+          <button class="nav-link" data-page="purchase-orders">
+            <span class="nav-icon">▤</span>
+            <span>Purchase Orders</span>
+          </button>
+          <button class="nav-link" data-page="shopping-list">
+            <span class="nav-icon">☰</span>
+            <span>Shopping List</span>
+          </button>
+          <button class="nav-link" data-page="delivery-log">
+            <span class="nav-icon">▔</span>
+            <span>Delivery Log</span>
+          </button>
         </div>
 
         <div class="nav-section">
-          <div class="nav-title">Operations</div>
-          <a class="nav-link" href="#">Place Order</a>
-          <a class="nav-link" href="#">Incoming Orders</a>
+          <div class="nav-title">DMC-Iriga Branch</div>
+          <button class="nav-link" data-page="branch-dashboard">
+            <span class="nav-icon">▦</span>
+            <span>Branch Dashboard</span>
+          </button>
+          <button class="nav-link" data-page="branch-stock">
+            <span class="nav-icon">▧</span>
+            <span>Branch Stock</span>
+          </button>
+          <button class="nav-link" data-page="place-order">
+            <span class="nav-icon">＋</span>
+            <span>Place Order</span>
+          </button>
+          <button class="nav-link" data-page="incoming-deliveries">
+            <span class="nav-icon">▔</span>
+            <span>Incoming Deliveries</span>
+          </button>
+          <button class="nav-link" data-page="branch-log-transaction">
+            <span class="nav-icon">↕</span>
+            <span>Log Transaction</span>
+            <span class="nav-badge">New</span>
+          </button>
+          <button class="nav-link" data-page="order-history">
+            <span class="nav-icon">◷</span>
+            <span>Order History</span>
+          </button>
         </div>
 
         <div class="nav-section">
-          <div class="nav-title">Admin</div>
-          <a class="nav-link" href="#">Staff</a>
-          <a class="nav-link" href="#">Settings</a>
+          <div class="nav-title">System</div>
+          <button class="nav-link" data-page="staff-access">
+            <span class="nav-icon">♟</span>
+            <span>Staff & Access</span>
+          </button>
+          <button class="nav-link" data-page="settings">
+            <span class="nav-icon">●</span>
+            <span>Settings</span>
+          </button>
+          <button class="nav-link" data-page="ledger">
+            <span class="nav-icon">▤</span>
+            <span>Ledger</span>
+          </button>
         </div>
       </nav>
     </aside>
@@ -250,80 +410,244 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <h2>Dashboard</h2>
-          <p style="color: var(--text-muted); margin: 8px 0 0;">
-            Static prototype for the DMC Inventory System.
+          <p class="eyebrow" id="page-eyebrow">Overview</p>
+          <h2 id="page-title">Dashboard</h2>
+          <p id="page-description">
+            Static prototype for the DMC Inventory System. The full sidebar is now in place.
           </p>
         </div>
 
         <span class="status-pill">GitHub + Render Static Site</span>
       </header>
 
-      <section class="grid">
-        <div class="card">
-          <p>Master Items</p>
-          <strong>24</strong>
-        </div>
-
-        <div class="card">
-          <p>Locations</p>
-          <strong>5</strong>
-        </div>
-
-        <div class="card">
-          <p>Pending Orders</p>
-          <strong>3</strong>
-        </div>
-
-        <div class="card">
-          <p>Ledger Entries</p>
-          <strong>12</strong>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h3>Recent Stock Movements</h3>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Item</th>
-              <th>Movement</th>
-              <th>Location</th>
-              <th>Qty</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Today</td>
-              <td>Coffee Beans</td>
-              <td>Received</td>
-              <td>Commissary</td>
-              <td>20 bags</td>
-              <td><span class="badge">Posted</span></td>
-            </tr>
-            <tr>
-              <td>Today</td>
-              <td>Fresh Milk</td>
-              <td>Transfer</td>
-              <td>BAR</td>
-              <td>6 gallons</td>
-              <td><span class="badge">Posted</span></td>
-            </tr>
-            <tr>
-              <td>Yesterday</td>
-              <td>Paper Cups 12oz</td>
-              <td>Usage</td>
-              <td>Branch 1</td>
-              <td>150 pcs</td>
-              <td><span class="badge">Reviewed</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <div id="page-content"></div>
     </main>
   </div>
+
+  <script>
+    const pages = {
+      "dashboard": {
+        eyebrow: "Overview",
+        title: "Dashboard",
+        description: "Static prototype for the DMC Inventory System. The full sidebar is now in place.",
+        content: `
+          <section class="grid">
+            <div class="card">
+              <p>Master Items</p>
+              <strong>24</strong>
+            </div>
+
+            <div class="card">
+              <p>Locations</p>
+              <strong>5</strong>
+            </div>
+
+            <div class="card">
+              <p>Pending Orders</p>
+              <strong>3</strong>
+            </div>
+
+            <div class="card">
+              <p>Ledger Entries</p>
+              <strong>12</strong>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h3>Recent Stock Movements</h3>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Item</th>
+                  <th>Movement</th>
+                  <th>Location</th>
+                  <th>Qty</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Today</td>
+                  <td>Coffee Beans</td>
+                  <td>Received</td>
+                  <td>Commissary</td>
+                  <td>20 bags</td>
+                  <td><span class="badge">Posted</span></td>
+                </tr>
+                <tr>
+                  <td>Today</td>
+                  <td>Fresh Milk</td>
+                  <td>Transfer</td>
+                  <td>BAR</td>
+                  <td>6 gallons</td>
+                  <td><span class="badge">Posted</span></td>
+                </tr>
+                <tr>
+                  <td>Yesterday</td>
+                  <td>Paper Cups 12oz</td>
+                  <td>Usage</td>
+                  <td>Branch</td>
+                  <td>150 pcs</td>
+                  <td><span class="badge">Reviewed</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        `
+      },
+
+      "activity-log": {
+        eyebrow: "Overview",
+        title: "Activity Log",
+        description: "Tracks recent user and inventory activity across the system."
+      },
+
+      "reports": {
+        eyebrow: "Overview",
+        title: "Reports",
+        description: "Future home for daily summaries, monthly audits, stock value, and usage reports."
+      },
+
+      "master-list": {
+        eyebrow: "Commissary",
+        title: "Master List",
+        description: "The main item catalog for ingredients, packaging, cleaning supplies, and other inventory items."
+      },
+
+      "commissary-stock": {
+        eyebrow: "Commissary",
+        title: "Commissary Stock",
+        description: "Tracks available stock inside the commissary storage area."
+      },
+
+      "commissary-log-transaction": {
+        eyebrow: "Commissary",
+        title: "Log Transaction",
+        description: "Records commissary receiving, usage, waste, transfers, and adjustments."
+      },
+
+      "production": {
+        eyebrow: "Commissary",
+        title: "Production",
+        description: "Future area for commissary production batches, prep output, and internal usage."
+      },
+
+      "branch-orders": {
+        eyebrow: "Commissary",
+        title: "Branch Orders",
+        description: "Shows branch requests waiting for commissary review, preparation, and fulfillment."
+      },
+
+      "purchase-orders": {
+        eyebrow: "Commissary",
+        title: "Purchase Orders",
+        description: "Tracks supplier purchase orders and external purchasing needs."
+      },
+
+      "shopping-list": {
+        eyebrow: "Commissary",
+        title: "Shopping List",
+        description: "A practical list of items to buy based on low stock, branch needs, and manual requests."
+      },
+
+      "delivery-log": {
+        eyebrow: "Commissary",
+        title: "Delivery Log",
+        description: "Tracks deliveries sent from commissary to branches or received from suppliers."
+      },
+
+      "branch-dashboard": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Branch Dashboard",
+        description: "Overview of one branch location, including stock status, pending orders, and incoming deliveries."
+      },
+
+      "branch-stock": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Branch Stock",
+        description: "Tracks current stock available at the branch level."
+      },
+
+      "place-order": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Place Order",
+        description: "Allows a branch to request stock from commissary."
+      },
+
+      "incoming-deliveries": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Incoming Deliveries",
+        description: "Shows deliveries expected or received by the branch."
+      },
+
+      "branch-log-transaction": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Log Transaction",
+        description: "Records branch usage, waste, adjustments, receiving, and transfers."
+      },
+
+      "order-history": {
+        eyebrow: "DMC-Iriga Branch",
+        title: "Order History",
+        description: "Shows previous branch orders and their status."
+      },
+
+      "staff-access": {
+        eyebrow: "System",
+        title: "Staff & Access",
+        description: "Future area for staff profiles, roles, access level, and user permissions."
+      },
+
+      "settings": {
+        eyebrow: "System",
+        title: "Settings",
+        description: "Future area for company settings, locations, categories, units, and system preferences."
+      },
+
+      "ledger": {
+        eyebrow: "System",
+        title: "Ledger",
+        description: "Complete inventory movement history across commissary and branches."
+      }
+    };
+
+    function renderPage(pageId) {
+      const page = pages[pageId];
+
+      document.getElementById("page-eyebrow").textContent = page.eyebrow;
+      document.getElementById("page-title").textContent = page.title;
+      document.getElementById("page-description").textContent = page.description;
+
+      document.getElementById("page-content").innerHTML =
+        page.content ||
+        `
+          <section class="coming-soon">
+            <div>
+              <h3>${page.title}</h3>
+              <p>
+                This section is now connected in the sidebar. We will build its
+                table, forms, buttons, and workflow in a later step.
+              </p>
+            </div>
+          </section>
+        `;
+
+      document.querySelectorAll(".nav-link").forEach((link) => {
+        link.classList.remove("active");
+      });
+
+      document.querySelector(`[data-page="${pageId}"]`).classList.add("active");
+    }
+
+    document.querySelectorAll(".nav-link").forEach((link) => {
+      link.addEventListener("click", () => {
+        renderPage(link.dataset.page);
+      });
+    });
+
+    renderPage("dashboard");
+  </script>
 </body>
 </html>
