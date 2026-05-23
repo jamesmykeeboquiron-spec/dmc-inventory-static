@@ -97,7 +97,8 @@ function renderOperatingAreaOptions(settings) {
 function renderDepartmentOptions(settings) {
   return settings.departments
     .map(
-      (department) => `<option value="${department.id}">${department.name}</option>`
+      (department) =>
+        `<option value="${department.id}">${department.name}</option>`
     )
     .join("");
 }
@@ -131,14 +132,94 @@ function getSettingsContent() {
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h3>Dropdown Settings</h3>
+          <h3>Settings Dashboard</h3>
           <p>
-            Manage the options that will appear in Master List forms. These are
-            saved locally in this browser while we are still prototyping.
+            Manage the dropdown choices and setup lists that will power the
+            inventory forms. For now, System Setup is active and saves locally
+            in this browser.
           </p>
         </div>
 
         <button class="ghost-button">Prototype Settings</button>
+      </div>
+
+      <div class="settings-category-grid">
+        <article class="settings-category-card active">
+          <div class="settings-category-icon">⚙</div>
+          <div>
+            <h4>System Setup</h4>
+            <p>Operating Areas, Departments, Sections, Units, and Item Categories.</p>
+          </div>
+          <span class="badge">Active</span>
+        </article>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">▧</div>
+          <div>
+            <h4>Inventory Setup</h4>
+            <p>Locations, Movement Types, Stock Statuses, and Order Statuses.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">♟</div>
+          <div>
+            <h4>Admin Setup</h4>
+            <p>Staff Roles, Access Levels, and Permissions.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">⌁</div>
+          <div>
+            <h4>Future Setup</h4>
+            <p>Suppliers, Audit Rules, Report Settings, and future controls.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>System Setup</h3>
+          <p>
+            These values will become dropdown options in the Master List Add Item
+            form. The relationship is Operating Area → Department → Section.
+          </p>
+        </div>
+
+        <button class="ghost-button">Dropdown Source</button>
+      </div>
+
+      <div class="settings-subsection-grid">
+        <article class="settings-subsection-card active">
+          <h4>Operating Areas</h4>
+          <p>Top-level inventory area such as Branch/Station or Commissary.</p>
+        </article>
+
+        <article class="settings-subsection-card active">
+          <h4>Departments</h4>
+          <p>Departments such as Bar, Kitchen, Dining, and Commissary.</p>
+        </article>
+
+        <article class="settings-subsection-card active">
+          <h4>Sections</h4>
+          <p>Groups under each department, such as Coffee, Milk, or Cups & Lids.</p>
+        </article>
+
+        <article class="settings-subsection-card disabled">
+          <h4>Units</h4>
+          <p>Coming later: kg, liters, pcs, pack, case, box, and more.</p>
+        </article>
+
+        <article class="settings-subsection-card disabled">
+          <h4>Item Categories</h4>
+          <p>Coming later: Ingredient, Packaging, Cleaning, Supply, and more.</p>
+        </article>
       </div>
     </section>
 
