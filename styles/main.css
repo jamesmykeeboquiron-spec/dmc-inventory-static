@@ -1569,3 +1569,16 @@ main,
   position: relative;
   z-index: 1;
 }
+/* Reports date filter sizing */
+#report-start-date,
+#report-end-date {
+  max-width: 160px;
+}
+
+#report-department-filter {
+  max-width: 180px;
+}
+
+#reset-report-filters {
+  width: fit-content;
+}
