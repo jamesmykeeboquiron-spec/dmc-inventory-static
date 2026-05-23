@@ -401,16 +401,47 @@ function renderBranchDailyInputRows() {
 function getBranchDailyInputSummary() {
   const inputData = getStoredBranchDailyInput();
   const rows = Object.values(inputData);
+  const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
 
   const rowsWithInput = rows.filter((row) => getDailyReviewStatus(row) !== "");
   const readyRows = rows.filter((row) => getDailyReviewStatus(row) === "READY");
   const checkRows = rows.filter((row) => getDailyReviewStatus(row) === "CHECK");
 
+  const movementTotals = ledgerEntries.reduce((totals, entry) => {
+    totals[entry.movementType] = (totals[entry.movementType] || 0) + 1;
+    return totals;
+  }, {});
+
   return {
     rowsWithInput: rowsWithInput.length,
     readyRows: readyRows.length,
-    checkRows: checkRows.length
+    checkRows: checkRows.length,
+    ledgerEntryCount: ledgerEntries.length,
+    movementTotals
   };
+}
+
+function renderDailyInputMovementSummary(summary) {
+  const movementTypes = [
+    "Received",
+    "Transfer In",
+    "Usage",
+    "Waste",
+    "Transfer Out",
+    "Adjustment"
+  ];
+
+  return movementTypes
+    .map((movementType) => {
+      const count = summary.movementTotals[movementType] || 0;
+
+      return `
+        <span class="ledger-batch-pill">
+          ${movementType}: ${count}
+        </span>
+      `;
+    })
+    .join("");
 }
 
 function getBranchLogTransactionContent() {
@@ -488,6 +519,41 @@ function getBranchLogTransactionContent() {
         </span>
       </div>
 
+      <div class="review-summary-box">
+  <div>
+    <h4>Review Summary Before Submit</h4>
+    <p>
+      This shows what will be submitted to the Ledger for the selected department.
+    </p>
+  </div>
+
+  <div class="review-summary-grid">
+    <div>
+      <span>Rows With Input</span>
+      <strong>${summary.rowsWithInput}</strong>
+    </div>
+
+    <div>
+      <span>Ready Rows</span>
+      <strong>${summary.readyRows}</strong>
+    </div>
+
+    <div>
+      <span>Needs Check</span>
+      <strong>${summary.checkRows}</strong>
+    </div>
+
+    <div>
+      <span>Ledger Entries</span>
+      <strong>${summary.ledgerEntryCount}</strong>
+    </div>
+  </div>
+
+  <div class="ledger-batch-totals">
+    ${renderDailyInputMovementSummary(summary)}
+  </div>
+</div>
+
       <div class="table-wrap">
         <table class="daily-input-table">
           <thead>
@@ -555,6 +621,13 @@ function setupBranchLogTransactionEvents() {
     submitButton.addEventListener("click", () => {
       const newLedgerEntries = buildLedgerEntriesFromBranchDailyInput();
       const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+
+          const summary = getBranchDailyInputSummary();
+
+    if (summary.checkRows > 0) {
+      alert("Some rows need checking before submission.");
+      return;
+    }
 
       if (newLedgerEntries.length === 0) {
         alert(`No ${selectedDepartment} daily input entries to submit.`);
