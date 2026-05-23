@@ -968,3 +968,17 @@ td {
   width: 180px;
   background: rgba(255, 220, 120, 0.1);
 }
+
+.audit-count-input {
+  width: 100px;
+  border: 1px solid var(--border);
+  background: rgba(120, 180, 255, 0.1);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.audit-count-input:focus {
+  outline: 1px solid var(--gold);
+}
