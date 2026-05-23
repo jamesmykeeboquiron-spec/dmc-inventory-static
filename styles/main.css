@@ -1076,3 +1076,61 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.review-summary-box {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.review-summary-box h4 {
+  margin: 0 0 6px;
+  color: white;
+  font-size: 18px;
+}
+
+.review-summary-box p {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.review-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.review-summary-grid div {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.review-summary-grid span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.review-summary-grid strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+@media (max-width: 900px) {
+  .review-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .review-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
