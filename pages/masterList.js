@@ -3,6 +3,12 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_MASTER_LIST_STORAGE_KEY = "dmc_master_list_items";
 const DMC_SETTINGS_STORAGE_KEY_FOR_MASTER_LIST = "dmc_inventory_settings";
 
+window.DMC_MASTER_LIST_FILTERS = window.DMC_MASTER_LIST_FILTERS || {
+  department: "all",
+  section: "all",
+  search: ""
+};
+
 function getMasterListDefaultItems() {
   return window.DMC_DATA?.masterList?.items || [];
 }
@@ -136,8 +142,88 @@ function updateItemIdPreview() {
   );
 }
 
-function renderMasterListRows() {
+function getFilteredMasterListItems() {
+  const filters = window.DMC_MASTER_LIST_FILTERS;
   const items = getStoredMasterListItems();
+
+  return items.filter((item) => {
+    const matchesDepartment =
+      filters.department === "all" || item.department === filters.department;
+
+    const matchesSection =
+      filters.section === "all" || item.section === filters.section;
+
+    const searchValue = filters.search.toLowerCase().trim();
+
+    const matchesSearch =
+      !searchValue ||
+      String(item.itemId || "").toLowerCase().includes(searchValue) ||
+      String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
+      String(item.operatingArea || "").toLowerCase().includes(searchValue) ||
+      String(item.department || "").toLowerCase().includes(searchValue) ||
+      String(item.section || "").toLowerCase().includes(searchValue) ||
+      String(item.unit || "").toLowerCase().includes(searchValue) ||
+      String(item.notes || "").toLowerCase().includes(searchValue);
+
+    return matchesDepartment && matchesSection && matchesSearch;
+  });
+}
+
+function renderDepartmentFilterOptions(settings) {
+  const currentDepartment = window.DMC_MASTER_LIST_FILTERS.department;
+
+  return `
+    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${settings.departments
+      .map(
+        (department) => `
+          <option value="${department.name}" ${
+          currentDepartment === department.name ? "selected" : ""
+        }>
+            ${department.name}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderSectionFilterOptions(settings) {
+  const filters = window.DMC_MASTER_LIST_FILTERS;
+
+  const selectedDepartment = settings.departments.find(
+    (department) => department.name === filters.department
+  );
+
+  const visibleSections =
+    filters.department === "all" || !selectedDepartment
+      ? settings.sections
+      : settings.sections.filter(
+          (section) => section.departmentId === selectedDepartment.id
+        );
+
+  return `
+    <option value="all" ${filters.section === "all" ? "selected" : ""}>
+      All Sections
+    </option>
+    ${visibleSections
+      .map(
+        (section) => `
+          <option value="${section.name}" ${
+          filters.section === section.name ? "selected" : ""
+        }>
+            ${section.name}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderMasterListRows() {
+  const items = getFilteredMasterListItems();
 
   if (items.length === 0) {
     return `
@@ -170,6 +256,7 @@ function renderMasterListRows() {
 
 function getMasterListContent() {
   const items = getStoredMasterListItems();
+  const filteredItems = getFilteredMasterListItems();
   const settings = getMasterListSettings();
 
   const departmentsCount = settings.departments.length;
@@ -179,8 +266,8 @@ function getMasterListContent() {
   return `
     <section class="grid">
       <div class="card">
-        <p>Total Items</p>
-        <strong>${items.length}</strong>
+        <p>Showing Items</p>
+        <strong>${filteredItems.length}</strong>
       </div>
 
       <div class="card">
@@ -283,6 +370,36 @@ function getMasterListContent() {
         </form>
       </div>
 
+<div class="filter-bar">
+  <label>
+    Department
+    <select id="master-list-department-filter">
+      ${renderDepartmentFilterOptions(settings)}
+    </select>
+  </label>
+
+  <label>
+    Section
+    <select id="master-list-section-filter">
+      ${renderSectionFilterOptions(settings)}
+    </select>
+  </label>
+
+  <label class="filter-search">
+    Search
+    <input
+      id="master-list-search"
+      type="text"
+      placeholder="Search item name, ID, section, unit..."
+      value="${window.DMC_MASTER_LIST_FILTERS.search}"
+    />
+  </label>
+
+  <button class="ghost-button" id="clear-master-list-filters">
+    Clear Filters
+  </button>
+</div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -311,6 +428,10 @@ function getMasterListContent() {
 function updateSectionDropdown() {
   const settings = getMasterListSettings();
   const departmentSelect = document.getElementById("department");
+  const departmentFilter = document.getElementById("master-list-department-filter");
+  const sectionFilter = document.getElementById("master-list-section-filter");
+  const searchInput = document.getElementById("master-list-search");
+  const clearFiltersButton = document.getElementById("clear-master-list-filters");
   const sectionSelect = document.getElementById("section");
 
   if (!departmentSelect || !sectionSelect) {
@@ -358,6 +479,44 @@ function setupMasterListEvents() {
   sectionSelect.addEventListener("change", updateItemIdPreview);
   }
 
+  if (departmentFilter) {
+  departmentFilter.addEventListener("change", () => {
+    window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
+    window.DMC_MASTER_LIST_FILTERS.section = "all";
+    window.DMC_PAGES["master-list"].content = getMasterListContent();
+    renderPage("master-list");
+  });
+}
+
+if (sectionFilter) {
+  sectionFilter.addEventListener("change", () => {
+    window.DMC_MASTER_LIST_FILTERS.section = sectionFilter.value;
+    window.DMC_PAGES["master-list"].content = getMasterListContent();
+    renderPage("master-list");
+  });
+}
+
+if (searchInput) {
+  searchInput.addEventListener("input", () => {
+    window.DMC_MASTER_LIST_FILTERS.search = searchInput.value;
+    window.DMC_PAGES["master-list"].content = getMasterListContent();
+    renderPage("master-list");
+  });
+}
+
+if (clearFiltersButton) {
+  clearFiltersButton.addEventListener("click", () => {
+    window.DMC_MASTER_LIST_FILTERS = {
+      department: "all",
+      section: "all",
+      search: ""
+    };
+
+    window.DMC_PAGES["master-list"].content = getMasterListContent();
+    renderPage("master-list");
+  });
+}
+  
   addItemForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
