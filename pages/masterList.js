@@ -7,6 +7,39 @@ function getMasterListData() {
   };
 }
 
+function getStoredMasterListItems() {
+  const storedItems = localStorage.getItem("dmc_master_list_items");
+
+  if (!storedItems) {
+    return getMasterListData().items;
+  }
+
+  try {
+    return JSON.parse(storedItems);
+  } catch {
+    return getMasterListData().items;
+  }
+}
+
+function saveMasterListItems(items) {
+  localStorage.setItem("dmc_master_list_items", JSON.stringify(items));
+}
+
+function getAllMasterListItems() {
+  return getStoredMasterListItems();
+}
+
+function getDepartmentIcon(departmentId) {
+  const icons = {
+    bar: "☕",
+    kitchen: "🍳",
+    dining: "🍽️",
+    commissary: "📦"
+  };
+
+  return icons[departmentId] || "▥";
+}
+
 function renderDepartmentCards() {
   const { departments } = getMasterListData();
 
@@ -39,20 +72,18 @@ function renderDepartmentCards() {
     .join("");
 }
 
-function getDepartmentIcon(departmentId) {
-  const icons = {
-    bar: "☕",
-    kitchen: "🍳",
-    dining: "🍽️",
-    commissary: "📦"
-  };
-
-  return icons[departmentId] || "▥";
-}
-
 function renderBarMasterListRows() {
-  const { items } = getMasterListData();
-  const barItems = items.filter((item) => item.department === "BAR");
+  const barItems = getAllMasterListItems().filter(
+    (item) => item.department === "BAR"
+  );
+
+  if (barItems.length === 0) {
+    return `
+      <tr>
+        <td colspan="9">No Bar items added yet.</td>
+      </tr>
+    `;
+  }
 
   return barItems
     .map(
@@ -75,12 +106,16 @@ function renderBarMasterListRows() {
     .join("");
 }
 
-window.DMC_PAGES["master-list"] = {
-  eyebrow: "Commissary",
-  title: "Master List",
-  description:
-    "View inventory catalogs by department. Bar is being built first using the official Master List table format.",
-  content: `
+function getMasterListContent() {
+  const barDepartment = getMasterListData().departments.find(
+    (department) => department.id === "bar"
+  );
+
+  const barItems = getAllMasterListItems().filter(
+    (item) => item.department === "BAR"
+  );
+
+  return `
     <section class="grid">
       <div class="card">
         <p>Department Catalogs</p>
@@ -94,12 +129,12 @@ window.DMC_PAGES["master-list"] = {
 
       <div class="card">
         <p>Bar Sections</p>
-        <strong>${getMasterListData().departments.find((department) => department.id === "bar")?.sections.length || 0}</strong>
+        <strong>${barDepartment?.sections.length || 0}</strong>
       </div>
 
       <div class="card">
         <p>Bar Items</p>
-        <strong>${getMasterListData().items.filter((item) => item.department === "BAR").length}</strong>
+        <strong>${barItems.length}</strong>
       </div>
     </section>
 
@@ -127,11 +162,80 @@ window.DMC_PAGES["master-list"] = {
           <h3>Bar Inventory Catalog</h3>
           <p>
             First test department using the official Master List format from the spreadsheet.
-            If this works, we will apply the same format to Kitchen, Dining, and Commissary.
+            Added items are saved locally in this browser for prototype testing.
           </p>
         </div>
 
-        <button class="ghost-button">Official Format</button>
+        <button class="primary-button" id="show-add-item-panel">
+          + Add Item
+        </button>
+      </div>
+
+      <div class="add-item-panel hidden" id="add-item-panel">
+        <h4>Add Bar Item</h4>
+
+        <form id="add-item-form" class="form-grid">
+          <label>
+            Inventory Layer
+            <select id="inventoryLayer" required>
+              <option value="Branch/Station">Branch/Station</option>
+              <option value="Commissary">Commissary</option>
+              <option value="System">System</option>
+            </select>
+          </label>
+
+          <label>
+            Department
+            <select id="department" required>
+              <option value="BAR">BAR</option>
+            </select>
+          </label>
+
+          <label>
+            Section
+            <input id="section" type="text" placeholder="Coffee" required />
+          </label>
+
+          <label>
+            Item ID
+            <input id="itemId" type="text" placeholder="BAR-COF-002" required />
+          </label>
+
+          <label>
+            Official Item Name
+            <input id="officialItemName" type="text" placeholder="Espresso Beans" required />
+          </label>
+
+          <label>
+            Unit
+            <input id="unit" type="text" placeholder="kg, liters, pcs, pack" required />
+          </label>
+
+          <label>
+            Minimum Stock
+            <input id="minimumStock" type="text" placeholder="Optional" />
+          </label>
+
+          <label>
+            Active
+            <select id="active" required>
+              <option value="true">TRUE</option>
+              <option value="false">FALSE</option>
+            </select>
+          </label>
+
+          <label class="form-full">
+            Notes
+            <textarea id="notes" rows="3" placeholder="Optional notes"></textarea>
+          </label>
+
+          <div class="form-actions form-full">
+            <button type="submit" class="primary-button">Save Item</button>
+            <button type="button" class="ghost-button" id="cancel-add-item">
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
 
       <div class="table-wrap">
@@ -156,5 +260,60 @@ window.DMC_PAGES["master-list"] = {
         </table>
       </div>
     </section>
-  `
+  `;
+}
+
+function setupMasterListEvents() {
+  const addItemPanel = document.getElementById("add-item-panel");
+  const showButton = document.getElementById("show-add-item-panel");
+  const cancelButton = document.getElementById("cancel-add-item");
+  const addItemForm = document.getElementById("add-item-form");
+
+  if (!addItemPanel || !showButton || !cancelButton || !addItemForm) {
+    return;
+  }
+
+  showButton.addEventListener("click", () => {
+    addItemPanel.classList.remove("hidden");
+  });
+
+  cancelButton.addEventListener("click", () => {
+    addItemPanel.classList.add("hidden");
+    addItemForm.reset();
+  });
+
+  addItemForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const newItem = {
+      inventoryLayer: document.getElementById("inventoryLayer").value,
+      department: document.getElementById("department").value,
+      section: document.getElementById("section").value.trim(),
+      itemId: document.getElementById("itemId").value.trim(),
+      officialItemName: document
+        .getElementById("officialItemName")
+        .value.trim(),
+      unit: document.getElementById("unit").value.trim(),
+      minimumStock: document.getElementById("minimumStock").value.trim(),
+      active: document.getElementById("active").value === "true",
+      notes: document.getElementById("notes").value.trim()
+    };
+
+    const currentItems = getAllMasterListItems();
+    const updatedItems = [...currentItems, newItem];
+
+    saveMasterListItems(updatedItems);
+
+    window.DMC_PAGES["master-list"].content = getMasterListContent();
+    renderPage("master-list");
+  });
+}
+
+window.DMC_PAGES["master-list"] = {
+  eyebrow: "Commissary",
+  title: "Master List",
+  description:
+    "View inventory catalogs by department. Bar is being built first using the official Master List table format.",
+  content: getMasterListContent(),
+  afterRender: setupMasterListEvents
 };
