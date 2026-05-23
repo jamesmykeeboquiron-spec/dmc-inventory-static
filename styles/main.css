@@ -789,3 +789,67 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.clickable-card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.settings-manager-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.manager-tab {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.manager-tab.active {
+  background: var(--gold);
+  color: #11100d;
+  border-color: var(--gold);
+}
+
+.manager-tab.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tiny-button {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--gold);
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.tiny-button.danger {
+  color: #ffb4a8;
+  background: rgba(255, 100, 80, 0.08);
+}
+
+.tiny-button:hover,
+.manager-tab:hover,
+.clickable-card:hover {
+  filter: brightness(1.08);
+}
