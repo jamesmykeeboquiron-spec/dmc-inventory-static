@@ -228,11 +228,11 @@ function buildLedgerEntriesFromBranchDailyInput() {
         return;
       }
 
-      const quantity = Number(rawValue);
+     const quantity = Number(rawValue);
 
-      if (Number.isNaN(quantity)) {
-        return;
-      }
+if (Number.isNaN(quantity) || quantity === 0) {
+  return;
+}
 
       ledgerEntries.push({
         date: getTodayDateString(),
@@ -444,6 +444,33 @@ function renderDailyInputMovementSummary(summary) {
     .join("");
 }
 
+function renderSubmitPreviewList() {
+  const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
+
+  if (ledgerEntries.length === 0) {
+    return `
+      <p class="submit-preview-empty">
+        No movements ready to submit yet. Fill in any movement field to preview what will be added to the Ledger.
+      </p>
+    `;
+  }
+
+  return `
+    <ul class="submit-preview-list">
+      ${ledgerEntries
+        .map(
+          (entry) => `
+            <li>
+              <strong>${entry.itemName}</strong>
+              <span>${entry.movementType}: ${entry.quantity} ${entry.unit}</span>
+            </li>
+          `
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
 function getBranchLogTransactionContent() {
   const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
   const departmentItems = getItemsForSelectedDepartment();
@@ -519,13 +546,16 @@ function getBranchLogTransactionContent() {
         </span>
       </div>
 
-      <div class="review-summary-box">
+      <div class="submit-preview-box">
   <div>
-    <h4>Review Summary Before Submit</h4>
-    <p>
-      This shows what will be submitted to the Ledger for the selected department.
-    </p>
+    <h4>Submit Preview</h4>
+    <p>Only filled movement values will be submitted to the Ledger. Blank fields and 0 values are ignored.</p>
   </div>
+
+  ${renderSubmitPreviewList()}
+</div>
+
+     
 
   <div class="review-summary-grid">
     <div>
@@ -621,13 +651,6 @@ function setupBranchLogTransactionEvents() {
     submitButton.addEventListener("click", () => {
       const newLedgerEntries = buildLedgerEntriesFromBranchDailyInput();
       const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-
-          const summary = getBranchDailyInputSummary();
-
-    if (summary.checkRows > 0) {
-      alert("Some rows need checking before submission.");
-      return;
-    }
 
       if (newLedgerEntries.length === 0) {
         alert(`No ${selectedDepartment} daily input entries to submit.`);
