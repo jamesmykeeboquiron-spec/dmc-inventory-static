@@ -162,6 +162,10 @@ function renderPage(pageId) {
   if (typeof page.afterRender === "function") {
   page.afterRender();
 }
+
+  if (typeof page.afterRender === "function") {
+  page.afterRender();
+}
   
   document.querySelectorAll(".nav-link").forEach((link) => {
     link.classList.remove("active");
