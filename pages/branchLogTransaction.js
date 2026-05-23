@@ -118,9 +118,36 @@ function getTodayDateString() {
   return today.toISOString().slice(0, 10);
 }
 
+function getCurrentTimestamp() {
+  return new Date().toISOString();
+}
+
+function getReadableTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function createBarDailyInputBatchId() {
+  const now = new Date();
+  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
+  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
+
+  return `BAR-${datePart}-${timePart}`;
+}
+
 function buildLedgerEntriesFromBarDailyInput() {
   const barItems = getBarItemsForDailyInput();
-  const inputData = getStoredBarDailyInput();
+const inputData = getStoredBarDailyInput();
+const batchId = createBarDailyInputBatchId();
+const submittedAt = getCurrentTimestamp();
+const submittedAtDisplay = getReadableTimestamp();
 
   const movementFields = [
     {
@@ -169,17 +196,20 @@ function buildLedgerEntriesFromBarDailyInput() {
       }
 
       ledgerEntries.push({
-        date: getTodayDateString(),
-        department: "Bar",
-        section: item.section || "",
-        itemId: item.itemId || "",
-        itemName: item.officialItemName || "",
-        movementType: movement.movementType,
-        quantity,
-        unit: item.unit || "",
-        source: "Bar Daily Input",
-        notes
-      });
+    date: getTodayDateString(),
+    submittedAt,
+    submittedAtDisplay,
+    batchId,
+    department: "Bar",
+    section: item.section || "",
+    itemId: item.itemId || "",
+    itemName: item.officialItemName || "",
+    movementType: movement.movementType,
+    quantity,
+    unit: item.unit || "",
+    source: "Bar Daily Input",
+    notes
+    });
     });
   });
 
@@ -372,6 +402,7 @@ function getBranchLogTransactionContent() {
   <button class="ghost-button" id="clear-bar-daily-input">
     Clear Today
   </button>
+</div>
 </div>
       </div>
 
