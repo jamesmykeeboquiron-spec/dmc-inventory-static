@@ -85,6 +85,57 @@ function renderSectionOptions(settings, selectedDepartmentName) {
   return renderOptions(sectionOptions);
 }
 
+function getCodePrefix(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, "")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.slice(0, 3))
+    .join("")
+    .slice(0, 3);
+}
+
+function getNextItemId(departmentName, sectionName) {
+  const departmentCode = getCodePrefix(departmentName);
+  const sectionCode = getCodePrefix(sectionName);
+  const prefix = `${departmentCode}-${sectionCode}`;
+
+  const matchingItems = getStoredMasterListItems().filter((item) =>
+    String(item.itemId || "").startsWith(prefix)
+  );
+
+  const highestNumber = matchingItems.reduce((highest, item) => {
+    const numberPart = String(item.itemId || "").split("-").pop();
+    const parsedNumber = Number(numberPart);
+
+    if (Number.isNaN(parsedNumber)) {
+      return highest;
+    }
+
+    return Math.max(highest, parsedNumber);
+  }, 0);
+
+  const nextNumber = String(highestNumber + 1).padStart(3, "0");
+
+  return `${prefix}-${nextNumber}`;
+}
+
+function updateItemIdPreview() {
+  const departmentSelect = document.getElementById("department");
+  const sectionSelect = document.getElementById("section");
+  const itemIdInput = document.getElementById("itemId");
+
+  if (!departmentSelect || !sectionSelect || !itemIdInput) {
+    return;
+  }
+
+  itemIdInput.value = getNextItemId(
+    departmentSelect.value,
+    sectionSelect.value
+  );
+}
+
 function renderMasterListRows() {
   const items = getStoredMasterListItems();
 
@@ -190,7 +241,7 @@ function getMasterListContent() {
 
           <label>
             Item ID
-            <input id="itemId" type="text" placeholder="BAR-COF-002" required />
+            <input id="itemId" type="text" placeholder="Auto-generated" required />
           </label>
 
           <label>
@@ -270,6 +321,8 @@ function updateSectionDropdown() {
     settings,
     departmentSelect.value
   );
+
+  updateItemIdPreview();
 }
 
 function setupMasterListEvents() {
@@ -278,24 +331,31 @@ function setupMasterListEvents() {
   const cancelButton = document.getElementById("cancel-add-item");
   const addItemForm = document.getElementById("add-item-form");
   const departmentSelect = document.getElementById("department");
+  const sectionSelect = document.getElementById("section");
 
   if (!addItemPanel || !showButton || !cancelButton || !addItemForm) {
     return;
   }
 
   showButton.addEventListener("click", () => {
-    addItemPanel.classList.remove("hidden");
-    updateSectionDropdown();
-  });
+  addItemPanel.classList.remove("hidden");
+  updateSectionDropdown();
+  updateItemIdPreview();
+});
 
   cancelButton.addEventListener("click", () => {
-    addItemPanel.classList.add("hidden");
-    addItemForm.reset();
-    updateSectionDropdown();
-  });
+  addItemPanel.classList.add("hidden");
+  addItemForm.reset();
+  updateSectionDropdown();
+  updateItemIdPreview();
+});
 
   if (departmentSelect) {
     departmentSelect.addEventListener("change", updateSectionDropdown);
+  }
+
+  if (sectionSelect) {
+  sectionSelect.addEventListener("change", updateItemIdPreview);
   }
 
   addItemForm.addEventListener("submit", (event) => {
