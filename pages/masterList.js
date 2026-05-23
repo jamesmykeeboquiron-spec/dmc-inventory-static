@@ -138,23 +138,7 @@ function getMasterListContent() {
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Inventory Catalog by Department</h3>
-          <p>
-            The Master List starts by department. Each department will later
-            have its own sections and official item catalog.
-          </p>
-        </div>
-
-        <button class="ghost-button">Department View</button>
-      </div>
-
-      <div class="department-catalog-grid">
-        ${renderDepartmentCards()}
-      </div>
-    </section>
+ 
 
     <section class="panel">
       <div class="panel-header">
