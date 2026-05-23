@@ -853,3 +853,53 @@ td {
 .clickable-card:hover {
   filter: brightness(1.08);
 }
+.filter-bar {
+  display: grid;
+  grid-template-columns: 180px 180px 1fr auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: rgba(8, 7, 4, 0.35);
+  border-radius: 18px;
+}
+
+.filter-bar label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.filter-bar select,
+.filter-bar input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+}
+
+.filter-search {
+  min-width: 220px;
+}
+
+@media (max-width: 980px) {
+  .filter-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .filter-bar {
+    grid-template-columns: 1fr;
+  }
+}
