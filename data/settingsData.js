@@ -66,5 +66,40 @@ window.DMC_DATA.settings = {
       name: "Bar Supplies",
       departmentId: "bar"
     }
+],
+
+  units: [
+    {
+      id: "kg",
+      name: "kg"
+    },
+    {
+      id: "liters",
+      name: "liters"
+    },
+    {
+      id: "pcs",
+      name: "pcs"
+    },
+    {
+      id: "pack",
+      name: "pack"
+    },
+    {
+      id: "box",
+      name: "box"
+    },
+    {
+      id: "case",
+      name: "case"
+    },
+    {
+      id: "bag",
+      name: "bag"
+    },
+    {
+      id: "bottle",
+      name: "bottle"
+    }
   ]
 };
