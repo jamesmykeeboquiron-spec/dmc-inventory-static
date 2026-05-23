@@ -431,3 +431,47 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.settings-wide {
+  grid-column: 1 / -1;
+}
+
+.mini-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.mini-form.stacked {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.mini-form input,
+.mini-form select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-form,
+  .mini-form.stacked {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}
