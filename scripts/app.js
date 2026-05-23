@@ -159,6 +159,10 @@ function renderPage(pageId) {
   document.getElementById("page-content").innerHTML =
     page.content || getComingSoonContent(page);
 
+  if (typeof page.afterRender === "function") {
+  page.afterRender();
+}
+  
   document.querySelectorAll(".nav-link").forEach((link) => {
     link.classList.remove("active");
   });
