@@ -7,6 +7,8 @@ const DMC_BRANCH_DAILY_INPUT_PREFIX = "dmc_branch_daily_input_today_";
 window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT =
   window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT || "Bar";
 
+window.DMC_BRANCH_LOG_MODE = window.DMC_BRANCH_LOG_MODE || "edit";
+
 function getDailyInputMasterListItems() {
   const storedItems = localStorage.getItem(
     DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT
@@ -228,11 +230,11 @@ function buildLedgerEntriesFromBranchDailyInput() {
         return;
       }
 
-     const quantity = Number(rawValue);
+      const quantity = Number(rawValue);
 
-if (Number.isNaN(quantity) || quantity === 0) {
-  return;
-}
+      if (Number.isNaN(quantity) || quantity === 0) {
+        return;
+      }
 
       ledgerEntries.push({
         date: getTodayDateString(),
@@ -244,6 +246,7 @@ if (Number.isNaN(quantity) || quantity === 0) {
         itemId: item.itemId || "",
         itemName: item.officialItemName || "",
         movementType: movement.movementType,
+        movementField: movement.field,
         quantity,
         unit: item.unit || "",
         source: `${selectedDepartment} Daily Input`,
@@ -303,84 +306,31 @@ function renderBranchDailyInputRows() {
           <td>${item.unit || "-"}</td>
 
           <td>
-            <input
-              class="daily-input-cell"
-              data-item-id="${item.itemId}"
-              data-field="received"
-              type="number"
-              min="0"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "received")}"
-            />
+            <input class="daily-input-cell" data-item-id="${item.itemId}" data-field="received" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "received")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell blue-input"
-              data-item-id="${item.itemId}"
-              data-field="transferIn"
-              type="number"
-              min="0"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "transferIn")}"
-            />
+            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="transferIn" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "transferIn")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell blue-input"
-              data-item-id="${item.itemId}"
-              data-field="usage"
-              type="number"
-              min="0"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "usage")}"
-            />
+            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="usage" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "usage")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell blue-input"
-              data-item-id="${item.itemId}"
-              data-field="waste"
-              type="number"
-              min="0"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "waste")}"
-            />
+            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="waste" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "waste")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell blue-input"
-              data-item-id="${item.itemId}"
-              data-field="transferOut"
-              type="number"
-              min="0"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "transferOut")}"
-            />
+            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="transferOut" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "transferOut")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell blue-input"
-              data-item-id="${item.itemId}"
-              data-field="adjustment"
-              type="number"
-              step="any"
-              value="${getDailyInputValue(inputData, item.itemId, "adjustment")}"
-            />
+            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="adjustment" type="number" step="any" value="${getDailyInputValue(inputData, item.itemId, "adjustment")}" />
           </td>
 
           <td>
-            <input
-              class="daily-input-cell notes-input"
-              data-item-id="${item.itemId}"
-              data-field="notes"
-              type="text"
-              value="${getDailyInputValue(inputData, item.itemId, "notes")}"
-            />
+            <input class="daily-input-cell notes-input" data-item-id="${item.itemId}" data-field="notes" type="text" value="${getDailyInputValue(inputData, item.itemId, "notes")}" />
           </td>
 
           <td>
@@ -401,27 +351,17 @@ function renderBranchDailyInputRows() {
 function getBranchDailyInputSummary() {
   const inputData = getStoredBranchDailyInput();
   const rows = Object.values(inputData);
-  const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
 
   const rowsWithInput = rows.filter((row) => getDailyReviewStatus(row) !== "");
   const readyRows = rows.filter((row) => getDailyReviewStatus(row) === "READY");
   const checkRows = rows.filter((row) => getDailyReviewStatus(row) === "CHECK");
 
-  const movementTotals = ledgerEntries.reduce((totals, entry) => {
-    totals[entry.movementType] = (totals[entry.movementType] || 0) + 1;
-    return totals;
-  }, {});
-
   return {
     rowsWithInput: rowsWithInput.length,
     readyRows: readyRows.length,
-    checkRows: checkRows.length,
-    ledgerEntryCount: ledgerEntries.length,
-    movementTotals
+    checkRows: checkRows.length
   };
 }
-
-
 
 function renderSubmitPreviewList() {
   const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
@@ -429,19 +369,38 @@ function renderSubmitPreviewList() {
   if (ledgerEntries.length === 0) {
     return `
       <p class="submit-preview-empty">
-        No movements ready to submit yet. Fill in any movement field to preview what will be added to the Ledger.
+        No movements ready to submit yet. Go back to edit mode and fill in any movement field.
       </p>
     `;
   }
 
   return `
-    <ul class="submit-preview-list">
+    <ul class="submit-preview-list review-mode-list">
       ${ledgerEntries
         .map(
           (entry) => `
             <li>
-              <strong>${entry.itemName}</strong>
-              <span>${entry.movementType}: ${entry.quantity} ${entry.unit}</span>
+              <div>
+                <strong>${entry.itemName}</strong>
+                <span>${entry.movementType}: ${entry.quantity} ${entry.unit}</span>
+              </div>
+
+              <div class="preview-actions">
+                <button
+                  class="tiny-button"
+                  data-preview-edit="true"
+                >
+                  Edit
+                </button>
+
+                <button
+                  class="tiny-button danger"
+                  data-preview-remove-item="${entry.itemId}"
+                  data-preview-remove-field="${entry.movementField}"
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           `
         )
@@ -450,10 +409,74 @@ function renderSubmitPreviewList() {
   `;
 }
 
+function renderEditModeContent(summary) {
+  return `
+    <div class="instruction-box">
+      <strong>Instruction:</strong>
+      <span>
+        Item rows and IDs should not be edited here. Add or correct items in
+        Master List. This page is only for today’s transaction input.
+      </span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="daily-input-table">
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Unit</th>
+            <th>Received</th>
+            <th>Transfer In</th>
+            <th>Usage</th>
+            <th>Waste</th>
+            <th>Transfer Out</th>
+            <th>Adjustment</th>
+            <th>Notes</th>
+            <th>Review</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${renderBranchDailyInputRows()}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderReviewModeContent() {
+  return `
+    <div class="submit-preview-box">
+      <div>
+        <h4>Submit Review</h4>
+        <p>
+          Review the movements below before posting. Use Edit to return to the table,
+          or Remove to clear a pending movement from today’s input.
+        </p>
+      </div>
+
+      ${renderSubmitPreviewList()}
+
+      <div class="form-actions review-actions">
+        <button class="ghost-button" id="back-to-edit-mode">
+          Back to Edit
+        </button>
+
+        <button class="primary-button" id="submit-branch-daily-input">
+          Submit to Ledger
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function getBranchLogTransactionContent() {
   const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
   const departmentItems = getItemsForSelectedDepartment();
   const summary = getBranchDailyInputSummary();
+  const isReviewMode = window.DMC_BRANCH_LOG_MODE === "review";
 
   return `
     <section class="grid">
@@ -483,15 +506,16 @@ function getBranchLogTransactionContent() {
         <div>
           <h3>${selectedDepartment} Daily Input — Today Only</h3>
           <p>
-            Select a department, then fill only the input columns. Item rows come
-            from the Master List.
+            Select a department, enter today’s movements, review them, then submit to Ledger.
           </p>
         </div>
 
         <div class="form-actions">
-          <button class="primary-button" id="submit-branch-daily-input">
-            Submit to Ledger
-          </button>
+          ${
+            isReviewMode
+              ? `<button class="ghost-button" id="back-to-edit-mode-top">Back to Edit</button>`
+              : `<button class="primary-button" id="ready-for-review">Ready for Review</button>`
+          }
 
           <button class="ghost-button" id="clear-branch-daily-input">
             Clear Today
@@ -502,65 +526,22 @@ function getBranchLogTransactionContent() {
       <div class="filter-bar">
         <label>
           Department
-          <select id="branch-log-department-select">
+          <select id="branch-log-department-select" ${isReviewMode ? "disabled" : ""}>
             ${renderDepartmentOptions()}
           </select>
         </label>
 
         <label class="filter-search">
-          Current Input
+          Current Mode
           <input
             type="text"
-            value="${selectedDepartment} Daily Input"
+            value="${isReviewMode ? "Review Mode" : `${selectedDepartment} Daily Input`}"
             disabled
           />
         </label>
       </div>
 
-<div class="instruction-box">
-  <strong>Instruction:</strong>
-  <span>
-    Item rows and IDs should not be edited here. Add or correct items in
-    Master List. This page is only for today’s transaction input.
-  </span>
-</div>
-
-<div class="submit-preview-box">
-  <div>
-    <h4>Submit Preview</h4>
-    <p>
-      Only filled movement values will be submitted to the Ledger.
-      Blank fields and 0 values are ignored.
-    </p>
-  </div>
-
-  ${renderSubmitPreviewList()}
-</div>
-
-<div class="table-wrap">
-        <table class="daily-input-table">
-          <thead>
-            <tr>
-              <th>Section</th>
-              <th>Item ID</th>
-              <th>Item Name</th>
-              <th>Unit</th>
-              <th>Received</th>
-              <th>Transfer In</th>
-              <th>Usage</th>
-              <th>Waste</th>
-              <th>Transfer Out</th>
-              <th>Adjustment</th>
-              <th>Notes</th>
-              <th>Review</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${renderBranchDailyInputRows()}
-          </tbody>
-        </table>
-      </div>
+      ${isReviewMode ? renderReviewModeContent() : renderEditModeContent(summary)}
     </section>
   `;
 }
@@ -572,6 +553,11 @@ function refreshBranchLogTransactionPage() {
   renderPage("branch-log-transaction");
 }
 
+function returnToEditMode() {
+  window.DMC_BRANCH_LOG_MODE = "edit";
+  refreshBranchLogTransactionPage();
+}
+
 function setupBranchLogTransactionEvents() {
   const departmentSelect = document.getElementById(
     "branch-log-department-select"
@@ -580,6 +566,7 @@ function setupBranchLogTransactionEvents() {
   if (departmentSelect) {
     departmentSelect.addEventListener("change", () => {
       window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT = departmentSelect.value;
+      window.DMC_BRANCH_LOG_MODE = "edit";
       refreshBranchLogTransactionPage();
     });
   }
@@ -594,6 +581,52 @@ function setupBranchLogTransactionEvents() {
       inputData[itemId][field] = input.value;
 
       saveBranchDailyInput(inputData);
+    });
+  });
+
+  const readyButton = document.getElementById("ready-for-review");
+
+  if (readyButton) {
+    readyButton.addEventListener("click", () => {
+      const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
+
+      if (ledgerEntries.length === 0) {
+        alert("No movements ready for review.");
+        return;
+      }
+
+      window.DMC_BRANCH_LOG_MODE = "review";
+      refreshBranchLogTransactionPage();
+    });
+  }
+
+  const backButtons = [
+    document.getElementById("back-to-edit-mode"),
+    document.getElementById("back-to-edit-mode-top")
+  ];
+
+  backButtons.forEach((button) => {
+    if (button) {
+      button.addEventListener("click", returnToEditMode);
+    }
+  });
+
+  document.querySelectorAll("[data-preview-edit]").forEach((button) => {
+    button.addEventListener("click", returnToEditMode);
+  });
+
+  document.querySelectorAll("[data-preview-remove-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const itemId = button.dataset.previewRemoveItem;
+      const field = button.dataset.previewRemoveField;
+      const inputData = getStoredBranchDailyInput();
+
+      if (inputData[itemId]) {
+        inputData[itemId][field] = "";
+      }
+
+      saveBranchDailyInput(inputData);
+      refreshBranchLogTransactionPage();
     });
   });
 
@@ -627,6 +660,8 @@ function setupBranchLogTransactionEvents() {
       saveLedgerEntriesFromDailyInput(updatedLedgerEntries);
       localStorage.removeItem(getDailyInputStorageKey());
 
+      window.DMC_BRANCH_LOG_MODE = "edit";
+
       alert(`${selectedDepartment} Daily Input submitted to Ledger.`);
       refreshBranchLogTransactionPage();
     });
@@ -642,6 +677,7 @@ function setupBranchLogTransactionEvents() {
       }
 
       localStorage.removeItem(getDailyInputStorageKey());
+      window.DMC_BRANCH_LOG_MODE = "edit";
       refreshBranchLogTransactionPage();
     });
   }
