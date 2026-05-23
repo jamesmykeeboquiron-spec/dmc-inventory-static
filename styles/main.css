@@ -918,3 +918,53 @@ td {
   background: rgba(120, 180, 255, 0.14);
   color: #a9ceff;
 }
+
+.instruction-box {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  background: rgba(214, 168, 79, 0.08);
+  color: var(--text-muted);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+.instruction-box strong {
+  color: var(--gold);
+}
+
+.daily-input-table th:nth-child(5),
+.daily-input-table th:nth-child(6),
+.daily-input-table th:nth-child(7),
+.daily-input-table th:nth-child(8),
+.daily-input-table th:nth-child(9),
+.daily-input-table th:nth-child(10) {
+  background: rgba(214, 168, 79, 0.12);
+}
+
+.daily-input-cell {
+  width: 92px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.daily-input-cell:focus {
+  outline: 1px solid var(--gold);
+}
+
+.blue-input {
+  background: rgba(120, 180, 255, 0.1);
+  border-color: rgba(120, 180, 255, 0.25);
+}
+
+.notes-input {
+  width: 180px;
+  background: rgba(255, 220, 120, 0.1);
+}
