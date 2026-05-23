@@ -1,96 +1,59 @@
-window.DMC_PAGES = window.DMC_PAGES || {};
+window.DMC_DATA = window.DMC_DATA || {};
 
-function renderMasterListRows() {
-  const items = window.DMC_DATA?.masterList || [];
+window.DMC_DATA.masterList = {
+  departments: [
+    {
+      id: "bar",
+      name: "Bar",
+      description:
+        "Inventory catalog for beverage station items, bar ingredients, milk, coffee, cups, lids, syrups, and bar supplies.",
+      sections: ["Coffee", "Milk", "Syrups", "Powders", "Cups & Lids", "Bar Supplies"]
+    },
+    {
+      id: "kitchen",
+      name: "Kitchen",
+      description:
+        "Inventory catalog for kitchen ingredients, proteins, produce, dry goods, sauces, packaging, and kitchen supplies.",
+      sections: []
+    },
+    {
+      id: "dining",
+      name: "Dining",
+      description:
+        "Inventory catalog for dining room service supplies, napkins, utensils, table supplies, guest supplies, and cleaning items.",
+      sections: []
+    },
+    {
+      id: "commissary",
+      name: "Commissary",
+      description:
+        "Inventory catalog for commissary bulk items, production supplies, prepared items, transfer packaging, and storage supplies.",
+      sections: []
+    }
+  ],
 
-  return items
-    .map(
-      (item) => `
-        <tr>
-          <td>${item.code}</td>
-          <td>${item.name}</td>
-          <td>${item.category}</td>
-          <td>${item.unit}</td>
-          <td>${item.parLevel}</td>
-          <td>${item.storageArea}</td>
-          <td><span class="badge">${item.status}</span></td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-window.DMC_PAGES["master-list"] = {
-  eyebrow: "Commissary",
-  title: "Master List",
-  description:
-    "The main item catalog for ingredients, packaging, cleaning supplies, and other inventory items.",
-  content: `
-    <section class="grid">
-      <div class="card">
-        <p>Total Items</p>
-        <strong>${window.DMC_DATA?.masterList?.length || 0}</strong>
-      </div>
-
-      <div class="card">
-        <p>Ingredients</p>
-        <strong>${
-          window.DMC_DATA?.masterList?.filter(
-            (item) => item.category === "Ingredient"
-          ).length || 0
-        }</strong>
-      </div>
-
-      <div class="card">
-        <p>Packaging</p>
-        <strong>${
-          window.DMC_DATA?.masterList?.filter(
-            (item) => item.category === "Packaging"
-          ).length || 0
-        }</strong>
-      </div>
-
-      <div class="card">
-        <p>Cleaning / Other</p>
-        <strong>${
-          window.DMC_DATA?.masterList?.filter(
-            (item) => item.category === "Cleaning" || item.category === "Other"
-          ).length || 0
-        }</strong>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Inventory Item Catalog</h3>
-          <p>
-            This is the foundation list used by commissary stock, branch stock,
-            orders, deliveries, and ledger records.
-          </p>
-        </div>
-
-        <button class="ghost-button">Static Prototype</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Item Code</th>
-              <th>Item Name</th>
-              <th>Category</th>
-              <th>Unit</th>
-              <th>Par Level</th>
-              <th>Storage Area</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${renderMasterListRows()}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  `
+  items: [
+    {
+      inventoryLayer: "Branch/Station",
+      department: "BAR",
+      section: "Coffee",
+      itemId: "BAR-COF-001",
+      officialItemName: "Coffee Beans",
+      unit: "kg",
+      minimumStock: "",
+      active: true,
+      notes: ""
+    },
+    {
+      inventoryLayer: "Branch/Station",
+      department: "BAR",
+      section: "Milk",
+      itemId: "BAR-MLK-001",
+      officialItemName: "Condensed Milk",
+      unit: "liters",
+      minimumStock: "",
+      active: true,
+      notes: ""
+    }
+  ]
 };
