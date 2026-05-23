@@ -4,10 +4,11 @@ const DMC_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
 
 function getDefaultSettings() {
   return window.DMC_DATA?.settings || {
-    operatingAreas: [],
-    departments: [],
-    sections: []
-  };
+  operatingAreas: [],
+  departments: [],
+  sections: [],
+  units: []
+};
 }
 
 function getStoredSettings() {
@@ -110,6 +111,27 @@ function renderSectionRows(settings) {
             <div class="row-actions">
               <button class="tiny-button" data-edit-section="${section.id}">Edit</button>
               <button class="tiny-button danger" data-remove-section="${section.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+
+function renderUnitRows(settings) {
+  return settings.units
+    .map(
+      (unit) => `
+        <tr>
+          <td>${unit.name}</td>
+          <td>${unit.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-unit="${unit.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-unit="${unit.id}">Remove</button>
             </div>
           </td>
         </tr>
@@ -230,6 +252,40 @@ function getSystemSetupManagerContent(activeManager) {
   `;
 }
 
+  if (activeManager === "units") {
+    return `
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Manage Units</h3>
+            <p>Units are used in the Master List item form. Examples: kg, liters, pcs, pack, box, case, bag, bottle.</p>
+          </div>
+        </div>
+
+        <form id="add-unit-form" class="mini-form">
+          <input id="unit-name" type="text" placeholder="Example: kg" required />
+          <button class="primary-button" type="submit">Add Unit</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderUnitRows(settings)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
 function getSettingsContent() {
   const settings = getStoredSettings();
   const activeManager = window.DMC_ACTIVE_SETTINGS_MANAGER || "operating-areas";
@@ -253,8 +309,8 @@ function getSettingsContent() {
       </div>
 
       <div class="card">
-        <p>Storage</p>
-        <strong>Local</strong>
+        <p>Units</p>
+        <strong>${settings.units.length}</strong>
       </div>
     </section>
 
@@ -331,8 +387,8 @@ function getSettingsContent() {
               <button class="manager-tab ${activeManager === "sections" ? "active" : ""}" data-settings-manager="sections">
                 Sections
               </button>
-              <button class="manager-tab disabled" type="button">
-                Units Soon
+              <button class="manager-tab ${activeManager === "units" ? "active" : ""}" data-settings-manager="units">
+                Units
               </button>
               <button class="manager-tab disabled" type="button">
                 Item Categories Soon
@@ -372,6 +428,7 @@ function setupSettingsEvents() {
   setupOperatingAreaEvents();
   setupDepartmentEvents();
   setupSectionEvents();
+  setupUnitEvents();
 }
 
 function setupOperatingAreaEvents() {
@@ -581,6 +638,65 @@ function setupSectionEvents() {
       refreshSettingsPage();
     });
   });
+
+  function setupUnitEvents() {
+  const form = document.getElementById("add-unit-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const settings = getStoredSettings();
+      const name = document.getElementById("unit-name").value.trim();
+
+      if (!name) return;
+
+      settings.units.push({
+        id: slugifySetting(name),
+        name
+      });
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-unit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const unit = settings.units.find(
+        (item) => item.id === button.dataset.editUnit
+      );
+
+      if (!unit) return;
+
+      const newName = prompt("Edit Unit name:", unit.name);
+
+      if (!newName || !newName.trim()) return;
+
+      unit.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-unit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const unitId = button.dataset.removeUnit;
+
+      const confirmed = confirm("Remove this Unit?");
+
+      if (!confirmed) return;
+
+      settings.units = settings.units.filter((unit) => unit.id !== unitId);
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
 }
 
 window.DMC_PAGES.settings = {
