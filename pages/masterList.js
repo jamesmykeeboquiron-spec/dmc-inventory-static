@@ -73,7 +73,10 @@ function getMasterListSettings() {
 
 function renderOptions(options, labelKey = "name") {
   return options
-    .map((option) => `<option value="${option[labelKey]}">${option[labelKey]}</option>`)
+    .map(
+      (option) =>
+        `<option value="${option[labelKey]}">${option[labelKey]}</option>`
+    )
     .join("");
 }
 
@@ -261,13 +264,9 @@ function renderMasterListRows() {
 }
 
 function getMasterListContent() {
-  const items = getStoredMasterListItems();
+  const allItems = getStoredMasterListItems();
   const filteredItems = getFilteredMasterListItems();
   const settings = getMasterListSettings();
-
-  const departmentsCount = settings.departments.length;
-  const sectionsCount = settings.sections.length;
-  const unitsCount = settings.units.length;
 
   return `
     <section class="grid">
@@ -277,18 +276,18 @@ function getMasterListContent() {
       </div>
 
       <div class="card">
-        <p>Departments</p>
-        <strong>${departmentsCount}</strong>
+        <p>Total Items</p>
+        <strong>${allItems.length}</strong>
       </div>
 
       <div class="card">
         <p>Sections</p>
-        <strong>${sectionsCount}</strong>
+        <strong>${settings.sections.length}</strong>
       </div>
 
       <div class="card">
         <p>Units</p>
-        <strong>${unitsCount}</strong>
+        <strong>${settings.units.length}</strong>
       </div>
     </section>
 
@@ -297,8 +296,8 @@ function getMasterListContent() {
         <div>
           <h3>Master List Item Catalog</h3>
           <p>
-            This catalog now uses dropdown options from Settings for Operating
-            Area, Department, Section, and Unit.
+            This catalog uses dropdown options from Settings for Operating Area,
+            Department, Section, and Unit.
           </p>
         </div>
 
@@ -376,35 +375,35 @@ function getMasterListContent() {
         </form>
       </div>
 
-<div class="filter-bar">
-  <label>
-    Department
-    <select id="master-list-department-filter">
-      ${renderDepartmentFilterOptions(settings)}
-    </select>
-  </label>
+      <div class="filter-bar">
+        <label>
+          Department
+          <select id="master-list-department-filter">
+            ${renderDepartmentFilterOptions(settings)}
+          </select>
+        </label>
 
-  <label>
-    Section
-    <select id="master-list-section-filter">
-      ${renderSectionFilterOptions(settings)}
-    </select>
-  </label>
+        <label>
+          Section
+          <select id="master-list-section-filter">
+            ${renderSectionFilterOptions(settings)}
+          </select>
+        </label>
 
-  <label class="filter-search">
-    Search
-    <input
-      id="master-list-search"
-      type="text"
-      placeholder="Search item name, ID, section, unit..."
-      value="${window.DMC_MASTER_LIST_FILTERS.search}"
-    />
-  </label>
+        <label class="filter-search">
+          Search
+          <input
+            id="master-list-search"
+            type="text"
+            placeholder="Search item name, ID, section, unit..."
+            value="${window.DMC_MASTER_LIST_FILTERS.search}"
+          />
+        </label>
 
-  <button class="ghost-button" id="clear-master-list-filters">
-    Clear Filters
-  </button>
-</div>
+        <button class="ghost-button" id="clear-master-list-filters">
+          Clear Filters
+        </button>
+      </div>
 
       <div class="table-wrap">
         <table>
@@ -431,13 +430,14 @@ function getMasterListContent() {
   `;
 }
 
+function refreshMasterListPage() {
+  window.DMC_PAGES["master-list"].content = getMasterListContent();
+  renderPage("master-list");
+}
+
 function updateSectionDropdown() {
   const settings = getMasterListSettings();
   const departmentSelect = document.getElementById("department");
-  const departmentFilter = document.getElementById("master-list-department-filter");
-  const sectionFilter = document.getElementById("master-list-section-filter");
-  const searchInput = document.getElementById("master-list-search");
-  const clearFiltersButton = document.getElementById("clear-master-list-filters");
   const sectionSelect = document.getElementById("section");
 
   if (!departmentSelect || !sectionSelect) {
@@ -460,69 +460,74 @@ function setupMasterListEvents() {
   const departmentSelect = document.getElementById("department");
   const sectionSelect = document.getElementById("section");
 
+  const departmentFilter = document.getElementById(
+    "master-list-department-filter"
+  );
+  const sectionFilter = document.getElementById("master-list-section-filter");
+  const searchInput = document.getElementById("master-list-search");
+  const clearFiltersButton = document.getElementById(
+    "clear-master-list-filters"
+  );
+
+  if (departmentFilter) {
+    departmentFilter.addEventListener("change", () => {
+      window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
+      window.DMC_MASTER_LIST_FILTERS.section = "all";
+      refreshMasterListPage();
+    });
+  }
+
+  if (sectionFilter) {
+    sectionFilter.addEventListener("change", () => {
+      window.DMC_MASTER_LIST_FILTERS.section = sectionFilter.value;
+      refreshMasterListPage();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_MASTER_LIST_FILTERS.search = searchInput.value;
+      refreshMasterListPage();
+    });
+  }
+
+  if (clearFiltersButton) {
+    clearFiltersButton.addEventListener("click", () => {
+      window.DMC_MASTER_LIST_FILTERS = {
+        department: "all",
+        section: "all",
+        search: ""
+      };
+
+      refreshMasterListPage();
+    });
+  }
+
   if (!addItemPanel || !showButton || !cancelButton || !addItemForm) {
     return;
   }
 
   showButton.addEventListener("click", () => {
-  addItemPanel.classList.remove("hidden");
-  updateSectionDropdown();
-  updateItemIdPreview();
-});
+    addItemPanel.classList.remove("hidden");
+    updateSectionDropdown();
+    updateItemIdPreview();
+  });
 
   cancelButton.addEventListener("click", () => {
-  addItemPanel.classList.add("hidden");
-  addItemForm.reset();
-  updateSectionDropdown();
-  updateItemIdPreview();
-});
+    addItemPanel.classList.add("hidden");
+    addItemForm.reset();
+    updateSectionDropdown();
+    updateItemIdPreview();
+  });
 
   if (departmentSelect) {
     departmentSelect.addEventListener("change", updateSectionDropdown);
   }
 
   if (sectionSelect) {
-  sectionSelect.addEventListener("change", updateItemIdPreview);
+    sectionSelect.addEventListener("change", updateItemIdPreview);
   }
 
-  if (departmentFilter) {
-  departmentFilter.addEventListener("change", () => {
-    window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
-    window.DMC_MASTER_LIST_FILTERS.section = "all";
-    window.DMC_PAGES["master-list"].content = getMasterListContent();
-    renderPage("master-list");
-  });
-}
-
-if (sectionFilter) {
-  sectionFilter.addEventListener("change", () => {
-    window.DMC_MASTER_LIST_FILTERS.section = sectionFilter.value;
-    window.DMC_PAGES["master-list"].content = getMasterListContent();
-    renderPage("master-list");
-  });
-}
-
-if (searchInput) {
-  searchInput.addEventListener("input", () => {
-    window.DMC_MASTER_LIST_FILTERS.search = searchInput.value;
-    window.DMC_PAGES["master-list"].content = getMasterListContent();
-    renderPage("master-list");
-  });
-}
-
-if (clearFiltersButton) {
-  clearFiltersButton.addEventListener("click", () => {
-    window.DMC_MASTER_LIST_FILTERS = {
-      department: "all",
-      section: "all",
-      search: ""
-    };
-
-    window.DMC_PAGES["master-list"].content = getMasterListContent();
-    renderPage("master-list");
-  });
-}
-  
   addItemForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
@@ -545,8 +550,10 @@ if (clearFiltersButton) {
 
     saveMasterListItems(updatedItems);
 
-    window.DMC_PAGES["master-list"].content = getMasterListContent();
-    renderPage("master-list");
+    addItemPanel.classList.add("hidden");
+    addItemForm.reset();
+
+    refreshMasterListPage();
   });
 }
 
@@ -554,7 +561,7 @@ window.DMC_PAGES["master-list"] = {
   eyebrow: "Commissary",
   title: "Master List",
   description:
-    "Manage the official item catalog. Dropdowns now come from Settings.",
+    "Manage the official item catalog. Dropdowns come from Settings.",
   content: getMasterListContent(),
   afterRender: setupMasterListEvents
 };
