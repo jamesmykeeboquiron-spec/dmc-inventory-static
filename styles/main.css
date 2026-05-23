@@ -903,3 +903,18 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.danger-badge {
+  background: rgba(255, 100, 80, 0.14);
+  color: #ffb4a8;
+}
+
+.warning-badge {
+  background: rgba(255, 193, 79, 0.14);
+  color: #ffd28a;
+}
+
+.info-badge {
+  background: rgba(120, 180, 255, 0.14);
+  color: #a9ceff;
+}
