@@ -1,100 +1,111 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-function getMasterListData() {
-  return window.DMC_DATA?.masterList || {
-    departments: [],
-    items: []
-  };
+const DMC_MASTER_LIST_STORAGE_KEY = "dmc_master_list_items";
+const DMC_SETTINGS_STORAGE_KEY_FOR_MASTER_LIST = "dmc_inventory_settings";
+
+function getMasterListDefaultItems() {
+  return window.DMC_DATA?.masterList?.items || [];
 }
 
 function getStoredMasterListItems() {
-  const storedItems = localStorage.getItem("dmc_master_list_items");
+  const storedItems = localStorage.getItem(DMC_MASTER_LIST_STORAGE_KEY);
 
   if (!storedItems) {
-    return getMasterListData().items;
+    return getMasterListDefaultItems();
   }
 
   try {
     return JSON.parse(storedItems);
   } catch {
-    return getMasterListData().items;
+    return getMasterListDefaultItems();
   }
 }
 
 function saveMasterListItems(items) {
-  localStorage.setItem("dmc_master_list_items", JSON.stringify(items));
+  localStorage.setItem(DMC_MASTER_LIST_STORAGE_KEY, JSON.stringify(items));
 }
 
-function getAllMasterListItems() {
-  return getStoredMasterListItems();
-}
-
-function getDepartmentIcon(departmentId) {
-  const icons = {
-    bar: "☕",
-    kitchen: "🍳",
-    dining: "🍽️",
-    commissary: "📦"
+function getMasterListSettings() {
+  const defaultSettings = window.DMC_DATA?.settings || {
+    operatingAreas: [],
+    departments: [],
+    sections: [],
+    units: []
   };
 
-  return icons[departmentId] || "▥";
+  const storedSettings = localStorage.getItem(
+    DMC_SETTINGS_STORAGE_KEY_FOR_MASTER_LIST
+  );
+
+  if (!storedSettings) {
+    return {
+      operatingAreas: defaultSettings.operatingAreas || [],
+      departments: defaultSettings.departments || [],
+      sections: defaultSettings.sections || [],
+      units: defaultSettings.units || []
+    };
+  }
+
+  try {
+    const parsedSettings = JSON.parse(storedSettings);
+
+    return {
+      operatingAreas: parsedSettings.operatingAreas || [],
+      departments: parsedSettings.departments || [],
+      sections: parsedSettings.sections || [],
+      units: parsedSettings.units || []
+    };
+  } catch {
+    return {
+      operatingAreas: defaultSettings.operatingAreas || [],
+      departments: defaultSettings.departments || [],
+      sections: defaultSettings.sections || [],
+      units: defaultSettings.units || []
+    };
+  }
 }
 
-function renderDepartmentCards() {
-  const { departments } = getMasterListData();
-
-  return departments
-    .map((department) => {
-      const sectionPreview =
-        department.sections.length > 0
-          ? department.sections
-              .map((section) => `<span class="section-chip">${section}</span>`)
-              .join("")
-          : `<span class="section-chip muted">Sections to be added later</span>`;
-
-      return `
-        <article class="department-card">
-          <div class="department-icon">${getDepartmentIcon(department.id)}</div>
-
-          <div>
-            <h4>${department.name} Inventory Catalog</h4>
-            <p>${department.description}</p>
-
-            <div class="section-chip-row">
-              ${sectionPreview}
-            </div>
-          </div>
-
-          <span class="badge">${department.name}</span>
-        </article>
-      `;
-    })
+function renderOptions(options, labelKey = "name") {
+  return options
+    .map((option) => `<option value="${option[labelKey]}">${option[labelKey]}</option>`)
     .join("");
 }
 
-function renderBarMasterListRows() {
-  const barItems = getAllMasterListItems().filter(
-    (item) => item.department === "BAR"
+function renderSectionOptions(settings, selectedDepartmentName) {
+  const selectedDepartment = settings.departments.find(
+    (department) => department.name === selectedDepartmentName
   );
 
-  if (barItems.length === 0) {
+  const sectionOptions = selectedDepartment
+    ? settings.sections.filter(
+        (section) => section.departmentId === selectedDepartment.id
+      )
+    : settings.sections;
+
+  return renderOptions(sectionOptions);
+}
+
+function renderMasterListRows() {
+  const items = getStoredMasterListItems();
+
+  if (items.length === 0) {
     return `
       <tr>
-        <td colspan="9">No Bar items added yet.</td>
+        <td colspan="9">No Master List items added yet.</td>
       </tr>
     `;
   }
 
-  return barItems
+  return items
     .map(
       (item) => `
         <tr>
-          <td>${item.inventoryLayer}</td>
-          <td>${item.department}</td>
-          <td>${item.section}</td>
-          <td>${item.itemId}</td>
-          <td>${item.officialItemName}</td>
-          <td>${item.unit}</td>
+          <td>${item.operatingArea || "-"}</td>
+          <td>${item.department || "-"}</td>
+          <td>${item.section || "-"}</td>
+          <td>${item.itemId || "-"}</td>
+          <td>${item.officialItemName || "-"}</td>
+          <td>${item.unit || "-"}</td>
           <td>${item.minimumStock || "-"}</td>
           <td>
             <span class="badge">${item.active ? "TRUE" : "FALSE"}</span>
@@ -107,46 +118,43 @@ function renderBarMasterListRows() {
 }
 
 function getMasterListContent() {
-  const barDepartment = getMasterListData().departments.find(
-    (department) => department.id === "bar"
-  );
+  const items = getStoredMasterListItems();
+  const settings = getMasterListSettings();
 
-  const barItems = getAllMasterListItems().filter(
-    (item) => item.department === "BAR"
-  );
+  const departmentsCount = settings.departments.length;
+  const sectionsCount = settings.sections.length;
+  const unitsCount = settings.units.length;
 
   return `
     <section class="grid">
       <div class="card">
-        <p>Department Catalogs</p>
-        <strong>4</strong>
+        <p>Total Items</p>
+        <strong>${items.length}</strong>
       </div>
 
       <div class="card">
-        <p>Active Build</p>
-        <strong>Bar</strong>
+        <p>Departments</p>
+        <strong>${departmentsCount}</strong>
       </div>
 
       <div class="card">
-        <p>Bar Sections</p>
-        <strong>${barDepartment?.sections.length || 0}</strong>
+        <p>Sections</p>
+        <strong>${sectionsCount}</strong>
       </div>
 
       <div class="card">
-        <p>Bar Items</p>
-        <strong>${barItems.length}</strong>
+        <p>Units</p>
+        <strong>${unitsCount}</strong>
       </div>
     </section>
-
- 
 
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h3>Bar Inventory Catalog</h3>
+          <h3>Master List Item Catalog</h3>
           <p>
-            First test department using the official Master List format from the spreadsheet.
-            Added items are saved locally in this browser for prototype testing.
+            This catalog now uses dropdown options from Settings for Operating
+            Area, Department, Section, and Unit.
           </p>
         </div>
 
@@ -156,28 +164,28 @@ function getMasterListContent() {
       </div>
 
       <div class="add-item-panel hidden" id="add-item-panel">
-        <h4>Add Bar Item</h4>
+        <h4>Add Master List Item</h4>
 
         <form id="add-item-form" class="form-grid">
           <label>
-            Inventory Layer
-            <select id="inventoryLayer" required>
-              <option value="Branch/Station">Branch/Station</option>
-              <option value="Commissary">Commissary</option>
-              <option value="System">System</option>
+            Operating Area
+            <select id="operatingArea" required>
+              ${renderOptions(settings.operatingAreas)}
             </select>
           </label>
 
           <label>
             Department
             <select id="department" required>
-              <option value="BAR">BAR</option>
+              ${renderOptions(settings.departments)}
             </select>
           </label>
 
           <label>
             Section
-            <input id="section" type="text" placeholder="Coffee" required />
+            <select id="section" required>
+              ${renderSectionOptions(settings, settings.departments[0]?.name)}
+            </select>
           </label>
 
           <label>
@@ -192,7 +200,9 @@ function getMasterListContent() {
 
           <label>
             Unit
-            <input id="unit" type="text" placeholder="kg, liters, pcs, pack" required />
+            <select id="unit" required>
+              ${renderOptions(settings.units)}
+            </select>
           </label>
 
           <label>
@@ -226,7 +236,7 @@ function getMasterListContent() {
         <table>
           <thead>
             <tr>
-              <th>Inventory Layer</th>
+              <th>Operating Area</th>
               <th>Department</th>
               <th>Section</th>
               <th>Item ID</th>
@@ -239,7 +249,7 @@ function getMasterListContent() {
           </thead>
 
           <tbody>
-            ${renderBarMasterListRows()}
+            ${renderMasterListRows()}
           </tbody>
         </table>
       </div>
@@ -247,11 +257,27 @@ function getMasterListContent() {
   `;
 }
 
+function updateSectionDropdown() {
+  const settings = getMasterListSettings();
+  const departmentSelect = document.getElementById("department");
+  const sectionSelect = document.getElementById("section");
+
+  if (!departmentSelect || !sectionSelect) {
+    return;
+  }
+
+  sectionSelect.innerHTML = renderSectionOptions(
+    settings,
+    departmentSelect.value
+  );
+}
+
 function setupMasterListEvents() {
   const addItemPanel = document.getElementById("add-item-panel");
   const showButton = document.getElementById("show-add-item-panel");
   const cancelButton = document.getElementById("cancel-add-item");
   const addItemForm = document.getElementById("add-item-form");
+  const departmentSelect = document.getElementById("department");
 
   if (!addItemPanel || !showButton || !cancelButton || !addItemForm) {
     return;
@@ -259,31 +285,37 @@ function setupMasterListEvents() {
 
   showButton.addEventListener("click", () => {
     addItemPanel.classList.remove("hidden");
+    updateSectionDropdown();
   });
 
   cancelButton.addEventListener("click", () => {
     addItemPanel.classList.add("hidden");
     addItemForm.reset();
+    updateSectionDropdown();
   });
+
+  if (departmentSelect) {
+    departmentSelect.addEventListener("change", updateSectionDropdown);
+  }
 
   addItemForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
     const newItem = {
-      inventoryLayer: document.getElementById("inventoryLayer").value,
+      operatingArea: document.getElementById("operatingArea").value,
       department: document.getElementById("department").value,
-      section: document.getElementById("section").value.trim(),
+      section: document.getElementById("section").value,
       itemId: document.getElementById("itemId").value.trim(),
       officialItemName: document
         .getElementById("officialItemName")
         .value.trim(),
-      unit: document.getElementById("unit").value.trim(),
+      unit: document.getElementById("unit").value,
       minimumStock: document.getElementById("minimumStock").value.trim(),
       active: document.getElementById("active").value === "true",
       notes: document.getElementById("notes").value.trim()
     };
 
-    const currentItems = getAllMasterListItems();
+    const currentItems = getStoredMasterListItems();
     const updatedItems = [...currentItems, newItem];
 
     saveMasterListItems(updatedItems);
@@ -297,7 +329,7 @@ window.DMC_PAGES["master-list"] = {
   eyebrow: "Commissary",
   title: "Master List",
   description:
-    "View inventory catalogs by department. Bar is being built first using the official Master List table format.",
+    "Manage the official item catalog. Dropdowns now come from Settings.",
   content: getMasterListContent(),
   afterRender: setupMasterListEvents
 };
