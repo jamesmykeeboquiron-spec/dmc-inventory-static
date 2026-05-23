@@ -1,11 +1,16 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_master_list_items";
-const DMC_BAR_DAILY_INPUT_STORAGE_KEY = "dmc_bar_daily_input_today";
 const DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_inventory_ledger_entries";
+const DMC_BRANCH_DAILY_INPUT_PREFIX = "dmc_branch_daily_input_today_";
+
+window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT =
+  window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT || "Bar";
 
 function getDailyInputMasterListItems() {
-  const storedItems = localStorage.getItem(DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT);
+  const storedItems = localStorage.getItem(
+    DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT
+  );
 
   if (storedItems) {
     try {
@@ -18,14 +23,66 @@ function getDailyInputMasterListItems() {
   return window.DMC_DATA?.masterList?.items || [];
 }
 
-function getBarItemsForDailyInput() {
-  return getDailyInputMasterListItems().filter(
-    (item) => String(item.department || "").toLowerCase() === "bar"
+function getBranchDepartments() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (storedSettings) {
+    try {
+      const settings = JSON.parse(storedSettings);
+      return (settings.departments || []).filter(
+        (department) => department.name !== "Commissary"
+      );
+    } catch {
+      return [
+        { id: "bar", name: "Bar" },
+        { id: "kitchen", name: "Kitchen" },
+        { id: "dining", name: "Dining" }
+      ];
+    }
+  }
+
+  return [
+    { id: "bar", name: "Bar" },
+    { id: "kitchen", name: "Kitchen" },
+    { id: "dining", name: "Dining" }
+  ];
+}
+
+function getDepartmentCode(departmentName) {
+  const codeMap = {
+    Bar: "BAR",
+    Kitchen: "KIT",
+    Dining: "DIN"
+  };
+
+  return (
+    codeMap[departmentName] ||
+    String(departmentName || "")
+      .toUpperCase()
+      .slice(0, 3)
   );
 }
 
-function getStoredBarDailyInput() {
-  const storedInput = localStorage.getItem(DMC_BAR_DAILY_INPUT_STORAGE_KEY);
+function getDailyInputStorageKey() {
+  const departmentCode = getDepartmentCode(
+    window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT
+  ).toLowerCase();
+
+  return `${DMC_BRANCH_DAILY_INPUT_PREFIX}${departmentCode}`;
+}
+
+function getItemsForSelectedDepartment() {
+  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+
+  return getDailyInputMasterListItems().filter(
+    (item) =>
+      String(item.department || "").toLowerCase() ===
+      String(selectedDepartment || "").toLowerCase()
+  );
+}
+
+function getStoredBranchDailyInput() {
+  const storedInput = localStorage.getItem(getDailyInputStorageKey());
 
   if (!storedInput) {
     return {};
@@ -38,11 +95,62 @@ function getStoredBarDailyInput() {
   }
 }
 
-function saveBarDailyInput(inputData) {
-  localStorage.setItem(
-    DMC_BAR_DAILY_INPUT_STORAGE_KEY,
-    JSON.stringify(inputData)
+function saveBranchDailyInput(inputData) {
+  localStorage.setItem(getDailyInputStorageKey(), JSON.stringify(inputData));
+}
+
+function getStoredLedgerEntriesForDailyInput() {
+  const storedEntries = localStorage.getItem(
+    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT
   );
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function saveLedgerEntriesFromDailyInput(entries) {
+  localStorage.setItem(
+    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT,
+    JSON.stringify(entries)
+  );
+}
+
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getCurrentTimestamp() {
+  return new Date().toISOString();
+}
+
+function getReadableTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function createDailyInputBatchId() {
+  const now = new Date();
+  const departmentCode = getDepartmentCode(
+    window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT
+  );
+  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
+  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
+
+  return `${departmentCode}-${datePart}-${timePart}`;
 }
 
 function getDailyReviewStatus(rowData) {
@@ -90,95 +198,26 @@ function getDailyReviewStatus(rowData) {
   return "READY";
 }
 
-function getStoredLedgerEntriesForDailyInput() {
-  const storedEntries = localStorage.getItem(
-    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT
-  );
-
-  if (!storedEntries) {
-    return window.DMC_DATA?.ledger || [];
-  }
-
-  try {
-    return JSON.parse(storedEntries);
-  } catch {
-    return window.DMC_DATA?.ledger || [];
-  }
-}
-
-function saveLedgerEntriesFromDailyInput(entries) {
-  localStorage.setItem(
-    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT,
-    JSON.stringify(entries)
-  );
-}
-
-function getTodayDateString() {
-  const today = new Date();
-  return today.toISOString().slice(0, 10);
-}
-
-function getCurrentTimestamp() {
-  return new Date().toISOString();
-}
-
-function getReadableTimestamp() {
-  const now = new Date();
-
-  return now.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function createBarDailyInputBatchId() {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
-  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
-
-  return `BAR-${datePart}-${timePart}`;
-}
-
-function buildLedgerEntriesFromBarDailyInput() {
-  const barItems = getBarItemsForDailyInput();
-const inputData = getStoredBarDailyInput();
-const batchId = createBarDailyInputBatchId();
-const submittedAt = getCurrentTimestamp();
-const submittedAtDisplay = getReadableTimestamp();
+function buildLedgerEntriesFromBranchDailyInput() {
+  const departmentItems = getItemsForSelectedDepartment();
+  const inputData = getStoredBranchDailyInput();
+  const batchId = createDailyInputBatchId();
+  const submittedAt = getCurrentTimestamp();
+  const submittedAtDisplay = getReadableTimestamp();
+  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
 
   const movementFields = [
-    {
-      field: "received",
-      movementType: "Received"
-    },
-    {
-      field: "transferIn",
-      movementType: "Transfer In"
-    },
-    {
-      field: "usage",
-      movementType: "Usage"
-    },
-    {
-      field: "waste",
-      movementType: "Waste"
-    },
-    {
-      field: "transferOut",
-      movementType: "Transfer Out"
-    },
-    {
-      field: "adjustment",
-      movementType: "Adjustment"
-    }
+    { field: "received", movementType: "Received" },
+    { field: "transferIn", movementType: "Transfer In" },
+    { field: "usage", movementType: "Usage" },
+    { field: "waste", movementType: "Waste" },
+    { field: "transferOut", movementType: "Transfer Out" },
+    { field: "adjustment", movementType: "Adjustment" }
   ];
 
   const ledgerEntries = [];
 
-  barItems.forEach((item) => {
+  departmentItems.forEach((item) => {
     const rowData = inputData[item.itemId] || {};
     const notes = String(rowData.notes || "").trim();
 
@@ -196,20 +235,20 @@ const submittedAtDisplay = getReadableTimestamp();
       }
 
       ledgerEntries.push({
-    date: getTodayDateString(),
-    submittedAt,
-    submittedAtDisplay,
-    batchId,
-    department: "Bar",
-    section: item.section || "",
-    itemId: item.itemId || "",
-    itemName: item.officialItemName || "",
-    movementType: movement.movementType,
-    quantity,
-    unit: item.unit || "",
-    source: "Bar Daily Input",
-    notes
-    });
+        date: getTodayDateString(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        department: selectedDepartment,
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: movement.movementType,
+        quantity,
+        unit: item.unit || "",
+        source: `${selectedDepartment} Daily Input`,
+        notes
+      });
     });
   });
 
@@ -220,21 +259,38 @@ function getDailyInputValue(inputData, itemId, fieldName) {
   return inputData?.[itemId]?.[fieldName] || "";
 }
 
-function renderBarDailyInputRows() {
-  const barItems = getBarItemsForDailyInput();
-  const inputData = getStoredBarDailyInput();
+function renderDepartmentOptions() {
+  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
 
-  if (barItems.length === 0) {
+  return getBranchDepartments()
+    .map(
+      (department) => `
+        <option value="${department.name}" ${
+        selectedDepartment === department.name ? "selected" : ""
+      }>
+          ${department.name}
+        </option>
+      `
+    )
+    .join("");
+}
+
+function renderBranchDailyInputRows() {
+  const departmentItems = getItemsForSelectedDepartment();
+  const inputData = getStoredBranchDailyInput();
+  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+
+  if (departmentItems.length === 0) {
     return `
       <tr>
         <td colspan="12">
-          No Bar items found. Add Bar items in the Master List first.
+          No ${selectedDepartment} items found. Add ${selectedDepartment} items in the Master List first.
         </td>
       </tr>
     `;
   }
 
-  return barItems
+  return departmentItems
     .map((item) => {
       const rowData = inputData[item.itemId] || {};
       const reviewStatus = getDailyReviewStatus(rowData);
@@ -342,8 +398,8 @@ function renderBarDailyInputRows() {
     .join("");
 }
 
-function getBarDailyInputSummary() {
-  const inputData = getStoredBarDailyInput();
+function getBranchDailyInputSummary() {
+  const inputData = getStoredBranchDailyInput();
   const rows = Object.values(inputData);
 
   const rowsWithInput = rows.filter((row) => getDailyReviewStatus(row) !== "");
@@ -358,14 +414,15 @@ function getBarDailyInputSummary() {
 }
 
 function getBranchLogTransactionContent() {
-  const barItems = getBarItemsForDailyInput();
-  const summary = getBarDailyInputSummary();
+  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+  const departmentItems = getItemsForSelectedDepartment();
+  const summary = getBranchDailyInputSummary();
 
   return `
     <section class="grid">
       <div class="card">
-        <p>Bar Items</p>
-        <strong>${barItems.length}</strong>
+        <p>${selectedDepartment} Items</p>
+        <strong>${departmentItems.length}</strong>
       </div>
 
       <div class="card">
@@ -387,23 +444,40 @@ function getBranchLogTransactionContent() {
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h3>BAR Daily Input — Today Only</h3>
+          <h3>${selectedDepartment} Daily Input — Today Only</h3>
           <p>
-            Fill only the input columns: Received, Transfer In, Usage, Waste,
-            Transfer Out, Adjustment, and Notes. Item rows come from the Master List.
+            Select a department, then fill only the input columns. Item rows come
+            from the Master List.
           </p>
         </div>
 
         <div class="form-actions">
-  <button class="primary-button" id="submit-bar-daily-input">
-    Submit to Ledger
-  </button>
+          <button class="primary-button" id="submit-branch-daily-input">
+            Submit to Ledger
+          </button>
 
-  <button class="ghost-button" id="clear-bar-daily-input">
-    Clear Today
-  </button>
-</div>
-</div>
+          <button class="ghost-button" id="clear-branch-daily-input">
+            Clear Today
+          </button>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <label>
+          Department
+          <select id="branch-log-department-select">
+            ${renderDepartmentOptions()}
+          </select>
+        </label>
+
+        <label class="filter-search">
+          Current Input
+          <input
+            type="text"
+            value="${selectedDepartment} Daily Input"
+            disabled
+          />
+        </label>
       </div>
 
       <div class="instruction-box">
@@ -434,7 +508,7 @@ function getBranchLogTransactionContent() {
           </thead>
 
           <tbody>
-            ${renderBarDailyInputRows()}
+            ${renderBranchDailyInputRows()}
           </tbody>
         </table>
       </div>
@@ -450,62 +524,75 @@ function refreshBranchLogTransactionPage() {
 }
 
 function setupBranchLogTransactionEvents() {
+  const departmentSelect = document.getElementById(
+    "branch-log-department-select"
+  );
+
+  if (departmentSelect) {
+    departmentSelect.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT = departmentSelect.value;
+      refreshBranchLogTransactionPage();
+    });
+  }
+
   document.querySelectorAll(".daily-input-cell").forEach((input) => {
-  input.addEventListener("change", () => {
-    const inputData = getStoredBarDailyInput();
-    const itemId = input.dataset.itemId;
-    const field = input.dataset.field;
+    input.addEventListener("change", () => {
+      const inputData = getStoredBranchDailyInput();
+      const itemId = input.dataset.itemId;
+      const field = input.dataset.field;
 
-    inputData[itemId] = inputData[itemId] || {};
-    inputData[itemId][field] = input.value;
+      inputData[itemId] = inputData[itemId] || {};
+      inputData[itemId][field] = input.value;
 
-    saveBarDailyInput(inputData);
+      saveBranchDailyInput(inputData);
+    });
   });
-});
 
-  const clearButton = document.getElementById("clear-bar-daily-input");
-  const submitButton = document.getElementById("submit-bar-daily-input");
+  const clearButton = document.getElementById("clear-branch-daily-input");
+  const submitButton = document.getElementById("submit-branch-daily-input");
 
   if (submitButton) {
-  submitButton.addEventListener("click", () => {
-    const newLedgerEntries = buildLedgerEntriesFromBarDailyInput();
+    submitButton.addEventListener("click", () => {
+      const newLedgerEntries = buildLedgerEntriesFromBranchDailyInput();
+      const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
 
-    if (newLedgerEntries.length === 0) {
-      alert("No daily input entries to submit.");
-      return;
-    }
+      if (newLedgerEntries.length === 0) {
+        alert(`No ${selectedDepartment} daily input entries to submit.`);
+        return;
+      }
 
-    const confirmed = confirm(
-      `Submit ${newLedgerEntries.length} ledger entries and clear today's Bar Daily Input?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    const currentLedgerEntries = getStoredLedgerEntriesForDailyInput();
-    const updatedLedgerEntries = [
-      ...currentLedgerEntries,
-      ...newLedgerEntries
-    ];
-
-    saveLedgerEntriesFromDailyInput(updatedLedgerEntries);
-    localStorage.removeItem(DMC_BAR_DAILY_INPUT_STORAGE_KEY);
-
-    alert("Bar Daily Input submitted to Ledger.");
-    refreshBranchLogTransactionPage();
-  });
-}
-  
-  if (clearButton) {
-    clearButton.addEventListener("click", () => {
-      const confirmed = confirm("Clear today’s Bar Daily Input?");
+      const confirmed = confirm(
+        `Submit ${newLedgerEntries.length} ledger entries for ${selectedDepartment} and clear today's input?`
+      );
 
       if (!confirmed) {
         return;
       }
 
-      localStorage.removeItem(DMC_BAR_DAILY_INPUT_STORAGE_KEY);
+      const currentLedgerEntries = getStoredLedgerEntriesForDailyInput();
+      const updatedLedgerEntries = [
+        ...currentLedgerEntries,
+        ...newLedgerEntries
+      ];
+
+      saveLedgerEntriesFromDailyInput(updatedLedgerEntries);
+      localStorage.removeItem(getDailyInputStorageKey());
+
+      alert(`${selectedDepartment} Daily Input submitted to Ledger.`);
+      refreshBranchLogTransactionPage();
+    });
+  }
+
+  if (clearButton) {
+    clearButton.addEventListener("click", () => {
+      const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+      const confirmed = confirm(`Clear today's ${selectedDepartment} Daily Input?`);
+
+      if (!confirmed) {
+        return;
+      }
+
+      localStorage.removeItem(getDailyInputStorageKey());
       refreshBranchLogTransactionPage();
     });
   }
@@ -515,7 +602,7 @@ window.DMC_PAGES["branch-log-transaction"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Log Transaction",
   description:
-    "Daily input screen for branch/station transactions. Starting with Bar Daily Input.",
+    "Daily input screen for branch/station transactions by department.",
   content: getBranchLogTransactionContent(),
   afterRender: setupBranchLogTransactionEvents
 };
