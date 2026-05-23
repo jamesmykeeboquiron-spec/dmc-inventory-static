@@ -326,7 +326,6 @@ function setupBranchLogTransactionEvents() {
     inputData[itemId][field] = input.value;
 
     saveBarDailyInput(inputData);
-    refreshBranchLogTransactionPage();
   });
 });
 
