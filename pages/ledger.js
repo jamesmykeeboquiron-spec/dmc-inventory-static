@@ -90,7 +90,7 @@ function renderLedgerRows() {
   if (entries.length === 0) {
     return `
       <tr>
-        <td colspan="10">No ledger entries match the current filters.</td>
+        <td colspan="12">No ledger entries match the current filters.</td>
       </tr>
     `;
   }
@@ -100,6 +100,8 @@ function renderLedgerRows() {
       (entry) => `
         <tr>
           <td>${entry.date || "-"}</td>
+          <td>${entry.submittedAtDisplay || "Legacy / Sample"}</td>
+          <td>${entry.batchId || "No Batch"}</td>
           <td>${entry.department || "-"}</td>
           <td>${entry.section || "-"}</td>
           <td>${entry.itemId || "-"}</td>
@@ -223,17 +225,20 @@ function getLedgerContent() {
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Department</th>
-              <th>Section</th>
-              <th>Item ID</th>
-              <th>Item Name</th>
-              <th>Movement Type</th>
-              <th>Quantity</th>
-              <th>Unit</th>
-              <th>Source</th>
-              <th>Notes</th>
-            </tr>
+              <tr>
+  <th>Date</th>
+  <th>Submitted At</th>
+  <th>Batch ID</th>
+  <th>Department</th>
+  <th>Section</th>
+  <th>Item ID</th>
+  <th>Item Name</th>
+  <th>Movement Type</th>
+  <th>Quantity</th>
+  <th>Unit</th>
+  <th>Source</th>
+  <th>Notes</th>
+</tr>
           </thead>
 
           <tbody>
