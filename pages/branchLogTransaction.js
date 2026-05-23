@@ -517,18 +517,27 @@ function getBranchLogTransactionContent() {
         </label>
       </div>
 
-      <div class="instruction-box">
-        <strong>Instruction:</strong>
-        <span>
-          Item rows and IDs should not be edited here. Add or correct items in
-          Master List. This page is only for today’s transaction input.
-        </span>
-      </div>
+<div class="instruction-box">
+  <strong>Instruction:</strong>
+  <span>
+    Item rows and IDs should not be edited here. Add or correct items in
+    Master List. This page is only for today’s transaction input.
+  </span>
+</div>
 
-   
-  
+<div class="submit-preview-box">
+  <div>
+    <h4>Submit Preview</h4>
+    <p>
+      Only filled movement values will be submitted to the Ledger.
+      Blank fields and 0 values are ignored.
+    </p>
+  </div>
 
-      <div class="table-wrap">
+  ${renderSubmitPreviewList()}
+</div>
+
+<div class="table-wrap">
         <table class="daily-input-table">
           <thead>
             <tr>
