@@ -4,29 +4,41 @@ const DMC_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
 
 function getDefaultSettings() {
   return window.DMC_DATA?.settings || {
-  operatingAreas: [],
-  departments: [],
-  sections: [],
-  units: []
-};
+    operatingAreas: [],
+    departments: [],
+    sections: [],
+    units: []
+  };
+}
+
+function normalizeSettings(settings) {
+  return {
+    operatingAreas: settings.operatingAreas || [],
+    departments: settings.departments || [],
+    sections: settings.sections || [],
+    units: settings.units || []
+  };
 }
 
 function getStoredSettings() {
   const storedSettings = localStorage.getItem(DMC_SETTINGS_STORAGE_KEY);
 
   if (!storedSettings) {
-    return getDefaultSettings();
+    return normalizeSettings(getDefaultSettings());
   }
 
   try {
-    return JSON.parse(storedSettings);
+    return normalizeSettings(JSON.parse(storedSettings));
   } catch {
-    return getDefaultSettings();
+    return normalizeSettings(getDefaultSettings());
   }
 }
 
 function saveSettings(settings) {
-  localStorage.setItem(DMC_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  localStorage.setItem(
+    DMC_SETTINGS_STORAGE_KEY,
+    JSON.stringify(normalizeSettings(settings))
+  );
 }
 
 function slugifySetting(value) {
@@ -42,7 +54,10 @@ function getAreaName(settings, areaId) {
 }
 
 function getDepartmentName(settings, departmentId) {
-  return settings.departments.find((dept) => dept.id === departmentId)?.name || "-";
+  return (
+    settings.departments.find((department) => department.id === departmentId)
+      ?.name || "-"
+  );
 }
 
 function renderOperatingAreaOptions(settings) {
@@ -53,11 +68,18 @@ function renderOperatingAreaOptions(settings) {
 
 function renderDepartmentOptions(settings) {
   return settings.departments
-    .map((dept) => `<option value="${dept.id}">${dept.name}</option>`)
+    .map(
+      (department) =>
+        `<option value="${department.id}">${department.name}</option>`
+    )
     .join("");
 }
 
 function renderOperatingAreaRows(settings) {
+  if (settings.operatingAreas.length === 0) {
+    return `<tr><td colspan="4">No operating areas yet.</td></tr>`;
+  }
+
   return settings.operatingAreas
     .map(
       (area) => `
@@ -78,6 +100,10 @@ function renderOperatingAreaRows(settings) {
 }
 
 function renderDepartmentRows(settings) {
+  if (settings.departments.length === 0) {
+    return `<tr><td colspan="5">No departments yet.</td></tr>`;
+  }
+
   return settings.departments
     .map(
       (department) => `
@@ -99,6 +125,10 @@ function renderDepartmentRows(settings) {
 }
 
 function renderSectionRows(settings) {
+  if (settings.sections.length === 0) {
+    return `<tr><td colspan="5">No sections yet.</td></tr>`;
+  }
+
   return settings.sections
     .map(
       (section) => `
@@ -119,8 +149,11 @@ function renderSectionRows(settings) {
     .join("");
 }
 
-
 function renderUnitRows(settings) {
+  if (settings.units.length === 0) {
+    return `<tr><td colspan="4">No units yet.</td></tr>`;
+  }
+
   return settings.units
     .map(
       (unit) => `
@@ -215,42 +248,43 @@ function getSystemSetupManagerContent(activeManager) {
     `;
   }
 
-  return `
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Manage Sections</h3>
-          <p>Sections belong under a Department. Example: Coffee under Bar.</p>
+  if (activeManager === "sections") {
+    return `
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Manage Sections</h3>
+            <p>Sections belong under a Department. Example: Coffee under Bar.</p>
+          </div>
         </div>
-      </div>
 
-      <form id="add-section-form" class="mini-form stacked">
-        <select id="section-department" required>
-          ${renderDepartmentOptions(settings)}
-        </select>
-        <input id="section-name" type="text" placeholder="Example: Coffee" required />
-        <button class="primary-button" type="submit">Add Section</button>
-      </form>
+        <form id="add-section-form" class="mini-form stacked">
+          <select id="section-department" required>
+            ${renderDepartmentOptions(settings)}
+          </select>
+          <input id="section-name" type="text" placeholder="Example: Coffee" required />
+          <button class="primary-button" type="submit">Add Section</button>
+        </form>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Department</th>
-              <th>ID</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${renderSectionRows(settings)}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  `;
-}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Department</th>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderSectionRows(settings)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
 
   if (activeManager === "units") {
     return `
@@ -258,12 +292,12 @@ function getSystemSetupManagerContent(activeManager) {
         <div class="panel-header">
           <div>
             <h3>Manage Units</h3>
-            <p>Units are used in the Master List item form. Examples: kg, liters, pcs, pack, box, case, bag, bottle.</p>
+            <p>Units will be used in the Master List item form. Examples: kg, liters, pcs, pack, box, case, bag, bottle.</p>
           </div>
         </div>
 
         <form id="add-unit-form" class="mini-form">
-          <input id="unit-name" type="text" placeholder="Example: kg" required />
+          <input id="unit-name" type="text" placeholder="Example: gallon" required />
           <button class="primary-button" type="submit">Add Unit</button>
         </form>
 
@@ -285,6 +319,9 @@ function getSystemSetupManagerContent(activeManager) {
       </section>
     `;
   }
+
+  return "";
+}
 
 function getSettingsContent() {
   const settings = getStoredSettings();
@@ -485,15 +522,15 @@ function setupOperatingAreaEvents() {
       if (!confirmed) return;
 
       const departmentIdsToRemove = settings.departments
-        .filter((dept) => dept.operatingAreaId === areaId)
-        .map((dept) => dept.id);
+        .filter((department) => department.operatingAreaId === areaId)
+        .map((department) => department.id);
 
       settings.operatingAreas = settings.operatingAreas.filter(
         (area) => area.id !== areaId
       );
 
       settings.departments = settings.departments.filter(
-        (dept) => dept.operatingAreaId !== areaId
+        (department) => department.operatingAreaId !== areaId
       );
 
       settings.sections = settings.sections.filter(
@@ -564,7 +601,7 @@ function setupDepartmentEvents() {
       if (!confirmed) return;
 
       settings.departments = settings.departments.filter(
-        (dept) => dept.id !== departmentId
+        (department) => department.id !== departmentId
       );
 
       settings.sections = settings.sections.filter(
@@ -638,8 +675,9 @@ function setupSectionEvents() {
       refreshSettingsPage();
     });
   });
+}
 
-  function setupUnitEvents() {
+function setupUnitEvents() {
   const form = document.getElementById("add-unit-form");
 
   if (form) {
@@ -697,13 +735,12 @@ function setupSectionEvents() {
     });
   });
 }
-}
 
 window.DMC_PAGES.settings = {
   eyebrow: "System",
   title: "Settings",
   description:
-    "Manage setup options for Operating Areas, Departments, Sections, and future dropdowns.",
+    "Manage setup options for Operating Areas, Departments, Sections, Units, and future dropdowns.",
   content: getSettingsContent(),
   afterRender: setupSettingsEvents
 };
