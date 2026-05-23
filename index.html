@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DMC Inventory System</title>
+  <style>
+    :root {
+      --bg: #11100d;
+      --surface: #17140f;
+      --surface-2: #201b13;
+      --border: #3b2f1f;
+      --gold: #d6a84f;
+      --text: #f5efe3;
+      --text-muted: #c9bda8;
+      --text-soft: #a99b86;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: #0f0d09;
+      border-right: 1px solid var(--border);
+      padding: 24px 18px;
+    }
+
+    .brand {
+      margin-bottom: 32px;
+    }
+
+    .brand small {
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .brand h1 {
+      font-size: 22px;
+      margin: 10px 0 0;
+    }
+
+    .nav-section {
+      margin-bottom: 24px;
+    }
+
+    .nav-title {
+      color: var(--text-soft);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 10px;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 11px 12px;
+      margin-bottom: 6px;
+      border-radius: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .nav-link.active,
+    .nav-link:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .main {
+      flex: 1;
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .status-pill {
+      border: 1px solid var(--border);
+      color: var(--gold);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: var(--surface);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 14px;
+    }
+
+    .card strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 30px;
+      color: var(--text);
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px;
+    }
+
+    .panel h3 {
+      margin-top: 0;
+      margin-bottom: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    th {
+      color: var(--gold);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    td {
+      color: var(--text-muted);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(214, 168, 79, 0.12);
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <small>D' Mezzanine Cafe</small>
+        <h1>DMC Inventory</h1>
+      </div>
+
+      <nav>
+        <div class="nav-section">
+          <div class="nav-title">Main</div>
+          <a class="nav-link active" href="#">Dashboard</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">Inventory</div>
+          <a class="nav-link" href="#">Master List</a>
+          <a class="nav-link" href="#">Commissary Stock</a>
+          <a class="nav-link" href="#">Branch Stock</a>
+          <a class="nav-link" href="#">Ledger</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">Operations</div>
+          <a class="nav-link" href="#">Place Order</a>
+          <a class="nav-link" href="#">Incoming Orders</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">Admin</div>
+          <a class="nav-link" href="#">Staff</a>
+          <a class="nav-link" href="#">Settings</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h2>Dashboard</h2>
+          <p style="color: var(--text-muted); margin: 8px 0 0;">
+            Static prototype for the DMC Inventory System.
+          </p>
+        </div>
+
+        <span class="status-pill">GitHub + Render Static Site</span>
+      </header>
+
+      <section class="grid">
+        <div class="card">
+          <p>Master Items</p>
+          <strong>24</strong>
+        </div>
+
+        <div class="card">
+          <p>Locations</p>
+          <strong>5</strong>
+        </div>
+
+        <div class="card">
+          <p>Pending Orders</p>
+          <strong>3</strong>
+        </div>
+
+        <div class="card">
+          <p>Ledger Entries</p>
+          <strong>12</strong>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Recent Stock Movements</h3>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Item</th>
+              <th>Movement</th>
+              <th>Location</th>
+              <th>Qty</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Today</td>
+              <td>Coffee Beans</td>
+              <td>Received</td>
+              <td>Commissary</td>
+              <td>20 bags</td>
+              <td><span class="badge">Posted</span></td>
+            </tr>
+            <tr>
+              <td>Today</td>
+              <td>Fresh Milk</td>
+              <td>Transfer</td>
+              <td>BAR</td>
+              <td>6 gallons</td>
+              <td><span class="badge">Posted</span></td>
+            </tr>
+            <tr>
+              <td>Yesterday</td>
+              <td>Paper Cups 12oz</td>
+              <td>Usage</td>
+              <td>Branch 1</td>
+              <td>150 pcs</td>
+              <td><span class="badge">Reviewed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
