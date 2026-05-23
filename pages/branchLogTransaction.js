@@ -421,28 +421,7 @@ function getBranchDailyInputSummary() {
   };
 }
 
-function renderDailyInputMovementSummary(summary) {
-  const movementTypes = [
-    "Received",
-    "Transfer In",
-    "Usage",
-    "Waste",
-    "Transfer Out",
-    "Adjustment"
-  ];
 
-  return movementTypes
-    .map((movementType) => {
-      const count = summary.movementTotals[movementType] || 0;
-
-      return `
-        <span class="ledger-batch-pill">
-          ${movementType}: ${count}
-        </span>
-      `;
-    })
-    .join("");
-}
 
 function renderSubmitPreviewList() {
   const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
@@ -546,43 +525,8 @@ function getBranchLogTransactionContent() {
         </span>
       </div>
 
-      <div class="submit-preview-box">
-  <div>
-    <h4>Submit Preview</h4>
-    <p>Only filled movement values will be submitted to the Ledger. Blank fields and 0 values are ignored.</p>
-  </div>
-
-  ${renderSubmitPreviewList()}
-</div>
-
-     
-
-  <div class="review-summary-grid">
-    <div>
-      <span>Rows With Input</span>
-      <strong>${summary.rowsWithInput}</strong>
-    </div>
-
-    <div>
-      <span>Ready Rows</span>
-      <strong>${summary.readyRows}</strong>
-    </div>
-
-    <div>
-      <span>Needs Check</span>
-      <strong>${summary.checkRows}</strong>
-    </div>
-
-    <div>
-      <span>Ledger Entries</span>
-      <strong>${summary.ledgerEntryCount}</strong>
-    </div>
-  </div>
-
-  <div class="ledger-batch-totals">
-    ${renderDailyInputMovementSummary(summary)}
-  </div>
-</div>
+   
+  
 
       <div class="table-wrap">
         <table class="daily-input-table">
