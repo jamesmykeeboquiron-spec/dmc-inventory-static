@@ -317,18 +317,18 @@ function refreshBranchLogTransactionPage() {
 
 function setupBranchLogTransactionEvents() {
   document.querySelectorAll(".daily-input-cell").forEach((input) => {
-    input.addEventListener("input", () => {
-      const inputData = getStoredBarDailyInput();
-      const itemId = input.dataset.itemId;
-      const field = input.dataset.field;
+  input.addEventListener("change", () => {
+    const inputData = getStoredBarDailyInput();
+    const itemId = input.dataset.itemId;
+    const field = input.dataset.field;
 
-      inputData[itemId] = inputData[itemId] || {};
-      inputData[itemId][field] = input.value;
+    inputData[itemId] = inputData[itemId] || {};
+    inputData[itemId][field] = input.value;
 
-      saveBarDailyInput(inputData);
-      refreshBranchLogTransactionPage();
-    });
+    saveBarDailyInput(inputData);
+    refreshBranchLogTransactionPage();
   });
+});
 
   const clearButton = document.getElementById("clear-bar-daily-input");
 
