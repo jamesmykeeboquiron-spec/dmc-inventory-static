@@ -2,6 +2,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_master_list_items";
 const DMC_BAR_DAILY_INPUT_STORAGE_KEY = "dmc_bar_daily_input_today";
+const DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_inventory_ledger_entries";
 
 function getDailyInputMasterListItems() {
   const storedItems = localStorage.getItem(DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT);
@@ -87,6 +88,102 @@ function getDailyReviewStatus(rowData) {
   }
 
   return "READY";
+}
+
+function getStoredLedgerEntriesForDailyInput() {
+  const storedEntries = localStorage.getItem(
+    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT
+  );
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function saveLedgerEntriesFromDailyInput(entries) {
+  localStorage.setItem(
+    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT,
+    JSON.stringify(entries)
+  );
+}
+
+function getTodayDateString() {
+  const today = new Date();
+  return today.toISOString().slice(0, 10);
+}
+
+function buildLedgerEntriesFromBarDailyInput() {
+  const barItems = getBarItemsForDailyInput();
+  const inputData = getStoredBarDailyInput();
+
+  const movementFields = [
+    {
+      field: "received",
+      movementType: "Received"
+    },
+    {
+      field: "transferIn",
+      movementType: "Transfer In"
+    },
+    {
+      field: "usage",
+      movementType: "Usage"
+    },
+    {
+      field: "waste",
+      movementType: "Waste"
+    },
+    {
+      field: "transferOut",
+      movementType: "Transfer Out"
+    },
+    {
+      field: "adjustment",
+      movementType: "Adjustment"
+    }
+  ];
+
+  const ledgerEntries = [];
+
+  barItems.forEach((item) => {
+    const rowData = inputData[item.itemId] || {};
+    const notes = String(rowData.notes || "").trim();
+
+    movementFields.forEach((movement) => {
+      const rawValue = String(rowData[movement.field] || "").trim();
+
+      if (rawValue === "") {
+        return;
+      }
+
+      const quantity = Number(rawValue);
+
+      if (Number.isNaN(quantity)) {
+        return;
+      }
+
+      ledgerEntries.push({
+        date: getTodayDateString(),
+        department: "Bar",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: movement.movementType,
+        quantity,
+        unit: item.unit || "",
+        source: "Bar Daily Input",
+        notes
+      });
+    });
+  });
+
+  return ledgerEntries;
 }
 
 function getDailyInputValue(inputData, itemId, fieldName) {
@@ -267,9 +364,15 @@ function getBranchLogTransactionContent() {
           </p>
         </div>
 
-        <button class="ghost-button" id="clear-bar-daily-input">
-          Clear Today
-        </button>
+        <div class="form-actions">
+  <button class="primary-button" id="submit-bar-daily-input">
+    Submit to Ledger
+  </button>
+
+  <button class="ghost-button" id="clear-bar-daily-input">
+    Clear Today
+  </button>
+</div>
       </div>
 
       <div class="instruction-box">
@@ -330,7 +433,39 @@ function setupBranchLogTransactionEvents() {
 });
 
   const clearButton = document.getElementById("clear-bar-daily-input");
+  const submitButton = document.getElementById("submit-bar-daily-input");
 
+  if (submitButton) {
+  submitButton.addEventListener("click", () => {
+    const newLedgerEntries = buildLedgerEntriesFromBarDailyInput();
+
+    if (newLedgerEntries.length === 0) {
+      alert("No daily input entries to submit.");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Submit ${newLedgerEntries.length} ledger entries and clear today's Bar Daily Input?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const currentLedgerEntries = getStoredLedgerEntriesForDailyInput();
+    const updatedLedgerEntries = [
+      ...currentLedgerEntries,
+      ...newLedgerEntries
+    ];
+
+    saveLedgerEntriesFromDailyInput(updatedLedgerEntries);
+    localStorage.removeItem(DMC_BAR_DAILY_INPUT_STORAGE_KEY);
+
+    alert("Bar Daily Input submitted to Ledger.");
+    refreshBranchLogTransactionPage();
+  });
+}
+  
   if (clearButton) {
     clearButton.addEventListener("click", () => {
       const confirmed = confirm("Clear today’s Bar Daily Input?");
