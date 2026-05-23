@@ -1174,3 +1174,36 @@ td {
 .submit-preview-empty {
   color: var(--text-soft);
 }
+
+.review-mode-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.review-mode-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-actions {
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .review-mode-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
