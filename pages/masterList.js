@@ -147,13 +147,19 @@ function getFilteredMasterListItems() {
   const items = getStoredMasterListItems();
 
   return items.filter((item) => {
+    const itemDepartment = String(item.department || "").toLowerCase();
+    const itemSection = String(item.section || "").toLowerCase();
+
+    const selectedDepartment = String(filters.department || "all").toLowerCase();
+    const selectedSection = String(filters.section || "all").toLowerCase();
+
     const matchesDepartment =
-      filters.department === "all" || item.department === filters.department;
+      selectedDepartment === "all" || itemDepartment === selectedDepartment;
 
     const matchesSection =
-      filters.section === "all" || item.section === filters.section;
+      selectedSection === "all" || itemSection === selectedSection;
 
-    const searchValue = filters.search.toLowerCase().trim();
+    const searchValue = String(filters.search || "").toLowerCase().trim();
 
     const matchesSearch =
       !searchValue ||
@@ -228,7 +234,7 @@ function renderMasterListRows() {
   if (items.length === 0) {
     return `
       <tr>
-        <td colspan="9">No Master List items added yet.</td>
+        <td colspan="9">No items match the current filters.</td>
       </tr>
     `;
   }
