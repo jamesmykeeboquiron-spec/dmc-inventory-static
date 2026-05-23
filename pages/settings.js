@@ -36,56 +36,12 @@ function slugifySetting(value) {
     .replace(/(^-|-$)/g, "");
 }
 
-function renderOperatingAreaRows(settings) {
-  return settings.operatingAreas
-    .map(
-      (area) => `
-        <tr>
-          <td>${area.name}</td>
-          <td>${area.id}</td>
-          <td><span class="badge">Active</span></td>
-        </tr>
-      `
-    )
-    .join("");
+function getAreaName(settings, areaId) {
+  return settings.operatingAreas.find((area) => area.id === areaId)?.name || "-";
 }
 
-function renderDepartmentRows(settings) {
-  return settings.departments
-    .map((department) => {
-      const area = settings.operatingAreas.find(
-        (item) => item.id === department.operatingAreaId
-      );
-
-      return `
-        <tr>
-          <td>${department.name}</td>
-          <td>${area?.name || "-"}</td>
-          <td>${department.id}</td>
-          <td><span class="badge">Active</span></td>
-        </tr>
-      `;
-    })
-    .join("");
-}
-
-function renderSectionRows(settings) {
-  return settings.sections
-    .map((section) => {
-      const department = settings.departments.find(
-        (item) => item.id === section.departmentId
-      );
-
-      return `
-        <tr>
-          <td>${section.name}</td>
-          <td>${department?.name || "-"}</td>
-          <td>${section.id}</td>
-          <td><span class="badge">Active</span></td>
-        </tr>
-      `;
-    })
-    .join("");
+function getDepartmentName(settings, departmentId) {
+  return settings.departments.find((dept) => dept.id === departmentId)?.name || "-";
 }
 
 function renderOperatingAreaOptions(settings) {
@@ -96,15 +52,188 @@ function renderOperatingAreaOptions(settings) {
 
 function renderDepartmentOptions(settings) {
   return settings.departments
+    .map((dept) => `<option value="${dept.id}">${dept.name}</option>`)
+    .join("");
+}
+
+function renderOperatingAreaRows(settings) {
+  return settings.operatingAreas
     .map(
-      (department) =>
-        `<option value="${department.id}">${department.name}</option>`
+      (area) => `
+        <tr>
+          <td>${area.name}</td>
+          <td>${area.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-area="${area.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-area="${area.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
     )
     .join("");
 }
 
+function renderDepartmentRows(settings) {
+  return settings.departments
+    .map(
+      (department) => `
+        <tr>
+          <td>${department.name}</td>
+          <td>${getAreaName(settings, department.operatingAreaId)}</td>
+          <td>${department.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-department="${department.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-department="${department.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderSectionRows(settings) {
+  return settings.sections
+    .map(
+      (section) => `
+        <tr>
+          <td>${section.name}</td>
+          <td>${getDepartmentName(settings, section.departmentId)}</td>
+          <td>${section.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-section="${section.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-section="${section.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function getSystemSetupManagerContent(activeManager) {
+  const settings = getStoredSettings();
+
+  if (activeManager === "operating-areas") {
+    return `
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Manage Operating Areas</h3>
+            <p>Operating Areas are the top-level dropdown options, such as Branch/Station or Commissary.</p>
+          </div>
+        </div>
+
+        <form id="add-operating-area-form" class="mini-form">
+          <input id="operating-area-name" type="text" placeholder="Example: Branch/Station" required />
+          <button class="primary-button" type="submit">Add Area</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderOperatingAreaRows(settings)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
+  if (activeManager === "departments") {
+    return `
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Manage Departments</h3>
+            <p>Departments belong under an Operating Area. Example: Bar under Branch/Station.</p>
+          </div>
+        </div>
+
+        <form id="add-department-form" class="mini-form stacked">
+          <select id="department-operating-area" required>
+            ${renderOperatingAreaOptions(settings)}
+          </select>
+          <input id="department-name" type="text" placeholder="Example: Bar" required />
+          <button class="primary-button" type="submit">Add Department</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Operating Area</th>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderDepartmentRows(settings)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Manage Sections</h3>
+          <p>Sections belong under a Department. Example: Coffee under Bar.</p>
+        </div>
+      </div>
+
+      <form id="add-section-form" class="mini-form stacked">
+        <select id="section-department" required>
+          ${renderDepartmentOptions(settings)}
+        </select>
+        <input id="section-name" type="text" placeholder="Example: Coffee" required />
+        <button class="primary-button" type="submit">Add Section</button>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Department</th>
+              <th>ID</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderSectionRows(settings)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function getSettingsContent() {
   const settings = getStoredSettings();
+  const activeManager = window.DMC_ACTIVE_SETTINGS_MANAGER || "operating-areas";
+  const systemOpen = window.DMC_SYSTEM_SETUP_OPEN !== false;
 
   return `
     <section class="grid">
@@ -134,24 +263,21 @@ function getSettingsContent() {
         <div>
           <h3>Settings Dashboard</h3>
           <p>
-            Manage the dropdown choices and setup lists that will power the
-            inventory forms. For now, System Setup is active and saves locally
-            in this browser.
+            Manage dropdown choices and setup lists. For now, we are testing System Setup first.
           </p>
         </div>
-
         <button class="ghost-button">Prototype Settings</button>
       </div>
 
       <div class="settings-category-grid">
-        <article class="settings-category-card active">
+        <button class="settings-category-card active clickable-card" id="toggle-system-setup">
           <div class="settings-category-icon">⚙</div>
           <div>
             <h4>System Setup</h4>
             <p>Operating Areas, Departments, Sections, Units, and Item Categories.</p>
           </div>
-          <span class="badge">Active</span>
-        </article>
+          <span class="badge">${systemOpen ? "Open" : "Closed"}</span>
+        </button>
 
         <article class="settings-category-card">
           <div class="settings-category-icon">▧</div>
@@ -182,59 +308,409 @@ function getSettingsContent() {
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>System Setup</h3>
-          <p>
-            These values will become dropdown options in the Master List Add Item
-            form. The relationship is Operating Area → Department → Section.
-          </p>
-        </div>
+    ${
+      systemOpen
+        ? `
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>System Setup Dropdown Manager</h3>
+                <p>
+                  Choose what you want to manage. These options will later feed dropdowns in the Master List.
+                </p>
+              </div>
+            </div>
 
-        <button class="ghost-button">Dropdown Source</button>
-      </div>
+            <div class="settings-manager-tabs">
+              <button class="manager-tab ${activeManager === "operating-areas" ? "active" : ""}" data-settings-manager="operating-areas">
+                Operating Areas
+              </button>
+              <button class="manager-tab ${activeManager === "departments" ? "active" : ""}" data-settings-manager="departments">
+                Departments
+              </button>
+              <button class="manager-tab ${activeManager === "sections" ? "active" : ""}" data-settings-manager="sections">
+                Sections
+              </button>
+              <button class="manager-tab disabled" type="button">
+                Units Soon
+              </button>
+              <button class="manager-tab disabled" type="button">
+                Item Categories Soon
+              </button>
+            </div>
+          </section>
 
-      <div class="settings-subsection-grid">
-        <article class="settings-subsection-card active">
-          <h4>Operating Areas</h4>
-          <p>Top-level inventory area such as Branch/Station or Commissary.</p>
-        </article>
+          ${getSystemSetupManagerContent(activeManager)}
+        `
+        : ""
+    }
+  `;
+}
 
-        <article class="settings-subsection-card active">
-          <h4>Departments</h4>
-          <p>Departments such as Bar, Kitchen, Dining, and Commissary.</p>
-        </article>
+function refreshSettingsPage() {
+  window.DMC_PAGES.settings.content = getSettingsContent();
+  renderPage("settings");
+}
 
-        <article class="settings-subsection-card active">
-          <h4>Sections</h4>
-          <p>Groups under each department, such as Coffee, Milk, or Cups & Lids.</p>
-        </article>
+function setupSettingsEvents() {
+  const toggleSystemSetup = document.getElementById("toggle-system-setup");
 
-        <article class="settings-subsection-card disabled">
-          <h4>Units</h4>
-          <p>Coming later: kg, liters, pcs, pack, case, box, and more.</p>
-        </article>
+  if (toggleSystemSetup) {
+    toggleSystemSetup.addEventListener("click", () => {
+      window.DMC_SYSTEM_SETUP_OPEN = window.DMC_SYSTEM_SETUP_OPEN === false;
+      refreshSettingsPage();
+    });
+  }
 
-        <article class="settings-subsection-card disabled">
-          <h4>Item Categories</h4>
-          <p>Coming later: Ingredient, Packaging, Cleaning, Supply, and more.</p>
-        </article>
-      </div>
-    </section>
+  document.querySelectorAll("[data-settings-manager]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_ACTIVE_SETTINGS_MANAGER = button.dataset.settingsManager;
+      refreshSettingsPage();
+    });
+  });
 
-    <section class="settings-grid">
-      <div class="panel">
+  setupOperatingAreaEvents();
+  setupDepartmentEvents();
+  setupSectionEvents();
+}
+
+function setupOperatingAreaEvents() {
+  const form = document.getElementById("add-operating-area-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const settings = getStoredSettings();
+      const name = document.getElementById("operating-area-name").value.trim();
+
+      if (!name) return;
+
+      settings.operatingAreas.push({
+        id: slugifySetting(name),
+        name
+      });
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const area = settings.operatingAreas.find((item) => item.id === button.dataset.editArea);
+
+      if (!area) return;
+
+      const newName = prompt("Edit Operating Area name:", area.name);
+
+      if (!newName || !newName.trim()) return;
+
+      area.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const areaId = button.dataset.removeArea;
+
+      const confirmed = confirm(
+        "Remove this Operating Area? Departments and Sections under it will also be removed in this prototype."
+      );
+
+      if (!confirmed) return;
+
+      const departmentIdsToRemove = settings.departments
+        .filter((dept) => dept.operatingAreaId === areaId)
+        .map((dept) => dept.id);
+
+      settings.operatingAreas = settings.operatingAreas.filter((area) => area.id !== areaId);
+      settings.departments = settings.departments.filter((dept) => dept.operatingAreaId !== areaId);
+      settings.sections = settings.sections.filter(
+        (section) => !departmentIdsToRemove.includes(section.departmentId)
+      );
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
+function setupDepartmentEvents() {
+  const form = document.getElementById("add-department-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const settings = getStoredSettings();
+      const name = document.getElementById("department-name").value.trim();
+      const operatingAreaId = document.getElementById("department-operating-area").value;
+
+      if (!name) return;
+
+      settings.departments.push({
+        id: slugifySetting(name),
+        name,
+        operatingAreaId
+      });
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-department]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const department = settings.departments.find(
+        (item) => item.id === button.dataset.editDepartment
+      );
+
+      if (!department) return;
+
+      const newName = prompt("Edit Department name:", department.name);
+
+      if (!newName || !newName.trim()) return;
+
+      department.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-department]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const departmentId = button.dataset.removeDepartment;
+
+      const confirmed = confirm(
+        "Remove this Department? Sections under it will also be removed in this prototype."
+      );
+
+      if (!confirmed) return;
+
+      settings.departments = settings.departments.filter((dept) => dept.id !== departmentId);
+      settings.sections = settings.sections.filter(
+        (section) => section.departmentId !== departmentId
+      );
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
+function setupSectionEvents() {
+  const form = document.getElementById("add-section-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const settings = getStoredSettings();
+      const name = document.getElementById("section-name").value.trim();
+      const departmentId = document.getElementById("section-department").value;
+
+      if (!name) return;
+
+      settings.sections.push({
+        id: `${departmentId}-${slugifySetting(name)}`,
+        name,
+        departmentId
+      });
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const section = settings.sections.find(
+        (item) => item.id === button.dataset.editSection
+      );
+
+      if (!section) return;
+
+      const newName = prompt("Edit Section name:", section.name);
+
+      if (!newName || !newName.trim()) return;
+
+      section.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const sectionId = button.dataset.removeSection;
+
+      const confirmed = confirm("Remove this Section?");
+
+      if (!confirmed) return;
+
+      settings.sections = settings.sections.filter((section) => section.id !== sectionId);
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
+window.DMC_PAGES.settings = {
+  eyebrow: "System",
+  title: "Settings",
+  description:
+    "Manage setup options for Operating Areas, Departments, Sections, and future dropdowns.",
+  content: getSettingsContent(),
+  afterRender: setupSettingsEvents
+};window.DMC_PAGES = window.DMC_PAGES || {};
+
+const DMC_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
+
+function getDefaultSettings() {
+  return window.DMC_DATA?.settings || {
+    operatingAreas: [],
+    departments: [],
+    sections: []
+  };
+}
+
+function getStoredSettings() {
+  const storedSettings = localStorage.getItem(DMC_SETTINGS_STORAGE_KEY);
+
+  if (!storedSettings) {
+    return getDefaultSettings();
+  }
+
+  try {
+    return JSON.parse(storedSettings);
+  } catch {
+    return getDefaultSettings();
+  }
+}
+
+function saveSettings(settings) {
+  localStorage.setItem(DMC_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function slugifySetting(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function getAreaName(settings, areaId) {
+  return settings.operatingAreas.find((area) => area.id === areaId)?.name || "-";
+}
+
+function getDepartmentName(settings, departmentId) {
+  return settings.departments.find((dept) => dept.id === departmentId)?.name || "-";
+}
+
+function renderOperatingAreaOptions(settings) {
+  return settings.operatingAreas
+    .map((area) => `<option value="${area.id}">${area.name}</option>`)
+    .join("");
+}
+
+function renderDepartmentOptions(settings) {
+  return settings.departments
+    .map((dept) => `<option value="${dept.id}">${dept.name}</option>`)
+    .join("");
+}
+
+function renderOperatingAreaRows(settings) {
+  return settings.operatingAreas
+    .map(
+      (area) => `
+        <tr>
+          <td>${area.name}</td>
+          <td>${area.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-area="${area.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-area="${area.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderDepartmentRows(settings) {
+  return settings.departments
+    .map(
+      (department) => `
+        <tr>
+          <td>${department.name}</td>
+          <td>${getAreaName(settings, department.operatingAreaId)}</td>
+          <td>${department.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-department="${department.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-department="${department.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderSectionRows(settings) {
+  return settings.sections
+    .map(
+      (section) => `
+        <tr>
+          <td>${section.name}</td>
+          <td>${getDepartmentName(settings, section.departmentId)}</td>
+          <td>${section.id}</td>
+          <td><span class="badge">Active</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-section="${section.id}">Edit</button>
+              <button class="tiny-button danger" data-remove-section="${section.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function getSystemSetupManagerContent(activeManager) {
+  const settings = getStoredSettings();
+
+  if (activeManager === "operating-areas") {
+    return `
+      <section class="panel">
         <div class="panel-header">
           <div>
-            <h3>Operating Areas</h3>
-            <p>The top-level area where inventory belongs.</p>
+            <h3>Manage Operating Areas</h3>
+            <p>Operating Areas are the top-level dropdown options, such as Branch/Station or Commissary.</p>
           </div>
         </div>
 
         <form id="add-operating-area-form" class="mini-form">
           <input id="operating-area-name" type="text" placeholder="Example: Branch/Station" required />
-          <button class="primary-button" type="submit">Add</button>
+          <button class="primary-button" type="submit">Add Area</button>
         </form>
 
         <div class="table-wrap">
@@ -244,6 +720,7 @@ function getSettingsContent() {
                 <th>Name</th>
                 <th>ID</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -251,13 +728,17 @@ function getSettingsContent() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
+    `;
+  }
 
-      <div class="panel">
+  if (activeManager === "departments") {
+    return `
+      <section class="panel">
         <div class="panel-header">
           <div>
-            <h3>Departments</h3>
-            <p>Departments belong under an operating area.</p>
+            <h3>Manage Departments</h3>
+            <p>Departments belong under an Operating Area. Example: Bar under Branch/Station.</p>
           </div>
         </div>
 
@@ -266,7 +747,7 @@ function getSettingsContent() {
             ${renderOperatingAreaOptions(settings)}
           </select>
           <input id="department-name" type="text" placeholder="Example: Bar" required />
-          <button class="primary-button" type="submit">Add</button>
+          <button class="primary-button" type="submit">Add Department</button>
         </form>
 
         <div class="table-wrap">
@@ -277,6 +758,7 @@ function getSettingsContent() {
                 <th>Operating Area</th>
                 <th>ID</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -284,60 +766,202 @@ function getSettingsContent() {
             </tbody>
           </table>
         </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Manage Sections</h3>
+          <p>Sections belong under a Department. Example: Coffee under Bar.</p>
+        </div>
       </div>
 
-      <div class="panel settings-wide">
-        <div class="panel-header">
-          <div>
-            <h3>Sections</h3>
-            <p>Sections belong under a department and will organize item lists.</p>
-          </div>
-        </div>
+      <form id="add-section-form" class="mini-form stacked">
+        <select id="section-department" required>
+          ${renderDepartmentOptions(settings)}
+        </select>
+        <input id="section-name" type="text" placeholder="Example: Coffee" required />
+        <button class="primary-button" type="submit">Add Section</button>
+      </form>
 
-        <form id="add-section-form" class="mini-form stacked">
-          <select id="section-department" required>
-            ${renderDepartmentOptions(settings)}
-          </select>
-          <input id="section-name" type="text" placeholder="Example: Coffee" required />
-          <button class="primary-button" type="submit">Add</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Department</th>
-                <th>ID</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderSectionRows(settings)}
-            </tbody>
-          </table>
-        </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Department</th>
+              <th>ID</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderSectionRows(settings)}
+          </tbody>
+        </table>
       </div>
     </section>
   `;
 }
 
-function setupSettingsEvents() {
-  const operatingAreaForm = document.getElementById("add-operating-area-form");
-  const departmentForm = document.getElementById("add-department-form");
-  const sectionForm = document.getElementById("add-section-form");
+function getSettingsContent() {
+  const settings = getStoredSettings();
+  const activeManager = window.DMC_ACTIVE_SETTINGS_MANAGER || "operating-areas";
+  const systemOpen = window.DMC_SYSTEM_SETUP_OPEN !== false;
 
-  if (operatingAreaForm) {
-    operatingAreaForm.addEventListener("submit", (event) => {
+  return `
+    <section class="grid">
+      <div class="card">
+        <p>Operating Areas</p>
+        <strong>${settings.operatingAreas.length}</strong>
+      </div>
+
+      <div class="card">
+        <p>Departments</p>
+        <strong>${settings.departments.length}</strong>
+      </div>
+
+      <div class="card">
+        <p>Sections</p>
+        <strong>${settings.sections.length}</strong>
+      </div>
+
+      <div class="card">
+        <p>Storage</p>
+        <strong>Local</strong>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Settings Dashboard</h3>
+          <p>
+            Manage dropdown choices and setup lists. For now, we are testing System Setup first.
+          </p>
+        </div>
+        <button class="ghost-button">Prototype Settings</button>
+      </div>
+
+      <div class="settings-category-grid">
+        <button class="settings-category-card active clickable-card" id="toggle-system-setup">
+          <div class="settings-category-icon">⚙</div>
+          <div>
+            <h4>System Setup</h4>
+            <p>Operating Areas, Departments, Sections, Units, and Item Categories.</p>
+          </div>
+          <span class="badge">${systemOpen ? "Open" : "Closed"}</span>
+        </button>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">▧</div>
+          <div>
+            <h4>Inventory Setup</h4>
+            <p>Locations, Movement Types, Stock Statuses, and Order Statuses.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">♟</div>
+          <div>
+            <h4>Admin Setup</h4>
+            <p>Staff Roles, Access Levels, and Permissions.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+
+        <article class="settings-category-card">
+          <div class="settings-category-icon">⌁</div>
+          <div>
+            <h4>Future Setup</h4>
+            <p>Suppliers, Audit Rules, Report Settings, and future controls.</p>
+          </div>
+          <span class="badge muted-badge">Soon</span>
+        </article>
+      </div>
+    </section>
+
+    ${
+      systemOpen
+        ? `
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>System Setup Dropdown Manager</h3>
+                <p>
+                  Choose what you want to manage. These options will later feed dropdowns in the Master List.
+                </p>
+              </div>
+            </div>
+
+            <div class="settings-manager-tabs">
+              <button class="manager-tab ${activeManager === "operating-areas" ? "active" : ""}" data-settings-manager="operating-areas">
+                Operating Areas
+              </button>
+              <button class="manager-tab ${activeManager === "departments" ? "active" : ""}" data-settings-manager="departments">
+                Departments
+              </button>
+              <button class="manager-tab ${activeManager === "sections" ? "active" : ""}" data-settings-manager="sections">
+                Sections
+              </button>
+              <button class="manager-tab disabled" type="button">
+                Units Soon
+              </button>
+              <button class="manager-tab disabled" type="button">
+                Item Categories Soon
+              </button>
+            </div>
+          </section>
+
+          ${getSystemSetupManagerContent(activeManager)}
+        `
+        : ""
+    }
+  `;
+}
+
+function refreshSettingsPage() {
+  window.DMC_PAGES.settings.content = getSettingsContent();
+  renderPage("settings");
+}
+
+function setupSettingsEvents() {
+  const toggleSystemSetup = document.getElementById("toggle-system-setup");
+
+  if (toggleSystemSetup) {
+    toggleSystemSetup.addEventListener("click", () => {
+      window.DMC_SYSTEM_SETUP_OPEN = window.DMC_SYSTEM_SETUP_OPEN === false;
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-settings-manager]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_ACTIVE_SETTINGS_MANAGER = button.dataset.settingsManager;
+      refreshSettingsPage();
+    });
+  });
+
+  setupOperatingAreaEvents();
+  setupDepartmentEvents();
+  setupSectionEvents();
+}
+
+function setupOperatingAreaEvents() {
+  const form = document.getElementById("add-operating-area-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
       event.preventDefault();
 
       const settings = getStoredSettings();
-      const nameInput = document.getElementById("operating-area-name");
-      const name = nameInput.value.trim();
+      const name = document.getElementById("operating-area-name").value.trim();
 
-      if (!name) {
-        return;
-      }
+      if (!name) return;
 
       settings.operatingAreas.push({
         id: slugifySetting(name),
@@ -345,48 +969,133 @@ function setupSettingsEvents() {
       });
 
       saveSettings(settings);
-      window.DMC_PAGES.settings.content = getSettingsContent();
-      renderPage("settings");
+      refreshSettingsPage();
     });
   }
 
-  if (departmentForm) {
-    departmentForm.addEventListener("submit", (event) => {
+  document.querySelectorAll("[data-edit-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const area = settings.operatingAreas.find((item) => item.id === button.dataset.editArea);
+
+      if (!area) return;
+
+      const newName = prompt("Edit Operating Area name:", area.name);
+
+      if (!newName || !newName.trim()) return;
+
+      area.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const areaId = button.dataset.removeArea;
+
+      const confirmed = confirm(
+        "Remove this Operating Area? Departments and Sections under it will also be removed in this prototype."
+      );
+
+      if (!confirmed) return;
+
+      const departmentIdsToRemove = settings.departments
+        .filter((dept) => dept.operatingAreaId === areaId)
+        .map((dept) => dept.id);
+
+      settings.operatingAreas = settings.operatingAreas.filter((area) => area.id !== areaId);
+      settings.departments = settings.departments.filter((dept) => dept.operatingAreaId !== areaId);
+      settings.sections = settings.sections.filter(
+        (section) => !departmentIdsToRemove.includes(section.departmentId)
+      );
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
+function setupDepartmentEvents() {
+  const form = document.getElementById("add-department-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
       event.preventDefault();
 
       const settings = getStoredSettings();
-      const areaId = document.getElementById("department-operating-area").value;
-      const nameInput = document.getElementById("department-name");
-      const name = nameInput.value.trim();
+      const name = document.getElementById("department-name").value.trim();
+      const operatingAreaId = document.getElementById("department-operating-area").value;
 
-      if (!name) {
-        return;
-      }
+      if (!name) return;
 
       settings.departments.push({
         id: slugifySetting(name),
         name,
-        operatingAreaId: areaId
+        operatingAreaId
       });
 
       saveSettings(settings);
-      window.DMC_PAGES.settings.content = getSettingsContent();
-      renderPage("settings");
+      refreshSettingsPage();
     });
   }
 
-  if (sectionForm) {
-    sectionForm.addEventListener("submit", (event) => {
+  document.querySelectorAll("[data-edit-department]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const department = settings.departments.find(
+        (item) => item.id === button.dataset.editDepartment
+      );
+
+      if (!department) return;
+
+      const newName = prompt("Edit Department name:", department.name);
+
+      if (!newName || !newName.trim()) return;
+
+      department.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-department]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const departmentId = button.dataset.removeDepartment;
+
+      const confirmed = confirm(
+        "Remove this Department? Sections under it will also be removed in this prototype."
+      );
+
+      if (!confirmed) return;
+
+      settings.departments = settings.departments.filter((dept) => dept.id !== departmentId);
+      settings.sections = settings.sections.filter(
+        (section) => section.departmentId !== departmentId
+      );
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
+function setupSectionEvents() {
+  const form = document.getElementById("add-section-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
       event.preventDefault();
 
       const settings = getStoredSettings();
+      const name = document.getElementById("section-name").value.trim();
       const departmentId = document.getElementById("section-department").value;
-      const nameInput = document.getElementById("section-name");
-      const name = nameInput.value.trim();
 
-      if (!name) {
-        return;
-      }
+      if (!name) return;
 
       settings.sections.push({
         id: `${departmentId}-${slugifySetting(name)}`,
@@ -395,17 +1104,52 @@ function setupSettingsEvents() {
       });
 
       saveSettings(settings);
-      window.DMC_PAGES.settings.content = getSettingsContent();
-      renderPage("settings");
+      refreshSettingsPage();
     });
   }
+
+  document.querySelectorAll("[data-edit-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const section = settings.sections.find(
+        (item) => item.id === button.dataset.editSection
+      );
+
+      if (!section) return;
+
+      const newName = prompt("Edit Section name:", section.name);
+
+      if (!newName || !newName.trim()) return;
+
+      section.name = newName.trim();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const sectionId = button.dataset.removeSection;
+
+      const confirmed = confirm("Remove this Section?");
+
+      if (!confirmed) return;
+
+      settings.sections = settings.sections.filter((section) => section.id !== sectionId);
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
 }
 
 window.DMC_PAGES.settings = {
   eyebrow: "System",
   title: "Settings",
   description:
-    "Manage dropdown options for Operating Areas, Departments, and Sections.",
+    "Manage setup options for Operating Areas, Departments, Sections, and future dropdowns.",
   content: getSettingsContent(),
   afterRender: setupSettingsEvents
 };
