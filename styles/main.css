@@ -1582,3 +1582,19 @@ main,
 #reset-report-filters {
   width: fit-content;
 }
+
+.opening-stock-input {
+  width: 100px;
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.08);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.opening-stock-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
+}
