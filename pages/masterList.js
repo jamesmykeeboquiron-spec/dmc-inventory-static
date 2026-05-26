@@ -9,6 +9,9 @@ window.DMC_MASTER_LIST_FILTERS = window.DMC_MASTER_LIST_FILTERS || {
   search: ""
 };
 
+window.DMC_MASTER_LIST_EDITING_ITEM_ID =
+  window.DMC_MASTER_LIST_EDITING_ITEM_ID || null;
+
 function getMasterListDefaultItems() {
   return window.DMC_DATA?.masterList?.items || [];
 }
@@ -71,16 +74,31 @@ function getMasterListSettings() {
   }
 }
 
-function renderOptions(options, labelKey = "name") {
+function getEditingMasterListItem() {
+  if (!window.DMC_MASTER_LIST_EDITING_ITEM_ID) {
+    return null;
+  }
+
+  return getStoredMasterListItems().find(
+    (item) => item.itemId === window.DMC_MASTER_LIST_EDITING_ITEM_ID
+  );
+}
+
+function renderOptions(options, selectedValue = "", labelKey = "name") {
   return options
     .map(
-      (option) =>
-        `<option value="${option[labelKey]}">${option[labelKey]}</option>`
+      (option) => `
+        <option value="${option[labelKey]}" ${
+        selectedValue === option[labelKey] ? "selected" : ""
+      }>
+          ${option[labelKey]}
+        </option>
+      `
     )
     .join("");
 }
 
-function renderSectionOptions(settings, selectedDepartmentName) {
+function renderSectionOptions(settings, selectedDepartmentName, selectedSection = "") {
   const selectedDepartment = settings.departments.find(
     (department) => department.name === selectedDepartmentName
   );
@@ -91,7 +109,7 @@ function renderSectionOptions(settings, selectedDepartmentName) {
       )
     : settings.sections;
 
-  return renderOptions(sectionOptions);
+  return renderOptions(sectionOptions, selectedSection);
 }
 
 function getCodePrefix(value) {
@@ -131,6 +149,12 @@ function getNextItemId(departmentName, sectionName) {
 }
 
 function updateItemIdPreview() {
+  const editingItem = getEditingMasterListItem();
+
+  if (editingItem) {
+    return;
+  }
+
   const departmentSelect = document.getElementById("department");
   const sectionSelect = document.getElementById("section");
   const itemIdInput = document.getElementById("itemId");
@@ -237,7 +261,7 @@ function renderMasterListRows() {
   if (items.length === 0) {
     return `
       <tr>
-        <td colspan="9">No items match the current filters.</td>
+        <td colspan="10">No items match the current filters.</td>
       </tr>
     `;
   }
@@ -257,6 +281,16 @@ function renderMasterListRows() {
             <span class="badge">${item.active ? "TRUE" : "FALSE"}</span>
           </td>
           <td>${item.notes || "-"}</td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-master-item="${item.itemId}">
+                Edit
+              </button>
+              <button class="tiny-button danger" data-remove-master-item="${item.itemId}">
+                Remove
+              </button>
+            </div>
+          </td>
         </tr>
       `
     )
@@ -267,6 +301,19 @@ function getMasterListContent() {
   const allItems = getStoredMasterListItems();
   const filteredItems = getFilteredMasterListItems();
   const settings = getMasterListSettings();
+  const editingItem = getEditingMasterListItem();
+  const isEditing = Boolean(editingItem);
+
+  const selectedOperatingArea =
+    editingItem?.operatingArea || settings.operatingAreas[0]?.name || "";
+
+  const selectedDepartment =
+    editingItem?.department || settings.departments[0]?.name || "";
+
+  const selectedSection =
+    editingItem?.section || settings.sections[0]?.name || "";
+
+  const selectedUnit = editingItem?.unit || settings.units[0]?.name || "";
 
   return `
     <section class="grid">
@@ -306,68 +353,89 @@ function getMasterListContent() {
         </button>
       </div>
 
-      <div class="add-item-panel hidden" id="add-item-panel">
-        <h4>Add Master List Item</h4>
+      <div class="add-item-panel ${isEditing ? "" : "hidden"}" id="add-item-panel">
+        <h4 id="master-list-form-title">
+          ${isEditing ? "Edit Master List Item" : "Add Master List Item"}
+        </h4>
 
         <form id="add-item-form" class="form-grid">
           <label>
             Operating Area
             <select id="operatingArea" required>
-              ${renderOptions(settings.operatingAreas)}
+              ${renderOptions(settings.operatingAreas, selectedOperatingArea)}
             </select>
           </label>
 
           <label>
             Department
             <select id="department" required>
-              ${renderOptions(settings.departments)}
+              ${renderOptions(settings.departments, selectedDepartment)}
             </select>
           </label>
 
           <label>
             Section
             <select id="section" required>
-              ${renderSectionOptions(settings, settings.departments[0]?.name)}
+              ${renderSectionOptions(settings, selectedDepartment, selectedSection)}
             </select>
           </label>
 
           <label>
             Item ID
-            <input id="itemId" type="text" placeholder="Auto-generated" required />
+            <input
+              id="itemId"
+              type="text"
+              placeholder="Auto-generated"
+              value="${editingItem?.itemId || ""}"
+              required
+            />
           </label>
 
           <label>
             Official Item Name
-            <input id="officialItemName" type="text" placeholder="Espresso Beans" required />
+            <input
+              id="officialItemName"
+              type="text"
+              placeholder="Espresso Beans"
+              value="${editingItem?.officialItemName || ""}"
+              required
+            />
           </label>
 
           <label>
             Unit
             <select id="unit" required>
-              ${renderOptions(settings.units)}
+              ${renderOptions(settings.units, selectedUnit)}
             </select>
           </label>
 
           <label>
             Minimum Stock
-            <input id="minimumStock" type="text" placeholder="Optional" />
+            <input
+              id="minimumStock"
+              type="text"
+              placeholder="Optional"
+              value="${editingItem?.minimumStock || ""}"
+            />
           </label>
 
           <label>
             Active
             <select id="active" required>
-              <option value="true">TRUE</option>
-              <option value="false">FALSE</option>
+              <option value="true" ${editingItem?.active !== false ? "selected" : ""}>TRUE</option>
+              <option value="false" ${editingItem?.active === false ? "selected" : ""}>FALSE</option>
             </select>
           </label>
 
           <label class="form-full">
             Notes
-            <textarea id="notes" rows="3" placeholder="Optional notes"></textarea>
+            <textarea id="notes" rows="3" placeholder="Optional notes">${editingItem?.notes || ""}</textarea>
           </label>
 
           <div class="form-actions form-full">
-            <button type="submit" class="primary-button">Save Item</button>
+            <button type="submit" class="primary-button">
+              ${isEditing ? "Save Changes" : "Save Item"}
+            </button>
             <button type="button" class="ghost-button" id="cancel-add-item">
               Cancel
             </button>
@@ -418,6 +486,7 @@ function getMasterListContent() {
               <th>Minimum Stock</th>
               <th>Active</th>
               <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
@@ -446,14 +515,44 @@ function updateSectionDropdown() {
 
   sectionSelect.innerHTML = renderSectionOptions(
     settings,
-    departmentSelect.value
+    departmentSelect.value,
+    sectionSelect.value
   );
 
   updateItemIdPreview();
 }
 
-function setupMasterListEvents() {
+function openAddItemPanel() {
+  window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+  refreshMasterListPage();
+
   const addItemPanel = document.getElementById("add-item-panel");
+
+  if (addItemPanel) {
+    addItemPanel.classList.remove("hidden");
+  }
+
+  updateSectionDropdown();
+  updateItemIdPreview();
+}
+
+function cancelMasterListForm() {
+  window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+  refreshMasterListPage();
+}
+
+function isDuplicateItemId(itemId, originalItemId = null) {
+  return getStoredMasterListItems().some((item) => {
+    if (originalItemId && item.itemId === originalItemId) {
+      return false;
+    }
+
+    return String(item.itemId || "").toLowerCase() ===
+      String(itemId || "").toLowerCase();
+  });
+}
+
+function setupMasterListEvents() {
   const showButton = document.getElementById("show-add-item-panel");
   const cancelButton = document.getElementById("cancel-add-item");
   const addItemForm = document.getElementById("add-item-form");
@@ -468,6 +567,22 @@ function setupMasterListEvents() {
   const clearFiltersButton = document.getElementById(
     "clear-master-list-filters"
   );
+
+  if (showButton) {
+    showButton.addEventListener("click", openAddItemPanel);
+  }
+
+  if (cancelButton) {
+    cancelButton.addEventListener("click", cancelMasterListForm);
+  }
+
+  if (departmentSelect) {
+    departmentSelect.addEventListener("change", updateSectionDropdown);
+  }
+
+  if (sectionSelect) {
+    sectionSelect.addEventListener("change", updateItemIdPreview);
+  }
 
   if (departmentFilter) {
     departmentFilter.addEventListener("change", () => {
@@ -503,58 +618,71 @@ function setupMasterListEvents() {
     });
   }
 
-  if (!addItemPanel || !showButton || !cancelButton || !addItemForm) {
-    return;
-  }
-
-  showButton.addEventListener("click", () => {
-    addItemPanel.classList.remove("hidden");
-    updateSectionDropdown();
-    updateItemIdPreview();
+  document.querySelectorAll("[data-edit-master-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_MASTER_LIST_EDITING_ITEM_ID = button.dataset.editMasterItem;
+      refreshMasterListPage();
+    });
   });
 
-  cancelButton.addEventListener("click", () => {
-    addItemPanel.classList.add("hidden");
-    addItemForm.reset();
-    updateSectionDropdown();
-    updateItemIdPreview();
+  document.querySelectorAll("[data-remove-master-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const itemId = button.dataset.removeMasterItem;
+      const confirmed = confirm(`Remove item ${itemId} from Master List?`);
+
+      if (!confirmed) {
+        return;
+      }
+
+      const updatedItems = getStoredMasterListItems().filter(
+        (item) => item.itemId !== itemId
+      );
+
+      saveMasterListItems(updatedItems);
+      refreshMasterListPage();
+    });
   });
 
-  if (departmentSelect) {
-    departmentSelect.addEventListener("change", updateSectionDropdown);
+  if (addItemForm) {
+    addItemForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const originalItemId = window.DMC_MASTER_LIST_EDITING_ITEM_ID;
+      const isEditing = Boolean(originalItemId);
+
+      const savedItem = {
+        operatingArea: document.getElementById("operatingArea").value,
+        department: document.getElementById("department").value,
+        section: document.getElementById("section").value,
+        itemId: document.getElementById("itemId").value.trim(),
+        officialItemName: document
+          .getElementById("officialItemName")
+          .value.trim(),
+        unit: document.getElementById("unit").value,
+        minimumStock: document.getElementById("minimumStock").value.trim(),
+        active: document.getElementById("active").value === "true",
+        notes: document.getElementById("notes").value.trim()
+      };
+
+      if (isDuplicateItemId(savedItem.itemId, originalItemId)) {
+        alert(`Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`);
+        return;
+      }
+
+      const currentItems = getStoredMasterListItems();
+
+      const updatedItems = isEditing
+        ? currentItems.map((item) =>
+            item.itemId === originalItemId ? savedItem : item
+          )
+        : [...currentItems, savedItem];
+
+      saveMasterListItems(updatedItems);
+
+      window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+      refreshMasterListPage();
+    });
   }
-
-  if (sectionSelect) {
-    sectionSelect.addEventListener("change", updateItemIdPreview);
-  }
-
-  addItemForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const newItem = {
-      operatingArea: document.getElementById("operatingArea").value,
-      department: document.getElementById("department").value,
-      section: document.getElementById("section").value,
-      itemId: document.getElementById("itemId").value.trim(),
-      officialItemName: document
-        .getElementById("officialItemName")
-        .value.trim(),
-      unit: document.getElementById("unit").value,
-      minimumStock: document.getElementById("minimumStock").value.trim(),
-      active: document.getElementById("active").value === "true",
-      notes: document.getElementById("notes").value.trim()
-    };
-
-    const currentItems = getStoredMasterListItems();
-    const updatedItems = [...currentItems, newItem];
-
-    saveMasterListItems(updatedItems);
-
-    addItemPanel.classList.add("hidden");
-    addItemForm.reset();
-
-    refreshMasterListPage();
-  });
 }
 
 window.DMC_PAGES["master-list"] = {
