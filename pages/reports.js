@@ -4,6 +4,7 @@ const DMC_REPORT_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
 const DMC_REPORT_MASTER_LIST_STORAGE_KEY = "dmc_master_list_items";
 const DMC_REPORT_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
 const DMC_AUDIT_PHYSICAL_COUNTS_KEY = "dmc_audit_physical_counts";
+const DMC_BRANCH_STARTING_STOCK_KEY = "dmc_branch_opening_stock";
 
 window.DMC_REPORT_FILTERS = window.DMC_REPORT_FILTERS || {
   department: "Bar",
@@ -99,6 +100,35 @@ function savePhysicalCounts(counts) {
   localStorage.setItem(DMC_AUDIT_PHYSICAL_COUNTS_KEY, JSON.stringify(counts));
 }
 
+function getStoredStartingStockForReports() {
+  const storedStartingStock = localStorage.getItem(DMC_BRANCH_STARTING_STOCK_KEY);
+
+  if (!storedStartingStock) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(storedStartingStock);
+  } catch {
+    return {};
+  }
+}
+
+function getStartingStockForReportItem(itemId) {
+  const startingStock = getStoredStartingStockForReports();
+  const filters = window.DMC_REPORT_FILTERS;
+  const key = `${filters.department}|${itemId}`;
+  const value = startingStock[key];
+
+  if (String(value || "").trim() === "") {
+    return 0;
+  }
+
+  const parsedValue = Number(value);
+
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+}
+
 function getAuditCountKey(itemId) {
   const filters = window.DMC_REPORT_FILTERS;
 
@@ -140,36 +170,35 @@ function buildAuditRows() {
   const rowsByItemId = {};
 
   masterItems.forEach((item) => {
-    rowsByItemId[item.itemId] = {
-      section: item.section || "-",
-      itemId: item.itemId || "-",
-      itemName: item.officialItemName || "-",
-      unit: item.unit || "-",
-      beginning: 0,
-      received: 0,
-      transferIn: 0,
-      usage: 0,
-      waste: 0,
-      transferOut: 0,
-      adjustment: 0
-    };
-  });
+  rowsByItemId[item.itemId] = {
+    section: item.section || "-",
+    itemId: item.itemId || "-",
+    itemName: item.officialItemName || "-",
+    unit: item.unit || "-",
+    startingStock: getStartingStockForReportItem(item.itemId),
+    received: 0,
+    transferIn: 0,
+    usage: 0,
+    waste: 0,
+    transferOut: 0,
+    adjustment: 0
+  };
+});
 
   ledgerEntries.forEach((entry) => {
-    if (!rowsByItemId[entry.itemId]) {
-      rowsByItemId[entry.itemId] = {
-        section: entry.section || "-",
-        itemId: entry.itemId || "-",
-        itemName: entry.itemName || "-",
-        unit: entry.unit || "-",
-        beginning: 0,
-        received: 0,
-        transferIn: 0,
-        usage: 0,
-        waste: 0,
-        transferOut: 0,
-        adjustment: 0
-      };
+    if rowsByItemId[entry.itemId] = {
+  section: entry.section || "-",
+  itemId: entry.itemId || "-",
+  itemName: entry.itemName || "-",
+  unit: entry.unit || "-",
+  startingStock: getStartingStockForReportItem(entry.itemId),
+  received: 0,
+  transferIn: 0,
+  usage: 0,
+  waste: 0,
+  transferOut: 0,
+  adjustment: 0
+};
     }
 
     const quantity = Number(entry.quantity || 0);
@@ -200,27 +229,27 @@ function buildAuditRows() {
   });
 
   return Object.values(rowsByItemId).map((row) => {
-    const ending =
-      row.beginning +
-      row.received +
-      row.transferIn -
-      row.usage -
-      row.waste -
-      row.transferOut +
-      row.adjustment;
+    const systemEnding =
+  row.startingStock +
+  row.received +
+  row.transferIn -
+  row.usage -
+  row.waste -
+  row.transferOut +
+  row.adjustment;
 
     const physicalCount = getPhysicalCountValue(row.itemId);
     const hasPhysicalCount = String(physicalCount).trim() !== "";
-    const variance = hasPhysicalCount ? Number(physicalCount) - ending : "";
-    const status = !hasPhysicalCount ? "Pending" : variance === 0 ? "OK" : "CHECK";
+const variance = hasPhysicalCount ? Number(physicalCount) - systemEnding : "";
+const status = !hasPhysicalCount ? "Pending" : variance === 0 ? "OK" : "CHECK";
 
     return {
-      ...row,
-      ending,
-      physicalCount,
-      variance,
-      status
-    };
+  ...row,
+  systemEnding,
+  physicalCount,
+  variance,
+  status
+};
   });
 }
 
@@ -266,23 +295,24 @@ function renderAuditRows() {
           <td>${row.itemId}</td>
           <td>${row.itemName}</td>
           <td>${row.unit}</td>
-          <td>${row.beginning}</td>
+          <td>${row.startingStock}</td>
           <td>${row.received}</td>
           <td>${row.transferIn}</td>
           <td>${row.usage}</td>
           <td>${row.waste}</td>
           <td>${row.transferOut}</td>
           <td>${row.adjustment}</td>
-          <td>${row.ending}</td>
+          <td>${row.systemEnding}</td>
           <td>
             <input
-              class="audit-count-input"
-              data-item-id="${row.itemId}"
-              data-ending="${row.ending}"
-              type="number"
-              step="any"
-              value="${row.physicalCount}"
-            />
+              <input
+  class="audit-count-input"
+  data-item-id="${row.itemId}"
+  data-ending="${row.systemEnding}"
+  type="number"
+  step="any"
+  value="${row.physicalCount}"
+/>
           </td>
           <td>
             <span class="audit-variance" data-variance-for="${row.itemId}">
@@ -379,8 +409,7 @@ function getReportsContent() {
       <div class="instruction-box">
         <strong>Audit Note:</strong>
         <span>
-          Beginning stock is set to 0 in this prototype until we build stock balances.
-          Ending is calculated from Ledger movement totals.
+          Starting Stock comes from the Branch Stock page. System Ending is calculated from Starting Stock plus Ledger movement totals.
         </span>
       </div>
 
@@ -392,14 +421,14 @@ function getReportsContent() {
               <th>Item ID</th>
               <th>Item Name</th>
               <th>Unit</th>
-              <th>Beginning</th>
+              <th>Starting Stock</th>
               <th>Received</th>
               <th>Transfer In</th>
               <th>Usage</th>
               <th>Waste</th>
               <th>Transfer Out</th>
               <th>Adjustment</th>
-              <th>Ending</th>
+              <th>System Ending</th>
               <th>Physical Count</th>
               <th>Variance</th>
               <th>Status</th>
