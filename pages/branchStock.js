@@ -40,24 +40,24 @@ function getBranchStockLedgerEntries() {
   return window.DMC_DATA?.ledger || [];
 }
 
-function getStoredOpeningStock() {
-  const storedOpeningStock = localStorage.getItem(DMC_BRANCH_OPENING_STOCK_KEY);
+function getStoredStartingStock() {
+  const storedStartingStock = localStorage.getItem(DMC_BRANCH_OPENING_STOCK_KEY);
 
-  if (!storedOpeningStock) {
+  if (!storedStartingStock) {
     return {};
   }
 
   try {
-    return JSON.parse(storedOpeningStock);
+    return JSON.parse(storedStartingStock);
   } catch {
     return {};
   }
 }
 
-function saveOpeningStock(openingStock) {
+function saveStartingStock(startingStock) {
   localStorage.setItem(
     DMC_BRANCH_OPENING_STOCK_KEY,
-    JSON.stringify(openingStock)
+    JSON.stringify(startingStock)
   );
 }
 
@@ -103,16 +103,16 @@ function renderBranchStockDepartmentOptions() {
     .join("");
 }
 
-function getOpeningStockValue(itemId) {
-  const openingStock = getStoredOpeningStock();
+function getStartingStockValue(itemId) {
+  const startingStock = getStoredStartingStock();
   const selectedDepartment = window.DMC_BRANCH_STOCK_SELECTED_DEPARTMENT;
   const key = `${selectedDepartment}|${itemId}`;
 
-  return openingStock[key] || "";
+  return startingStock[key] || "";
 }
 
-function getOpeningStockNumber(itemId) {
-  const value = getOpeningStockValue(itemId);
+function getStartingStockNumber(itemId) {
+  const value = getStartingStockValue(itemId);
 
   if (String(value).trim() === "") {
     return 0;
@@ -187,11 +187,11 @@ function getLedgerMovementTotalsForItem(itemId) {
 }
 
 function calculateCurrentStock(item) {
-  const openingStock = getOpeningStockNumber(item.itemId);
+  const startingStock = getStartingStockNumber(item.itemId);
   const totals = getLedgerMovementTotalsForItem(item.itemId);
 
   return (
-    openingStock +
+    startingStock +
     totals.received +
     totals.transferIn -
     totals.usage -
@@ -296,10 +296,10 @@ function renderBranchStockRows() {
           <td>
             <input
               class="opening-stock-input"
-              data-opening-stock-item="${item.itemId}"
+              data-starting-stock-item="${item.itemId}"
               type="number"
               step="any"
-              value="${getOpeningStockValue(item.itemId)}"
+              value="${getStartingStockValue(item.itemId)}"
               placeholder="0"
             />
           </td>
@@ -369,11 +369,11 @@ function getBranchStockContent() {
         <div>
           <h3>${selectedDepartment} Branch Stock</h3>
           <p>
-            Set opening stock, then current stock is calculated from posted Ledger movements.
+            Set starting stock once, then current stock is calculated from posted Ledger movements.
           </p>
         </div>
 
-        <button class="ghost-button">System Stock View</button>
+        <button class="ghost-button">Starting Stock Auto-Saves</button>
       </div>
 
       <div class="filter-bar">
@@ -409,7 +409,8 @@ function getBranchStockContent() {
       <div class="instruction-box">
         <strong>Stock Formula:</strong>
         <span>
-          Current Stock = Opening Stock + Received + Transfer In - Usage - Waste - Transfer Out + Adjustment.
+          Current Stock = Starting Stock + Received + Transfer In - Usage - Waste - Transfer Out + Adjustment.
+          Starting Stock is only used as the setup baseline. Daily changes should be entered through Log Transaction.
         </span>
       </div>
 
@@ -420,7 +421,7 @@ function getBranchStockContent() {
               <th>Section</th>
               <th>Item ID</th>
               <th>Item Name</th>
-              <th>Opening Stock</th>
+              <th>Starting Stock</th>
               <th>Current Stock</th>
               <th>Minimum Stock</th>
               <th>Unit</th>
@@ -486,15 +487,15 @@ function setupBranchStockEvents() {
     });
   }
 
-  document.querySelectorAll("[data-opening-stock-item]").forEach((input) => {
+  document.querySelectorAll("[data-starting-stock-item]").forEach((input) => {
     input.addEventListener("change", () => {
-      const openingStock = getStoredOpeningStock();
+      const startingStock = getStoredStartingStock();
       const selectedDepartment = window.DMC_BRANCH_STOCK_SELECTED_DEPARTMENT;
-      const itemId = input.dataset.openingStockItem;
+      const itemId = input.dataset.startingStockItem;
       const key = `${selectedDepartment}|${itemId}`;
 
-      openingStock[key] = input.value;
-      saveOpeningStock(openingStock);
+      startingStock[key] = input.value;
+      saveStartingStock(startingStock);
       refreshBranchStockPage();
     });
   });
@@ -504,7 +505,7 @@ window.DMC_PAGES["branch-stock"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Stock",
   description:
-    "Current branch stock calculated from opening stock and Ledger movements.",
+    "Current branch stock calculated from starting stock and Ledger movements.",
   content: getBranchStockContent(),
   afterRender: setupBranchStockEvents
 };
