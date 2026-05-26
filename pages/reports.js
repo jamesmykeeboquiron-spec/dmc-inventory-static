@@ -101,7 +101,9 @@ function savePhysicalCounts(counts) {
 }
 
 function getStoredStartingStockForReports() {
-  const storedStartingStock = localStorage.getItem(DMC_BRANCH_STARTING_STOCK_KEY);
+  const storedStartingStock = localStorage.getItem(
+    DMC_BRANCH_STARTING_STOCK_KEY
+  );
 
   if (!storedStartingStock) {
     return {};
@@ -170,35 +172,36 @@ function buildAuditRows() {
   const rowsByItemId = {};
 
   masterItems.forEach((item) => {
-  rowsByItemId[item.itemId] = {
-    section: item.section || "-",
-    itemId: item.itemId || "-",
-    itemName: item.officialItemName || "-",
-    unit: item.unit || "-",
-    startingStock: getStartingStockForReportItem(item.itemId),
-    received: 0,
-    transferIn: 0,
-    usage: 0,
-    waste: 0,
-    transferOut: 0,
-    adjustment: 0
-  };
-});
+    rowsByItemId[item.itemId] = {
+      section: item.section || "-",
+      itemId: item.itemId || "-",
+      itemName: item.officialItemName || "-",
+      unit: item.unit || "-",
+      startingStock: getStartingStockForReportItem(item.itemId),
+      received: 0,
+      transferIn: 0,
+      usage: 0,
+      waste: 0,
+      transferOut: 0,
+      adjustment: 0
+    };
+  });
 
   ledgerEntries.forEach((entry) => {
-    if rowsByItemId[entry.itemId] = {
-  section: entry.section || "-",
-  itemId: entry.itemId || "-",
-  itemName: entry.itemName || "-",
-  unit: entry.unit || "-",
-  startingStock: getStartingStockForReportItem(entry.itemId),
-  received: 0,
-  transferIn: 0,
-  usage: 0,
-  waste: 0,
-  transferOut: 0,
-  adjustment: 0
-};
+    if (!rowsByItemId[entry.itemId]) {
+      rowsByItemId[entry.itemId] = {
+        section: entry.section || "-",
+        itemId: entry.itemId || "-",
+        itemName: entry.itemName || "-",
+        unit: entry.unit || "-",
+        startingStock: getStartingStockForReportItem(entry.itemId),
+        received: 0,
+        transferIn: 0,
+        usage: 0,
+        waste: 0,
+        transferOut: 0,
+        adjustment: 0
+      };
     }
 
     const quantity = Number(entry.quantity || 0);
@@ -230,26 +233,26 @@ function buildAuditRows() {
 
   return Object.values(rowsByItemId).map((row) => {
     const systemEnding =
-  row.startingStock +
-  row.received +
-  row.transferIn -
-  row.usage -
-  row.waste -
-  row.transferOut +
-  row.adjustment;
+      row.startingStock +
+      row.received +
+      row.transferIn -
+      row.usage -
+      row.waste -
+      row.transferOut +
+      row.adjustment;
 
     const physicalCount = getPhysicalCountValue(row.itemId);
     const hasPhysicalCount = String(physicalCount).trim() !== "";
-const variance = hasPhysicalCount ? Number(physicalCount) - systemEnding : "";
-const status = !hasPhysicalCount ? "Pending" : variance === 0 ? "OK" : "CHECK";
+    const variance = hasPhysicalCount ? Number(physicalCount) - systemEnding : "";
+    const status = !hasPhysicalCount ? "Pending" : variance === 0 ? "OK" : "CHECK";
 
     return {
-  ...row,
-  systemEnding,
-  physicalCount,
-  variance,
-  status
-};
+      ...row,
+      systemEnding,
+      physicalCount,
+      variance,
+      status
+    };
   });
 }
 
@@ -282,7 +285,7 @@ function renderAuditRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="14">No items found for this department and date range.</td>
+        <td colspan="15">No items found for this department and date range.</td>
       </tr>
     `;
   }
@@ -305,14 +308,13 @@ function renderAuditRows() {
           <td>${row.systemEnding}</td>
           <td>
             <input
-              <input
-  class="audit-count-input"
-  data-item-id="${row.itemId}"
-  data-ending="${row.systemEnding}"
-  type="number"
-  step="any"
-  value="${row.physicalCount}"
-/>
+              class="audit-count-input"
+              data-item-id="${row.itemId}"
+              data-ending="${row.systemEnding}"
+              type="number"
+              step="any"
+              value="${row.physicalCount}"
+            />
           </td>
           <td>
             <span class="audit-variance" data-variance-for="${row.itemId}">
@@ -375,12 +377,12 @@ function getReportsContent() {
         <div>
           <h3>Monthly Audit / Date Range Report</h3>
           <p>
-            Select a department and date range. Movement totals come from the Ledger.
-            Physical Count is entered during audit.
+            Select a department and date range. Starting Stock comes from Branch Stock.
+            Movement totals come from the Ledger. Physical Count is entered during audit.
           </p>
         </div>
 
-        <button class="ghost-button">Report Prototype</button>
+        <button class="ghost-button">Branch Audit Report</button>
       </div>
 
       <div class="filter-bar">
@@ -527,10 +529,10 @@ function setupReportsEvents() {
 }
 
 window.DMC_PAGES.reports = {
-  eyebrow: "Overview",
-  title: "Reports",
+  eyebrow: "DMC-Iriga Branch",
+  title: "Branch Reports",
   description:
-    "Department audit and date range reports powered by Ledger history.",
+    "Department audit and date range reports powered by Starting Stock and Ledger history.",
   content: getReportsContent(),
   afterRender: setupReportsEvents
 };
