@@ -2855,3 +2855,132 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================
+   DELIVERY LOG PAGE
+================================ */
+
+.delivery-log-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.75fr) minmax(620px, 1.25fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.delivery-log-list-panel,
+.delivery-log-detail {
+  min-height: 520px;
+}
+
+.delivery-log-list {
+  display: grid;
+  gap: 10px;
+}
+
+.delivery-log-list-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.delivery-log-list-item.active {
+  border-left: 3px solid var(--gold);
+  background: rgba(240, 192, 79, 0.08);
+}
+
+.delivery-log-list-item strong {
+  color: var(--gold);
+}
+
+.delivery-log-list-item p {
+  margin: 6px 0;
+  color: var(--text);
+}
+
+.delivery-log-list-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.delivery-log-list-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.delivery-log-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.delivery-log-info-grid div {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.delivery-log-info-grid strong {
+  display: block;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.delivery-log-issue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.delivery-log-issue-card {
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.045);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.delivery-log-issue-card strong {
+  display: block;
+  color: var(--text);
+}
+
+.delivery-log-issue-card span,
+.delivery-log-issue-card p {
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+@media (max-width: 1150px) {
+  .delivery-log-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-log-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .delivery-log-list-item,
+  .delivery-log-issue-card {
+    flex-direction: column;
+  }
+
+  .delivery-log-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
