@@ -686,10 +686,11 @@ function setupMasterListEvents() {
 }
 
 window.DMC_PAGES["master-list"] = {
-  eyebrow: "Commissary",
+  eyebrow: "System",
   title: "Master List",
   description:
     "Manage the official item catalog. Dropdowns come from Settings.",
+  getContent: getMasterListContent,
   content: getMasterListContent(),
   afterRender: setupMasterListEvents
 };
