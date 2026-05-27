@@ -2066,3 +2066,55 @@ button:disabled {
     text-align: left;
   }
 }
+
+.order-status-tracker {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.order-status-step {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.order-status-step span {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.order-status-step.done {
+  border-color: var(--gold-border);
+  background: rgba(240, 192, 79, 0.07);
+}
+
+.order-status-step.done span {
+  background: rgba(240, 192, 79, 0.18);
+  color: var(--gold);
+}
+
+.order-status-step.current {
+  box-shadow: 0 0 18px rgba(240, 192, 79, 0.12);
+}
+
+.order-status-step p {
+  margin: 0;
+  font-size: 12px;
+  color: inherit;
+}
+
+@media (max-width: 900px) {
+  .order-status-tracker {
+    grid-template-columns: 1fr;
+  }
+}
