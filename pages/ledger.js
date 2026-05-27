@@ -7,12 +7,11 @@ window.DMC_LEDGER_FILTERS = window.DMC_LEDGER_FILTERS || {
   movementType: "all",
   search: "",
   startDate: "",
-  endDate: "",
-  viewBy: "batch"
+  endDate: ""
 };
 
-window.DMC_OPEN_LEDGER_BATCHES = window.DMC_OPEN_LEDGER_BATCHES || {};
-window.DMC_OPEN_LEDGER_DATES = window.DMC_OPEN_LEDGER_DATES || {};
+window.DMC_SELECTED_LEDGER_BATCH_KEY =
+  window.DMC_SELECTED_LEDGER_BATCH_KEY || "";
 
 function getTodayLedgerDate() {
   return new Date().toISOString().slice(0, 10);
@@ -21,6 +20,7 @@ function getTodayLedgerDate() {
 function getMonthStartLedgerDate() {
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
   return firstDay.toISOString().slice(0, 10);
 }
 
@@ -178,27 +178,6 @@ function groupLedgerEntriesByBatch(entries) {
   });
 }
 
-function groupLedgerEntriesByDate(entries) {
-  const dates = {};
-
-  entries.forEach((entry) => {
-    const dateKey = entry.date || "No Date";
-
-    if (!dates[dateKey]) {
-      dates[dateKey] = {
-        dateKey,
-        entries: []
-      };
-    }
-
-    dates[dateKey].entries.push(entry);
-  });
-
-  return Object.values(dates).sort((a, b) => {
-    return new Date(b.dateKey).getTime() - new Date(a.dateKey).getTime();
-  });
-}
-
 function getBatchTotals(entries) {
   const totals = {};
 
@@ -226,7 +205,72 @@ function renderBatchTotals(entries) {
     .join("");
 }
 
-function renderLedgerBatchRows(entries) {
+function getSelectedLedgerBatch() {
+  const batches = groupLedgerEntriesByBatch(getFilteredLedgerEntries());
+
+  if (window.DMC_SELECTED_LEDGER_BATCH_KEY) {
+    const selectedBatch = batches.find(
+      (batch) => batch.batchKey === window.DMC_SELECTED_LEDGER_BATCH_KEY
+    );
+
+    if (selectedBatch) {
+      return selectedBatch;
+    }
+  }
+
+  return batches[0] || null;
+}
+
+function renderLedgerBatchList() {
+  const batches = groupLedgerEntriesByBatch(getFilteredLedgerEntries());
+  const selectedBatch = getSelectedLedgerBatch();
+
+  if (batches.length === 0) {
+    return `
+      <div class="order-list-empty">
+        <p>No ledger batches found.</p>
+        <span>Try changing the filters or search terms.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="ledger-workbench-batch-list">
+      ${batches
+        .map(
+          (batch) => `
+            <button
+              class="ledger-workbench-batch-item ${
+                selectedBatch?.batchKey === batch.batchKey ? "active" : ""
+              }"
+              data-select-ledger-batch="${batch.batchKey}"
+            >
+              <div>
+                <strong>${getLedgerBatchLabel(batch)}</strong>
+                <p>${batch.department} • ${batch.source}</p>
+                <span>${batch.submittedAtDisplay || batch.date}</span>
+              </div>
+
+              <div class="ledger-workbench-batch-meta">
+                <span class="badge">${batch.entries.length} entries</span>
+              </div>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLedgerRows(entries) {
+  if (!entries || entries.length === 0) {
+    return `
+      <tr>
+        <td colspan="10">No ledger entries found for this batch.</td>
+      </tr>
+    `;
+  }
+
   return entries
     .map(
       (entry) => `
@@ -247,136 +291,82 @@ function renderLedgerBatchRows(entries) {
     .join("");
 }
 
-function renderLedgerBatchCard(batch, index) {
-  const isOpen =
-    window.DMC_OPEN_LEDGER_BATCHES[batch.batchKey] ?? index === 0;
+function renderSelectedLedgerBatchDetail() {
+  const batch = getSelectedLedgerBatch();
+
+  if (!batch) {
+    return `
+      <section class="panel ledger-workbench-detail">
+        <div class="order-list-empty">
+          <p>No batch selected.</p>
+          <span>Select a ledger batch from the left panel.</span>
+        </div>
+      </section>
+    `;
+  }
 
   return `
-    <section class="ledger-batch-card">
-      <button class="ledger-batch-header" data-ledger-batch="${batch.batchKey}">
+    <section class="panel ledger-workbench-detail">
+      <div class="panel-header">
         <div>
-          <p class="eyebrow">Batch</p>
+          <p class="eyebrow">Selected Batch</p>
           <h3>${getLedgerBatchLabel(batch)}</h3>
-          <p>
-            ${batch.submittedAtDisplay} • ${batch.department} • ${batch.source}
-          </p>
+          <p>${batch.submittedAtDisplay || batch.date} • ${batch.department} • ${batch.source}</p>
         </div>
 
-        <div class="ledger-batch-meta">
-          <span class="badge">${batch.entries.length} entries</span>
-          <span class="badge">${isOpen ? "Collapse" : "Open"}</span>
-        </div>
-      </button>
+        <span class="badge">${batch.entries.length} entries</span>
+      </div>
 
-      <div class="ledger-batch-totals">
+      <div class="ledger-workbench-info-grid">
+        <div>
+          <p class="eyebrow">Batch ID</p>
+          <strong>${getLedgerBatchLabel(batch)}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Date</p>
+          <strong>${batch.date || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Department</p>
+          <strong>${batch.department || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Source</p>
+          <strong>${batch.source || "-"}</strong>
+        </div>
+      </div>
+
+      <div class="ledger-workbench-totals">
         ${renderBatchTotals(batch.entries)}
       </div>
 
-      ${
-        isOpen
-          ? `
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Department</th>
-                    <th>Section</th>
-                    <th>Item ID</th>
-                    <th>Item Name</th>
-                    <th>Movement Type</th>
-                    <th>Quantity</th>
-                    <th>Unit</th>
-                    <th>Source</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Department</th>
+              <th>Section</th>
+              <th>Item ID</th>
+              <th>Item Name</th>
+              <th>Movement Type</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Source</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
 
-                <tbody>
-                  ${renderLedgerBatchRows(batch.entries)}
-                </tbody>
-              </table>
-            </div>
-          `
-          : ""
-      }
+          <tbody>
+            ${renderLedgerRows(batch.entries)}
+          </tbody>
+        </table>
+      </div>
     </section>
   `;
-}
-
-function renderLedgerBatchView() {
-  const entries = getFilteredLedgerEntries();
-
-  if (entries.length === 0) {
-    return `
-      <section class="panel">
-        <p>No ledger entries match the current filters.</p>
-      </section>
-    `;
-  }
-
-  const batches = groupLedgerEntriesByBatch(entries);
-
-  return batches.map((batch, index) => renderLedgerBatchCard(batch, index)).join("");
-}
-
-function renderLedgerDateView() {
-  const entries = getFilteredLedgerEntries();
-
-  if (entries.length === 0) {
-    return `
-      <section class="panel">
-        <p>No ledger entries match the current filters.</p>
-      </section>
-    `;
-  }
-
-  const dateGroups = groupLedgerEntriesByDate(entries);
-
-  return dateGroups
-    .map((dateGroup, index) => {
-      const isOpen =
-        window.DMC_OPEN_LEDGER_DATES[dateGroup.dateKey] ?? index === 0;
-
-      const batches = groupLedgerEntriesByBatch(dateGroup.entries);
-
-      return `
-        <section class="ledger-batch-card">
-          <button class="ledger-batch-header" data-ledger-date="${dateGroup.dateKey}">
-            <div>
-              <p class="eyebrow">Date View</p>
-              <h3>${dateGroup.dateKey}</h3>
-              <p>${dateGroup.entries.length} ledger entries • ${batches.length} batches</p>
-            </div>
-
-            <div class="ledger-batch-meta">
-              <span class="badge">${isOpen ? "Collapse" : "Open"}</span>
-            </div>
-          </button>
-
-          <div class="ledger-batch-totals">
-            ${renderBatchTotals(dateGroup.entries)}
-          </div>
-
-          ${
-            isOpen
-              ? batches
-                  .map((batch, batchIndex) => renderLedgerBatchCard(batch, batchIndex))
-                  .join("")
-              : ""
-          }
-        </section>
-      `;
-    })
-    .join("");
-}
-
-function renderLedgerView() {
-  if (window.DMC_LEDGER_FILTERS.viewBy === "date") {
-    return renderLedgerDateView();
-  }
-
-  return renderLedgerBatchView();
 }
 
 function getLedgerSummary() {
@@ -388,11 +378,13 @@ function getLedgerSummary() {
   ).length;
 
   const batchCount = groupLedgerEntriesByBatch(entries).length;
+  const filteredBatchCount = groupLedgerEntriesByBatch(filteredEntries).length;
 
   return {
     totalEntries: entries.length,
     showingEntries: filteredEntries.length,
     batchCount,
+    filteredBatchCount,
     usageCount
   };
 }
@@ -412,97 +404,90 @@ function getLedgerContent() {
       </div>
 
       <div class="card">
+        <p>Filtered Batches</p>
+        <strong>${summary.filteredBatchCount}</strong>
+      </div>
+
+      <div class="card">
         <p>Total Entries</p>
         <strong>${summary.totalEntries}</strong>
       </div>
 
       <div class="card">
-        <p>Batches</p>
+        <p>Total Batches</p>
         <strong>${summary.batchCount}</strong>
       </div>
-
-      <div class="card">
-        <p>Usage Entries</p>
-        <strong>${summary.usageCount}</strong>
-      </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Stock Movement Ledger</h3>
-          <p>
-            Ledger entries can be viewed by submitted batch or by transaction date.
-            Latest activity appears first.
-          </p>
+    <section class="ledger-workbench-layout">
+      <section class="panel ledger-workbench-control">
+        <div class="panel-header">
+          <div>
+            <h3>Ledger Control</h3>
+            <p>Search, filter, and select one batch to review.</p>
+          </div>
         </div>
 
-        <div class="form-actions">
-          <button class="ghost-button" id="expand-ledger-groups">Expand All</button>
-          <button class="ghost-button" id="collapse-ledger-groups">Collapse All</button>
+        <div class="ledger-workbench-filters">
+          <label>
+            Department
+            <select id="ledger-department-filter">
+              ${renderLedgerFilterOptions(
+                departmentOptions,
+                filters.department,
+                "All Departments"
+              )}
+            </select>
+          </label>
+
+          <label>
+            Movement Type
+            <select id="ledger-movement-filter">
+              ${renderLedgerFilterOptions(
+                movementTypeOptions,
+                filters.movementType,
+                "All Movement Types"
+              )}
+            </select>
+          </label>
+
+          <label>
+            Start Date
+            <input id="ledger-start-date" type="date" value="${filters.startDate}" />
+          </label>
+
+          <label>
+            End Date
+            <input id="ledger-end-date" type="date" value="${filters.endDate}" />
+          </label>
+
+          <label class="form-full">
+            Search
+            <input
+              id="ledger-search"
+              type="text"
+              placeholder="Search batch, item, source, notes..."
+              value="${filters.search}"
+            />
+          </label>
+
+          <div class="ledger-quick-actions form-full">
+            <button class="ghost-button" id="ledger-today-filter">Today</button>
+            <button class="ghost-button" id="ledger-month-filter">This Month</button>
+            <button class="ghost-button" id="clear-ledger-filters">Clear</button>
+          </div>
         </div>
-      </div>
 
-      <div class="filter-bar ledger-filter-bar">
-        <label>
-          View By
-          <select id="ledger-view-filter">
-            <option value="batch" ${filters.viewBy === "batch" ? "selected" : ""}>Batch View</option>
-            <option value="date" ${filters.viewBy === "date" ? "selected" : ""}>Date View</option>
-          </select>
-        </label>
-
-        <label>
-          Department
-          <select id="ledger-department-filter">
-            ${renderLedgerFilterOptions(
-              departmentOptions,
-              filters.department,
-              "All Departments"
-            )}
-          </select>
-        </label>
-
-        <label>
-          Movement Type
-          <select id="ledger-movement-filter">
-            ${renderLedgerFilterOptions(
-              movementTypeOptions,
-              filters.movementType,
-              "All Movement Types"
-            )}
-          </select>
-        </label>
-
-        <label>
-          Start Date
-          <input id="ledger-start-date" type="date" value="${filters.startDate}" />
-        </label>
-
-        <label>
-          End Date
-          <input id="ledger-end-date" type="date" value="${filters.endDate}" />
-        </label>
-
-        <label class="filter-search">
-          Search
-          <input
-            id="ledger-search"
-            type="text"
-            placeholder="Search date, batch, item, ID, source, notes..."
-            value="${filters.search}"
-          />
-        </label>
-
-        <div class="ledger-quick-actions">
-          <button class="ghost-button" id="ledger-today-filter">Today</button>
-          <button class="ghost-button" id="ledger-month-filter">This Month</button>
-          <button class="ghost-button" id="clear-ledger-filters">Clear</button>
+        <div class="ledger-workbench-list-header">
+          <p class="eyebrow">Batch List</p>
+          <span>${summary.filteredBatchCount} batch(es)</span>
         </div>
-      </div>
+
+        ${renderLedgerBatchList()}
+      </section>
+
+      ${renderSelectedLedgerBatchDetail()}
     </section>
-
-    ${renderLedgerView()}
   `;
 }
 
@@ -511,22 +496,7 @@ function refreshLedgerPage() {
   renderPage("ledger");
 }
 
-function setAllBatchOpenState(isOpen) {
-  const batches = groupLedgerEntriesByBatch(getFilteredLedgerEntries());
-
-  batches.forEach((batch) => {
-    window.DMC_OPEN_LEDGER_BATCHES[batch.batchKey] = isOpen;
-  });
-
-  const dateGroups = groupLedgerEntriesByDate(getFilteredLedgerEntries());
-
-  dateGroups.forEach((dateGroup) => {
-    window.DMC_OPEN_LEDGER_DATES[dateGroup.dateKey] = isOpen;
-  });
-}
-
 function setupLedgerEvents() {
-  const viewFilter = document.getElementById("ledger-view-filter");
   const departmentFilter = document.getElementById("ledger-department-filter");
   const movementFilter = document.getElementById("ledger-movement-filter");
   const startDateInput = document.getElementById("ledger-start-date");
@@ -535,19 +505,11 @@ function setupLedgerEvents() {
   const clearButton = document.getElementById("clear-ledger-filters");
   const todayButton = document.getElementById("ledger-today-filter");
   const monthButton = document.getElementById("ledger-month-filter");
-  const expandButton = document.getElementById("expand-ledger-groups");
-  const collapseButton = document.getElementById("collapse-ledger-groups");
-
-  if (viewFilter) {
-    viewFilter.addEventListener("change", () => {
-      window.DMC_LEDGER_FILTERS.viewBy = viewFilter.value;
-      refreshLedgerPage();
-    });
-  }
 
   if (departmentFilter) {
     departmentFilter.addEventListener("change", () => {
       window.DMC_LEDGER_FILTERS.department = departmentFilter.value;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
     });
   }
@@ -555,6 +517,7 @@ function setupLedgerEvents() {
   if (movementFilter) {
     movementFilter.addEventListener("change", () => {
       window.DMC_LEDGER_FILTERS.movementType = movementFilter.value;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
     });
   }
@@ -562,6 +525,7 @@ function setupLedgerEvents() {
   if (startDateInput) {
     startDateInput.addEventListener("change", () => {
       window.DMC_LEDGER_FILTERS.startDate = startDateInput.value;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
     });
   }
@@ -569,13 +533,15 @@ function setupLedgerEvents() {
   if (endDateInput) {
     endDateInput.addEventListener("change", () => {
       window.DMC_LEDGER_FILTERS.endDate = endDateInput.value;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
     });
   }
 
   if (searchInput) {
-    searchInput.addEventListener("input", () => {
+    searchInput.addEventListener("change", () => {
       window.DMC_LEDGER_FILTERS.search = searchInput.value;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
     });
   }
@@ -583,8 +549,11 @@ function setupLedgerEvents() {
   if (todayButton) {
     todayButton.addEventListener("click", () => {
       const today = getTodayLedgerDate();
+
       window.DMC_LEDGER_FILTERS.startDate = today;
       window.DMC_LEDGER_FILTERS.endDate = today;
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
+
       refreshLedgerPage();
     });
   }
@@ -593,6 +562,8 @@ function setupLedgerEvents() {
     monthButton.addEventListener("click", () => {
       window.DMC_LEDGER_FILTERS.startDate = getMonthStartLedgerDate();
       window.DMC_LEDGER_FILTERS.endDate = getTodayLedgerDate();
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
+
       refreshLedgerPage();
     });
   }
@@ -604,45 +575,18 @@ function setupLedgerEvents() {
         movementType: "all",
         search: "",
         startDate: "",
-        endDate: "",
-        viewBy: "batch"
+        endDate: ""
       };
 
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
+
       refreshLedgerPage();
     });
   }
 
-  if (expandButton) {
-    expandButton.addEventListener("click", () => {
-      setAllBatchOpenState(true);
-      refreshLedgerPage();
-    });
-  }
-
-  if (collapseButton) {
-    collapseButton.addEventListener("click", () => {
-      setAllBatchOpenState(false);
-      refreshLedgerPage();
-    });
-  }
-
-  document.querySelectorAll("[data-ledger-batch]").forEach((button) => {
+  document.querySelectorAll("[data-select-ledger-batch]").forEach((button) => {
     button.addEventListener("click", () => {
-      const batchKey = button.dataset.ledgerBatch;
-      const currentState = window.DMC_OPEN_LEDGER_BATCHES[batchKey];
-
-      window.DMC_OPEN_LEDGER_BATCHES[batchKey] = !(currentState ?? true);
-
-      refreshLedgerPage();
-    });
-  });
-
-  document.querySelectorAll("[data-ledger-date]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const dateKey = button.dataset.ledgerDate;
-      const currentState = window.DMC_OPEN_LEDGER_DATES[dateKey];
-
-      window.DMC_OPEN_LEDGER_DATES[dateKey] = !(currentState ?? true);
+      window.DMC_SELECTED_LEDGER_BATCH_KEY = button.dataset.selectLedgerBatch;
 
       refreshLedgerPage();
     });
