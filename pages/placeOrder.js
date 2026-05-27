@@ -550,6 +550,7 @@ window.DMC_PAGES["place-order"] = {
   title: "Place Order",
   description:
     "Create branch stock requests for commissary review and fulfillment.",
+  getContent: getPlaceOrderContent,
   content: getPlaceOrderContent(),
   afterRender: setupPlaceOrderEvents
 };
