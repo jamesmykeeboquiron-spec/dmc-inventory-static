@@ -653,7 +653,8 @@ window.DMC_PAGES.ledger = {
   eyebrow: "System",
   title: "Ledger",
   description:
-    "Permanent inventory movement history grouped by batch or date.",
+    "Complete inventory movement history across commissary and branches.",
+  getContent: getLedgerContent,
   content: getLedgerContent(),
   afterRender: setupLedgerEvents
 };
