@@ -10,6 +10,9 @@ window.DMC_BRANCH_ORDERS_SEARCH = window.DMC_BRANCH_ORDERS_SEARCH || "";
 window.DMC_BRANCH_ORDERS_SELECTED_ID =
   window.DMC_BRANCH_ORDERS_SELECTED_ID || "";
 
+window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT =
+  window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT || {};
+
 function getStoredBranchOrdersForCommissary() {
   const storedOrders = localStorage.getItem(DMC_BRANCH_ORDERS_STORAGE_KEY);
 
@@ -49,7 +52,7 @@ function formatOrderDateTime(value) {
 }
 
 function getOrderTimestamp(order) {
-  const historyTime = order.statusHistory?.[0]?.timestamp;
+  const historyTime = order.statusHistory?.[order.statusHistory.length - 1]?.timestamp;
 
   if (historyTime) {
     return new Date(historyTime).getTime();
@@ -84,6 +87,8 @@ function getFilteredBranchOrders() {
       String(order.department || "").toLowerCase().includes(searchValue) ||
       String(order.status || "").toLowerCase().includes(searchValue) ||
       String(order.notes || "").toLowerCase().includes(searchValue) ||
+      String(order.fulfillment?.preparedBy || "").toLowerCase().includes(searchValue) ||
+      String(order.fulfillment?.driver || "").toLowerCase().includes(searchValue) ||
       (order.lines || []).some(
         (line) =>
           String(line.itemId || "").toLowerCase().includes(searchValue) ||
@@ -120,7 +125,8 @@ function getBranchOrdersSummary() {
     urgent: orders.filter((order) => order.urgent).length,
     accepted: orders.filter((order) => order.status === "Accepted").length,
     fulfilling: orders.filter((order) => order.status === "Being Fulfilled")
-      .length
+      .length,
+    onTheWay: orders.filter((order) => order.status === "On the Way").length
   };
 }
 
@@ -128,14 +134,24 @@ function getOrderStatusBadgeClass(status) {
   if (status === "Submitted") return "warning-badge";
   if (status === "Accepted") return "info-badge";
   if (status === "Being Fulfilled") return "";
+  if (status === "On the Way") return "info-badge";
   if (status === "Rejected") return "danger-badge";
+  if (status === "Variance") return "danger-badge";
   return "";
 }
 
 function renderBranchOrderStatusOptions() {
   const selectedStatus = window.DMC_BRANCH_ORDERS_SELECTED_STATUS;
 
-  const statuses = ["Submitted", "Accepted", "Being Fulfilled", "Rejected"];
+  const statuses = [
+    "Submitted",
+    "Accepted",
+    "Being Fulfilled",
+    "On the Way",
+    "Completed",
+    "Variance",
+    "Rejected"
+  ];
 
   return `
     <option value="all" ${selectedStatus === "all" ? "selected" : ""}>
@@ -276,6 +292,170 @@ function canRejectOrder(order) {
   return order && ["Submitted", "Accepted"].includes(order.status);
 }
 
+function getFulfillmentDraft(order) {
+  if (!order) {
+    return {
+      lines: {},
+      preparedBy: "",
+      driver: "",
+      deliveryNotes: ""
+    };
+  }
+
+  const existingFulfillment = order.fulfillment || {};
+
+  if (!window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId]) {
+    const lineDrafts = {};
+
+    (order.lines || []).forEach((line) => {
+      lineDrafts[line.itemId] = {
+        sentQty:
+          existingFulfillment.lines?.[line.itemId]?.sentQty ??
+          line.requestedQty ??
+          "",
+        notes: existingFulfillment.lines?.[line.itemId]?.notes || ""
+      };
+    });
+
+    window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId] = {
+      lines: lineDrafts,
+      preparedBy: existingFulfillment.preparedBy || "",
+      driver: existingFulfillment.driver || "",
+      deliveryNotes: existingFulfillment.deliveryNotes || ""
+    };
+  }
+
+  return window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId];
+}
+
+function renderFulfillmentPanel(order) {
+  if (!order) {
+    return "";
+  }
+
+  if (order.status !== "Being Fulfilled" && order.status !== "On the Way") {
+    return "";
+  }
+
+  const isLocked = order.status === "On the Way";
+  const draft = getFulfillmentDraft(order);
+
+  return `
+    <div class="branch-order-section fulfillment-panel">
+      <div class="panel-header fulfillment-panel-header">
+        <div>
+          <h4>Fulfillment Panel</h4>
+          <p>
+            Enter quantities that commissary will send. When marked On the Way,
+            this order becomes visible for branch receiving.
+          </p>
+        </div>
+
+        <span class="badge ${isLocked ? "info-badge" : ""}">
+          ${isLocked ? "Locked / On the Way" : "Editable"}
+        </span>
+      </div>
+
+      <div class="fulfillment-lines">
+        ${(order.lines || [])
+          .map((line) => {
+            const lineDraft = draft.lines[line.itemId] || {};
+
+            return `
+              <div class="fulfillment-line">
+                <div>
+                  <p class="eyebrow">${line.section || "Item"}</p>
+                  <strong>${line.itemName}</strong>
+                  <span>${line.itemId} • Requested: ${line.requestedQty} ${line.unit}</span>
+                </div>
+
+                <label>
+                  Sent Qty
+                  <input
+                    class="fulfillment-input"
+                    data-fulfillment-qty="${line.itemId}"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value="${lineDraft.sentQty ?? ""}"
+                    ${isLocked ? "disabled" : ""}
+                  />
+                </label>
+
+                <label>
+                  Notes
+                  <input
+                    class="fulfillment-input"
+                    data-fulfillment-notes="${line.itemId}"
+                    type="text"
+                    placeholder="Optional"
+                    value="${lineDraft.notes || ""}"
+                    ${isLocked ? "disabled" : ""}
+                  />
+                </label>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+
+      <div class="fulfillment-meta-grid">
+        <label>
+          Prepared By
+          <input
+            id="fulfillment-prepared-by"
+            type="text"
+            placeholder="Commissary staff"
+            value="${draft.preparedBy || ""}"
+            ${isLocked ? "disabled" : ""}
+          />
+        </label>
+
+        <label>
+          Driver / Rider
+          <input
+            id="fulfillment-driver"
+            type="text"
+            placeholder="Driver or rider name"
+            value="${draft.driver || ""}"
+            ${isLocked ? "disabled" : ""}
+          />
+        </label>
+
+        <label class="form-full">
+          Delivery Notes
+          <textarea
+            id="fulfillment-delivery-notes"
+            rows="3"
+            placeholder="Delivery notes, packing notes, special handling..."
+            ${isLocked ? "disabled" : ""}
+          >${draft.deliveryNotes || ""}</textarea>
+        </label>
+      </div>
+
+      ${
+        isLocked
+          ? `
+            <div class="instruction-box">
+              <strong>Delivery Status:</strong>
+              <span>
+                This order has been marked On the Way. Fulfillment details are locked
+                until the branch confirms receipt in Incoming Deliveries.
+              </span>
+            </div>
+          `
+          : `
+            <div class="form-actions fulfillment-actions">
+              <button class="primary-button" id="mark-order-on-the-way">
+                Mark as On the Way
+              </button>
+            </div>
+          `
+      }
+    </div>
+  `;
+}
+
 function renderSelectedBranchOrder() {
   const order = getSelectedBranchOrder();
 
@@ -339,6 +519,8 @@ function renderSelectedBranchOrder() {
         ${renderSelectedOrderLines(order)}
       </div>
 
+      ${renderFulfillmentPanel(order)}
+
       <div class="branch-order-section">
         <h4>Status History</h4>
         ${renderStatusHistory(order)}
@@ -394,8 +576,8 @@ function getBranchOrdersContent() {
       </div>
 
       <div class="card">
-        <p>Being Fulfilled</p>
-        <strong>${summary.fulfilling}</strong>
+        <p>On the Way</p>
+        <strong>${summary.onTheWay}</strong>
       </div>
     </section>
 
@@ -437,7 +619,7 @@ function refreshBranchOrdersPage() {
   renderPage("branch-orders");
 }
 
-function updateBranchOrderStatus(orderId, nextStatus, note) {
+function updateBranchOrderStatus(orderId, nextStatus, note, extraUpdates = {}) {
   const orders = getStoredBranchOrdersForCommissary();
 
   const updatedOrders = orders.map((order) => {
@@ -447,6 +629,7 @@ function updateBranchOrderStatus(orderId, nextStatus, note) {
 
     return {
       ...order,
+      ...extraUpdates,
       status: nextStatus,
       statusHistory: [
         ...(order.statusHistory || []),
@@ -462,6 +645,40 @@ function updateBranchOrderStatus(orderId, nextStatus, note) {
   saveBranchOrdersForCommissary(updatedOrders);
   window.DMC_BRANCH_ORDERS_SELECTED_ID = orderId;
   refreshBranchOrdersPage();
+}
+
+function saveFulfillmentDraftFromInputs(order) {
+  if (!order) {
+    return;
+  }
+
+  const draft = getFulfillmentDraft(order);
+
+  document.querySelectorAll("[data-fulfillment-qty]").forEach((input) => {
+    const itemId = input.dataset.fulfillmentQty;
+
+    draft.lines[itemId] = draft.lines[itemId] || {};
+    draft.lines[itemId].sentQty = input.value;
+  });
+
+  document.querySelectorAll("[data-fulfillment-notes]").forEach((input) => {
+    const itemId = input.dataset.fulfillmentNotes;
+
+    draft.lines[itemId] = draft.lines[itemId] || {};
+    draft.lines[itemId].notes = input.value;
+  });
+
+  const preparedByInput = document.getElementById("fulfillment-prepared-by");
+  const driverInput = document.getElementById("fulfillment-driver");
+  const deliveryNotesInput = document.getElementById(
+    "fulfillment-delivery-notes"
+  );
+
+  draft.preparedBy = preparedByInput?.value || "";
+  draft.driver = driverInput?.value || "";
+  draft.deliveryNotes = deliveryNotesInput?.value || "";
+
+  window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId] = draft;
 }
 
 function setupBranchOrdersEvents() {
@@ -495,9 +712,36 @@ function setupBranchOrdersEvents() {
 
   const selectedOrder = getSelectedBranchOrder();
 
+  document.querySelectorAll("[data-fulfillment-qty]").forEach((input) => {
+    input.addEventListener("change", () => {
+      saveFulfillmentDraftFromInputs(selectedOrder);
+    });
+  });
+
+  document.querySelectorAll("[data-fulfillment-notes]").forEach((input) => {
+    input.addEventListener("change", () => {
+      saveFulfillmentDraftFromInputs(selectedOrder);
+    });
+  });
+
+  const preparedByInput = document.getElementById("fulfillment-prepared-by");
+  const driverInput = document.getElementById("fulfillment-driver");
+  const deliveryNotesInput = document.getElementById(
+    "fulfillment-delivery-notes"
+  );
+
+  [preparedByInput, driverInput, deliveryNotesInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("change", () => {
+        saveFulfillmentDraftFromInputs(selectedOrder);
+      });
+    }
+  });
+
   const acceptButton = document.getElementById("accept-branch-order");
   const fulfillmentButton = document.getElementById("start-fulfillment-order");
   const rejectButton = document.getElementById("reject-branch-order");
+  const markOnTheWayButton = document.getElementById("mark-order-on-the-way");
 
   if (acceptButton && selectedOrder) {
     acceptButton.addEventListener("click", () => {
@@ -531,6 +775,54 @@ function setupBranchOrdersEvents() {
         selectedOrder.orderId,
         "Rejected",
         "Commissary rejected the branch order."
+      );
+    });
+  }
+
+  if (markOnTheWayButton && selectedOrder) {
+    markOnTheWayButton.addEventListener("click", () => {
+      saveFulfillmentDraftFromInputs(selectedOrder);
+
+      const draft = getFulfillmentDraft(selectedOrder);
+
+      const missingSentQty = (selectedOrder.lines || []).some((line) => {
+        const sentQty = Number(draft.lines[line.itemId]?.sentQty || 0);
+        return Number.isNaN(sentQty) || sentQty <= 0;
+      });
+
+      if (missingSentQty) {
+        alert("Please enter sent quantity greater than 0 for every item.");
+        return;
+      }
+
+      if (!draft.preparedBy.trim()) {
+        alert("Please enter Prepared By.");
+        return;
+      }
+
+      if (!draft.driver.trim()) {
+        alert("Please enter Driver / Rider.");
+        return;
+      }
+
+      const confirmed = confirm(
+        `Mark order ${selectedOrder.orderId} as On the Way?`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      updateBranchOrderStatus(
+        selectedOrder.orderId,
+        "On the Way",
+        "Commissary marked the delivery as On the Way.",
+        {
+          fulfillment: {
+            ...draft,
+            sentAt: new Date().toISOString()
+          }
+        }
       );
     });
   }
