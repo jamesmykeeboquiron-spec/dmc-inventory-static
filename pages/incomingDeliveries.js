@@ -719,6 +719,7 @@ window.DMC_PAGES["incoming-deliveries"] = {
   title: "Incoming Deliveries",
   description:
     "Confirm deliveries sent by commissary and flag missing, damaged, or spoiled items.",
+  getContent: getIncomingDeliveriesContent,
   content: getIncomingDeliveriesContent(),
   afterRender: setupIncomingDeliveriesEvents
 };
