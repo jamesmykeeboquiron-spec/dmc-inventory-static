@@ -594,6 +594,7 @@ window.DMC_PAGES["order-history"] = {
   title: "Order History",
   description:
     "Track submitted branch orders and commissary fulfillment status updates.",
+  getContent: getOrderHistoryContent,
   content: getOrderHistoryContent(),
   afterRender: setupOrderHistoryEvents
 };
