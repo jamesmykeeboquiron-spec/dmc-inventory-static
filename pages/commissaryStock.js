@@ -357,7 +357,8 @@ window.DMC_PAGES["commissary-stock"] = {
   eyebrow: "Commissary",
   title: "Commissary Stock",
   description:
-    "Overview of commissary stock levels, low stock alerts, priorities, and expiry concerns.",
+    "Tracks available stock inside the commissary storage area.",
+  getContent: getCommissaryStockContent,
   content: getCommissaryStockContent(),
   afterRender: setupCommissaryStockEvents
 };
