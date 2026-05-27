@@ -506,6 +506,7 @@ window.DMC_PAGES["branch-stock"] = {
   title: "Branch Stock",
   description:
     "Current branch stock calculated from starting stock and Ledger movements.",
+  getContent: getBranchStockContent,
   content: getBranchStockContent(),
   afterRender: setupBranchStockEvents
 };
