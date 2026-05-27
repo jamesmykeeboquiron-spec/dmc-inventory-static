@@ -649,7 +649,7 @@ function setupLedgerEvents() {
   });
 }
 
-window.DMC_PAGES.ledger = {
+window.DMC_PAGES["ledger"] = {
   eyebrow: "System",
   title: "Ledger",
   description:
