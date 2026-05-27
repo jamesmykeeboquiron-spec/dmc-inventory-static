@@ -3,7 +3,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_INCOMING_DELIVERIES_STORAGE_KEY = "dmc_branch_orders";
 const DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY =
   "dmc_inventory_ledger_entries";
-const DMC_DELIVERY_ISSUES_STORAGE_KEY = "dmc_delivery_issues";
+const DMC_INCOMING_DELIVERY_ISSUES_STORAGE_KEY = "dmc_delivery_issues";
 
 window.DMC_INCOMING_DELIVERIES_SELECTED_ID =
   window.DMC_INCOMING_DELIVERIES_SELECTED_ID || "";
@@ -58,8 +58,10 @@ function saveLedgerEntriesFromIncomingDeliveries(entries) {
   );
 }
 
-function getStoredDeliveryIssues() {
-  const storedIssues = localStorage.getItem(DMC_DELIVERY_ISSUES_STORAGE_KEY);
+function getStoredIncomingDeliveryIssues() {
+  const storedIssues = localStorage.getItem(
+    DMC_INCOMING_DELIVERY_ISSUES_STORAGE_KEY
+  );
 
   if (!storedIssues) {
     return [];
@@ -72,8 +74,11 @@ function getStoredDeliveryIssues() {
   }
 }
 
-function saveDeliveryIssues(issues) {
-  localStorage.setItem(DMC_DELIVERY_ISSUES_STORAGE_KEY, JSON.stringify(issues));
+function saveIncomingDeliveryIssues(issues) {
+  localStorage.setItem(
+    DMC_INCOMING_DELIVERY_ISSUES_STORAGE_KEY,
+    JSON.stringify(issues)
+  );
 }
 
 function getIncomingDeliveryTodayDate() {
@@ -326,7 +331,9 @@ function writeBranchTransferInToLedger(order, receivingDraft) {
 }
 
 function hasDeliveryIssueAlreadyCreated(orderId) {
-  return getStoredDeliveryIssues().some((issue) => issue.orderId === orderId);
+  return getStoredIncomingDeliveryIssues().some(
+    (issue) => issue.orderId === orderId
+  );
 }
 
 function getDeliveryIssueReason(sentQty, receivedQty, condition) {
@@ -399,6 +406,10 @@ function buildDeliveryIssueRecords(order, receivingDraft) {
         branchReceivingNotes: receivingDraft.receivingNotes || "",
         status: "Open",
         resolution: "",
+        resolutionCategory: "",
+        stockAction: "",
+        stockActionApplied: false,
+        ledgerEntryCreated: false,
         resolutionNotes: "",
         createdAt,
         createdAtDisplay,
@@ -419,9 +430,9 @@ function writeDeliveryIssuesForVariance(order, receivingDraft) {
     return;
   }
 
-  const currentIssues = getStoredDeliveryIssues();
+  const currentIssues = getStoredIncomingDeliveryIssues();
 
-  saveDeliveryIssues([...currentIssues, ...newIssues]);
+  saveIncomingDeliveryIssues([...currentIssues, ...newIssues]);
 }
 
 function renderIncomingDeliveryList() {
