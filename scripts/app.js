@@ -156,14 +156,17 @@ function renderPage(pageId) {
   document.getElementById("page-title").textContent = page.title;
   document.getElementById("page-description").textContent = page.description;
 
-  document.getElementById("page-content").innerHTML =
-    page.content || getComingSoonContent(page);
+  const pageContent =
+    typeof page.getContent === "function"
+      ? page.getContent()
+      : page.content || getComingSoonContent(page);
+
+  document.getElementById("page-content").innerHTML = pageContent;
 
   if (typeof page.afterRender === "function") {
-  page.afterRender();
-}
+    page.afterRender();
+  }
 
-  
   document.querySelectorAll(".nav-link").forEach((link) => {
     link.classList.remove("active");
   });
