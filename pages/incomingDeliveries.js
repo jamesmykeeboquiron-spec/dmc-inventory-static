@@ -3,6 +3,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_INCOMING_DELIVERIES_STORAGE_KEY = "dmc_branch_orders";
 const DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY =
   "dmc_inventory_ledger_entries";
+const DMC_DELIVERY_ISSUES_STORAGE_KEY = "dmc_delivery_issues";
 
 window.DMC_INCOMING_DELIVERIES_SELECTED_ID =
   window.DMC_INCOMING_DELIVERIES_SELECTED_ID || "";
@@ -55,6 +56,24 @@ function saveLedgerEntriesFromIncomingDeliveries(entries) {
     DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY,
     JSON.stringify(entries)
   );
+}
+
+function getStoredDeliveryIssues() {
+  const storedIssues = localStorage.getItem(DMC_DELIVERY_ISSUES_STORAGE_KEY);
+
+  if (!storedIssues) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(storedIssues);
+  } catch {
+    return [];
+  }
+}
+
+function saveDeliveryIssues(issues) {
+  localStorage.setItem(DMC_DELIVERY_ISSUES_STORAGE_KEY, JSON.stringify(issues));
 }
 
 function getIncomingDeliveryTodayDate() {
@@ -227,22 +246,6 @@ function getReceivingVariance(order, line) {
   return receivedQty - sentQty;
 }
 
-function getUsableReceivedQtyForLine(order, line) {
-  const draft = getIncomingDraft(order);
-  const receivedQty = Number(draft.lines[line.itemId]?.receivedQty || 0);
-  const condition = draft.lines[line.itemId]?.condition || "Good";
-
-  if (condition !== "Good") {
-    return 0;
-  }
-
-  if (Number.isNaN(receivedQty) || receivedQty <= 0) {
-    return 0;
-  }
-
-  return receivedQty;
-}
-
 function hasIncomingDeliveryVariance(order) {
   const draft = getIncomingDraft(order);
 
@@ -320,6 +323,105 @@ function writeBranchTransferInToLedger(order, receivingDraft) {
     ...currentLedgerEntries,
     ...branchTransferInEntries
   ]);
+}
+
+function hasDeliveryIssueAlreadyCreated(orderId) {
+  return getStoredDeliveryIssues().some((issue) => issue.orderId === orderId);
+}
+
+function getDeliveryIssueReason(sentQty, receivedQty, condition) {
+  if (condition === "Missing") {
+    return "Missing";
+  }
+
+  if (condition === "Damaged") {
+    return "Damaged";
+  }
+
+  if (condition === "Spoiled") {
+    return "Spoiled";
+  }
+
+  if (receivedQty < sentQty) {
+    return "Short Received";
+  }
+
+  if (receivedQty > sentQty) {
+    return "Over Received";
+  }
+
+  return "Needs Review";
+}
+
+function buildDeliveryIssueRecords(order, receivingDraft) {
+  const createdAt = new Date().toISOString();
+  const createdAtDisplay = getIncomingDeliveryReadableTimestamp();
+
+  return (order.lines || [])
+    .map((line) => {
+      const sentQty = getSentQtyForLine(order, line);
+      const receivedQty = Number(
+        receivingDraft.lines?.[line.itemId]?.receivedQty || 0
+      );
+      const condition = receivingDraft.lines?.[line.itemId]?.condition || "Good";
+      const lineNotes = receivingDraft.lines?.[line.itemId]?.notes || "";
+      const varianceQty = receivedQty - sentQty;
+
+      const hasIssue =
+        receivedQty !== sentQty ||
+        condition === "Damaged" ||
+        condition === "Spoiled" ||
+        condition === "Missing";
+
+      if (!hasIssue) {
+        return null;
+      }
+
+      return {
+        issueId: `DI-${order.orderId}-${line.itemId}`,
+        orderId: order.orderId,
+        branch: order.branch || "DMC-Iriga Branch",
+        department: order.department || "-",
+        itemId: line.itemId || "",
+        itemName: line.itemName || "",
+        section: line.section || "",
+        unit: line.unit || "",
+        sentQty,
+        receivedQty,
+        varianceQty,
+        condition,
+        issueReason: getDeliveryIssueReason(sentQty, receivedQty, condition),
+        driver: order.fulfillment?.driver || "",
+        preparedBy: order.fulfillment?.preparedBy || "",
+        receivedBy: receivingDraft.receivedBy || "",
+        deliveryNotes: order.fulfillment?.deliveryNotes || "",
+        branchLineNotes: lineNotes,
+        branchReceivingNotes: receivingDraft.receivingNotes || "",
+        status: "Open",
+        resolution: "",
+        resolutionNotes: "",
+        createdAt,
+        createdAtDisplay,
+        resolvedAt: ""
+      };
+    })
+    .filter(Boolean);
+}
+
+function writeDeliveryIssuesForVariance(order, receivingDraft) {
+  if (hasDeliveryIssueAlreadyCreated(order.orderId)) {
+    return;
+  }
+
+  const newIssues = buildDeliveryIssueRecords(order, receivingDraft);
+
+  if (newIssues.length === 0) {
+    return;
+  }
+
+  const currentIssues = getStoredDeliveryIssues();
+
+  saveDeliveryIssues([...currentIssues, ...newIssues]);
 }
 
 function renderIncomingDeliveryList() {
@@ -527,7 +629,8 @@ function renderIncomingDeliveryDetail() {
         <strong>Receiving Rule:</strong>
         <span>
           Good received quantity will be added to Branch Stock through the Ledger.
-          Missing, damaged, spoiled, or quantity differences will mark the order as Variance.
+          Missing, damaged, spoiled, or quantity differences will mark the order as Variance
+          and create Delivery Issue records.
         </span>
       </div>
 
@@ -719,12 +822,12 @@ function confirmIncomingDelivery(order) {
   const hasVariance = hasIncomingDeliveryVariance(order);
   const nextStatus = hasVariance ? "Variance" : "Completed";
   const statusNote = hasVariance
-    ? "Branch confirmed delivery with variance or condition issue. Branch Transfer In was logged for usable received quantities only."
+    ? "Branch confirmed delivery with variance or condition issue. Branch Transfer In was logged for usable received quantities only. Delivery Issue record was created."
     : "Branch confirmed delivery received complete. Branch Transfer In was logged.";
 
   const confirmed = confirm(
     hasVariance
-      ? `Confirm receipt for ${order.orderId} with variance?`
+      ? `Confirm receipt for ${order.orderId} with variance and create Delivery Issue record?`
       : `Confirm receipt for ${order.orderId} as complete?`
   );
 
@@ -733,6 +836,10 @@ function confirmIncomingDelivery(order) {
   }
 
   writeBranchTransferInToLedger(order, draft);
+
+  if (hasVariance) {
+    writeDeliveryIssuesForVariance(order, draft);
+  }
 
   const orders = getStoredIncomingDeliveryOrders();
 
@@ -766,7 +873,7 @@ function confirmIncomingDelivery(order) {
 
   alert(
     hasVariance
-      ? "Delivery confirmed with variance. Branch Transfer In was logged for usable received quantities only."
+      ? "Delivery confirmed with variance. Delivery Issue record was created."
       : "Delivery confirmed complete. Branch Transfer In was logged."
   );
 
