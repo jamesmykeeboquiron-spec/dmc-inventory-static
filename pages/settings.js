@@ -740,7 +740,8 @@ window.DMC_PAGES.settings = {
   eyebrow: "System",
   title: "Settings",
   description:
-    "Manage setup options for Operating Areas, Departments, Sections, Units, and future dropdowns.",
+    "Manage system setup options like operating areas, departments, sections, and units.",
+  getContent: getSettingsContent,
   content: getSettingsContent(),
   afterRender: setupSettingsEvents
 };
