@@ -102,17 +102,14 @@ function getCommissaryLogPreparedEntries() {
 
     const movements = [
       {
-        key: "received",
         movementType: "Received",
         quantity: Number(draft.received || 0)
       },
       {
-        key: "waste",
         movementType: "Waste",
         quantity: Number(draft.waste || 0)
       },
       {
-        key: "adjustment",
         movementType: "Adjustment",
         quantity: Number(draft.adjustment || 0)
       }
@@ -364,10 +361,10 @@ function getCommissaryLogTransactionContent() {
 }
 
 function refreshCommissaryLogTransactionPage() {
-  window.DMC_PAGES["log-transaction"].content =
+  window.DMC_PAGES["commissary-log-transaction"].content =
     getCommissaryLogTransactionContent();
 
-  renderPage("log-transaction");
+  renderPage("commissary-log-transaction");
 }
 
 function saveCommissaryLogDraftFromInputs() {
@@ -487,7 +484,7 @@ function setupCommissaryLogTransactionEvents() {
   }
 }
 
-window.DMC_PAGES["log-transaction"] = {
+window.DMC_PAGES["commissary-log-transaction"] = {
   eyebrow: "Commissary",
   title: "Log Transaction",
   description:
