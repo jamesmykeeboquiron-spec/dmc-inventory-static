@@ -2710,3 +2710,148 @@ select:focus {
   border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
 }
+
+/* ================================
+   DELIVERY ISSUES PAGE
+================================ */
+
+.delivery-issues-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.75fr) minmax(560px, 1.25fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.delivery-issue-list-panel,
+.delivery-issue-detail {
+  min-height: 520px;
+}
+
+.delivery-issue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.delivery-issue-list-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.delivery-issue-list-item.active {
+  border-left: 3px solid var(--gold);
+  background: rgba(240, 192, 79, 0.08);
+}
+
+.delivery-issue-list-item strong {
+  color: var(--gold);
+}
+
+.delivery-issue-list-item p {
+  margin: 6px 0;
+  color: var(--text);
+}
+
+.delivery-issue-list-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.delivery-issue-list-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.delivery-issue-comparison {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.delivery-issue-comparison div {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.delivery-issue-comparison strong {
+  display: block;
+  color: var(--text);
+  font-size: 24px;
+}
+
+.delivery-issue-comparison span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.delivery-issue-resolution-panel {
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.035);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.delivery-issue-resolution-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.delivery-issue-resolution-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.delivery-issue-resolution-grid input,
+.delivery-issue-resolution-grid select,
+.delivery-issue-resolution-grid textarea {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.delivery-issue-actions {
+  margin-top: 16px;
+}
+
+@media (max-width: 1150px) {
+  .delivery-issues-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-issue-comparison {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .delivery-issue-list-item {
+    flex-direction: column;
+  }
+
+  .delivery-issue-comparison,
+  .delivery-issue-resolution-grid {
+    grid-template-columns: 1fr;
+  }
+}
