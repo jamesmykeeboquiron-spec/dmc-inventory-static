@@ -13,7 +13,7 @@ const fallbackPages = {
   },
 
   "master-list": {
-    eyebrow: "Commissary",
+    eyebrow: "System",
     title: "Master List",
     description:
       "The main item catalog for ingredients, packaging, cleaning supplies, and other inventory items."
@@ -44,6 +44,13 @@ const fallbackPages = {
     title: "Branch Orders",
     description:
       "Shows branch requests waiting for commissary review, preparation, and fulfillment."
+  },
+
+  "delivery-issues": {
+    eyebrow: "Commissary",
+    title: "Delivery Issues",
+    description:
+      "Review delivery variances before deciding whether items are waste, returned stock, missing, or input error."
   },
 
   "purchase-orders": {
@@ -126,10 +133,12 @@ const fallbackPages = {
   }
 };
 
-const pages = {
-  ...fallbackPages,
-  ...(window.DMC_PAGES || {})
-};
+function getPages() {
+  return {
+    ...fallbackPages,
+    ...(window.DMC_PAGES || {})
+  };
+}
 
 function getComingSoonContent(page) {
   return `
@@ -146,9 +155,11 @@ function getComingSoonContent(page) {
 }
 
 function renderPage(pageId) {
+  const pages = getPages();
   const page = pages[pageId];
 
   if (!page) {
+    console.warn(`Page not found: ${pageId}`);
     return;
   }
 
