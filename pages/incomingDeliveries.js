@@ -1,6 +1,8 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_INCOMING_DELIVERIES_STORAGE_KEY = "dmc_branch_orders";
+const DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY =
+  "dmc_inventory_ledger_entries";
 
 window.DMC_INCOMING_DELIVERIES_SELECTED_ID =
   window.DMC_INCOMING_DELIVERIES_SELECTED_ID || "";
@@ -30,6 +32,45 @@ function saveIncomingDeliveryOrders(orders) {
     DMC_INCOMING_DELIVERIES_STORAGE_KEY,
     JSON.stringify(orders)
   );
+}
+
+function getStoredLedgerEntriesForIncomingDeliveries() {
+  const storedEntries = localStorage.getItem(
+    DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY
+  );
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function saveLedgerEntriesFromIncomingDeliveries(entries) {
+  localStorage.setItem(
+    DMC_INCOMING_DELIVERIES_LEDGER_STORAGE_KEY,
+    JSON.stringify(entries)
+  );
+}
+
+function getIncomingDeliveryTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getIncomingDeliveryReadableTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function formatIncomingDeliveryDateTime(value) {
@@ -88,7 +129,9 @@ function getIncomingDeliveryOrders() {
         String(order.orderId || "").toLowerCase().includes(searchValue) ||
         String(order.branch || "").toLowerCase().includes(searchValue) ||
         String(order.department || "").toLowerCase().includes(searchValue) ||
-        String(order.fulfillment?.driver || "").toLowerCase().includes(searchValue) ||
+        String(order.fulfillment?.driver || "")
+          .toLowerCase()
+          .includes(searchValue) ||
         String(order.fulfillment?.preparedBy || "")
           .toLowerCase()
           .includes(searchValue) ||
@@ -148,7 +191,9 @@ function getIncomingDraft(order) {
 
     (order.lines || []).forEach((line) => {
       const sentQty = Number(
-        order.fulfillment?.lines?.[line.itemId]?.sentQty ?? line.requestedQty ?? 0
+        order.fulfillment?.lines?.[line.itemId]?.sentQty ??
+          line.requestedQty ??
+          0
       );
 
       lineDrafts[line.itemId] = {
@@ -182,6 +227,22 @@ function getReceivingVariance(order, line) {
   return receivedQty - sentQty;
 }
 
+function getUsableReceivedQtyForLine(order, line) {
+  const draft = getIncomingDraft(order);
+  const receivedQty = Number(draft.lines[line.itemId]?.receivedQty || 0);
+  const condition = draft.lines[line.itemId]?.condition || "Good";
+
+  if (condition !== "Good") {
+    return 0;
+  }
+
+  if (Number.isNaN(receivedQty) || receivedQty <= 0) {
+    return 0;
+  }
+
+  return receivedQty;
+}
+
 function hasIncomingDeliveryVariance(order) {
   const draft = getIncomingDraft(order);
 
@@ -192,6 +253,73 @@ function hasIncomingDeliveryVariance(order) {
 
     return receivedQty !== sentQty || condition !== "Good";
   });
+}
+
+function hasBranchTransferInAlreadyLogged(orderId) {
+  return getStoredLedgerEntriesForIncomingDeliveries().some(
+    (entry) =>
+      entry.batchId === orderId &&
+      entry.movementType === "Transfer In" &&
+      entry.source === "Incoming Delivery Receipt"
+  );
+}
+
+function buildBranchTransferInLedgerEntries(order, receivingDraft) {
+  const submittedAt = new Date().toISOString();
+  const submittedAtDisplay = getIncomingDeliveryReadableTimestamp();
+
+  return (order.lines || [])
+    .map((line) => {
+      const condition = receivingDraft.lines?.[line.itemId]?.condition || "Good";
+      const receivedQty = Number(
+        receivingDraft.lines?.[line.itemId]?.receivedQty || 0
+      );
+
+      const usableQty =
+        condition === "Good" && !Number.isNaN(receivedQty) && receivedQty > 0
+          ? receivedQty
+          : 0;
+
+      if (usableQty <= 0) {
+        return null;
+      }
+
+      return {
+        date: getIncomingDeliveryTodayDate(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId: order.orderId,
+        department: order.department || "Branch",
+        section: line.section || "",
+        itemId: line.itemId || "",
+        itemName: line.itemName || "",
+        movementType: "Transfer In",
+        quantity: usableQty,
+        unit: line.unit || "",
+        source: "Incoming Delivery Receipt",
+        notes: `Received from Commissary by ${
+          receivingDraft.receivedBy || "branch receiver"
+        }. Order ${order.orderId}. Condition: ${condition}.`
+      };
+    })
+    .filter(Boolean);
+}
+
+function writeBranchTransferInToLedger(order, receivingDraft) {
+  if (hasBranchTransferInAlreadyLogged(order.orderId)) {
+    return;
+  }
+
+  const currentLedgerEntries = getStoredLedgerEntriesForIncomingDeliveries();
+  const branchTransferInEntries = buildBranchTransferInLedgerEntries(
+    order,
+    receivingDraft
+  );
+
+  saveLedgerEntriesFromIncomingDeliveries([
+    ...currentLedgerEntries,
+    ...branchTransferInEntries
+  ]);
 }
 
 function renderIncomingDeliveryList() {
@@ -398,7 +526,7 @@ function renderIncomingDeliveryDetail() {
       <div class="instruction-box">
         <strong>Receiving Rule:</strong>
         <span>
-          If received quantity matches sent quantity and condition is good, the delivery will be completed.
+          Good received quantity will be added to Branch Stock through the Ledger.
           Missing, damaged, spoiled, or quantity differences will mark the order as Variance.
         </span>
       </div>
@@ -591,8 +719,8 @@ function confirmIncomingDelivery(order) {
   const hasVariance = hasIncomingDeliveryVariance(order);
   const nextStatus = hasVariance ? "Variance" : "Completed";
   const statusNote = hasVariance
-    ? "Branch confirmed delivery with variance or condition issue."
-    : "Branch confirmed delivery received complete.";
+    ? "Branch confirmed delivery with variance or condition issue. Branch Transfer In was logged for usable received quantities only."
+    : "Branch confirmed delivery received complete. Branch Transfer In was logged.";
 
   const confirmed = confirm(
     hasVariance
@@ -603,6 +731,8 @@ function confirmIncomingDelivery(order) {
   if (!confirmed) {
     return;
   }
+
+  writeBranchTransferInToLedger(order, draft);
 
   const orders = getStoredIncomingDeliveryOrders();
 
@@ -636,8 +766,8 @@ function confirmIncomingDelivery(order) {
 
   alert(
     hasVariance
-      ? "Delivery confirmed with variance. Management review required."
-      : "Delivery confirmed complete."
+      ? "Delivery confirmed with variance. Branch Transfer In was logged for usable received quantities only."
+      : "Delivery confirmed complete. Branch Transfer In was logged."
   );
 
   refreshIncomingDeliveriesPage();
