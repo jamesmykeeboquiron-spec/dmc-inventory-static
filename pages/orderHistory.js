@@ -7,8 +7,25 @@ window.DMC_ORDER_HISTORY_SELECTED_STATUS =
 
 window.DMC_ORDER_HISTORY_SEARCH = window.DMC_ORDER_HISTORY_SEARCH || "";
 
+window.DMC_ORDER_HISTORY_START_DATE =
+  window.DMC_ORDER_HISTORY_START_DATE || "";
+
+window.DMC_ORDER_HISTORY_END_DATE =
+  window.DMC_ORDER_HISTORY_END_DATE || "";
+
 window.DMC_ORDER_HISTORY_SELECTED_ID =
   window.DMC_ORDER_HISTORY_SELECTED_ID || "";
+
+function getTodayOrderHistoryDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getMonthStartOrderHistoryDate() {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  return firstDay.toISOString().slice(0, 10);
+}
 
 function getStoredOrderHistoryOrders() {
   const storedOrders = localStorage.getItem(DMC_ORDER_HISTORY_STORAGE_KEY);
@@ -71,7 +88,17 @@ function getFilteredOrderHistoryOrders() {
     .trim();
 
   return getSortedOrderHistoryOrders().filter((order) => {
+    const orderDate = String(order.orderDate || "");
+
     const matchesStatus = status === "all" || order.status === status;
+
+    const matchesStartDate =
+      !window.DMC_ORDER_HISTORY_START_DATE ||
+      orderDate >= window.DMC_ORDER_HISTORY_START_DATE;
+
+    const matchesEndDate =
+      !window.DMC_ORDER_HISTORY_END_DATE ||
+      orderDate <= window.DMC_ORDER_HISTORY_END_DATE;
 
     const matchesSearch =
       !searchValue ||
@@ -87,7 +114,7 @@ function getFilteredOrderHistoryOrders() {
           String(line.section || "").toLowerCase().includes(searchValue)
       );
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesStartDate && matchesEndDate && matchesSearch;
   });
 }
 
@@ -176,41 +203,39 @@ function renderOrderHistoryList() {
   return `
     <div class="branch-order-list">
       ${orders
-        .map(
-          (order) => {
-            const latestStatus =
-              order.statusHistory?.[order.statusHistory.length - 1];
+        .map((order) => {
+          const latestStatus =
+            order.statusHistory?.[order.statusHistory.length - 1];
 
-            return `
-              <button
-                class="branch-order-list-item ${
-                  selectedOrder?.orderId === order.orderId ? "active" : ""
-                }"
-                data-select-order-history="${order.orderId}"
-              >
-                <div>
-                  <strong>${order.orderId}</strong>
-                  <p>${order.department || "-"} • ${(order.lines || []).length} item(s)</p>
-                  <span>
-                    Last update:
-                    ${formatOrderHistoryDateTime(latestStatus?.timestamp || order.orderDate)}
-                  </span>
-                </div>
+          return `
+            <button
+              class="branch-order-list-item ${
+                selectedOrder?.orderId === order.orderId ? "active" : ""
+              }"
+              data-select-order-history="${order.orderId}"
+            >
+              <div>
+                <strong>${order.orderId}</strong>
+                <p>${order.department || "-"} • ${(order.lines || []).length} item(s)</p>
+                <span>
+                  Last update:
+                  ${formatOrderHistoryDateTime(latestStatus?.timestamp || order.orderDate)}
+                </span>
+              </div>
 
-                <div class="branch-order-list-meta">
-                  ${
-                    order.urgent
-                      ? `<span class="badge danger-badge">Urgent</span>`
-                      : ""
-                  }
-                  <span class="badge ${getOrderHistoryStatusBadgeClass(order.status)}">
-                    ${order.status || "Submitted"}
-                  </span>
-                </div>
-              </button>
-            `;
-          }
-        )
+              <div class="branch-order-list-meta">
+                ${
+                  order.urgent
+                    ? `<span class="badge danger-badge">Urgent</span>`
+                    : ""
+                }
+                <span class="badge ${getOrderHistoryStatusBadgeClass(order.status)}">
+                  ${order.status || "Submitted"}
+                </span>
+              </div>
+            </button>
+          `;
+        })
         .join("")}
     </div>
   `;
@@ -430,7 +455,25 @@ function getOrderHistoryContent() {
           </select>
         </div>
 
-        <div class="filter-bar branch-order-search-bar">
+        <div class="filter-bar branch-order-search-bar order-history-filter-bar">
+          <label>
+            Start Date
+            <input
+              id="order-history-start-date"
+              type="date"
+              value="${window.DMC_ORDER_HISTORY_START_DATE}"
+            />
+          </label>
+
+          <label>
+            End Date
+            <input
+              id="order-history-end-date"
+              type="date"
+              value="${window.DMC_ORDER_HISTORY_END_DATE}"
+            />
+          </label>
+
           <label class="filter-search">
             Search
             <input
@@ -440,6 +483,12 @@ function getOrderHistoryContent() {
               value="${window.DMC_ORDER_HISTORY_SEARCH}"
             />
           </label>
+
+          <div class="ledger-quick-actions">
+            <button class="ghost-button" id="order-history-today-filter">Today</button>
+            <button class="ghost-button" id="order-history-month-filter">This Month</button>
+            <button class="ghost-button" id="order-history-clear-filter">Clear</button>
+          </div>
         </div>
 
         ${renderOrderHistoryList()}
@@ -458,6 +507,11 @@ function refreshOrderHistoryPage() {
 function setupOrderHistoryEvents() {
   const statusFilter = document.getElementById("order-history-status-filter");
   const searchInput = document.getElementById("order-history-search");
+  const startDateInput = document.getElementById("order-history-start-date");
+  const endDateInput = document.getElementById("order-history-end-date");
+  const todayButton = document.getElementById("order-history-today-filter");
+  const monthButton = document.getElementById("order-history-month-filter");
+  const clearButton = document.getElementById("order-history-clear-filter");
 
   if (statusFilter) {
     statusFilter.addEventListener("change", () => {
@@ -471,6 +525,56 @@ function setupOrderHistoryEvents() {
     searchInput.addEventListener("change", () => {
       window.DMC_ORDER_HISTORY_SEARCH = searchInput.value;
       window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (startDateInput) {
+    startDateInput.addEventListener("change", () => {
+      window.DMC_ORDER_HISTORY_START_DATE = startDateInput.value;
+      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (endDateInput) {
+    endDateInput.addEventListener("change", () => {
+      window.DMC_ORDER_HISTORY_END_DATE = endDateInput.value;
+      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (todayButton) {
+    todayButton.addEventListener("click", () => {
+      const today = getTodayOrderHistoryDate();
+
+      window.DMC_ORDER_HISTORY_START_DATE = today;
+      window.DMC_ORDER_HISTORY_END_DATE = today;
+      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (monthButton) {
+    monthButton.addEventListener("click", () => {
+      window.DMC_ORDER_HISTORY_START_DATE = getMonthStartOrderHistoryDate();
+      window.DMC_ORDER_HISTORY_END_DATE = getTodayOrderHistoryDate();
+      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (clearButton) {
+    clearButton.addEventListener("click", () => {
+      window.DMC_ORDER_HISTORY_SELECTED_STATUS = "all";
+      window.DMC_ORDER_HISTORY_SEARCH = "";
+      window.DMC_ORDER_HISTORY_START_DATE = "";
+      window.DMC_ORDER_HISTORY_END_DATE = "";
+      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+
       refreshOrderHistoryPage();
     });
   }
