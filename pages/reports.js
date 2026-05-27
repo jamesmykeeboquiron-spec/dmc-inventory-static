@@ -533,6 +533,7 @@ window.DMC_PAGES.reports = {
   title: "Branch Reports",
   description:
     "Department audit and date range reports powered by Starting Stock and Ledger history.",
+  getContent: getReportsContent,
   content: getReportsContent(),
   afterRender: setupReportsEvents
 };
