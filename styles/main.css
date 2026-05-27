@@ -2334,3 +2334,156 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================
+   LEDGER WORKBENCH LAYOUT
+================================ */
+
+.ledger-workbench-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.75fr) minmax(560px, 1.25fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.ledger-workbench-control,
+.ledger-workbench-detail {
+  min-height: 520px;
+}
+
+.ledger-workbench-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ledger-workbench-filters label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ledger-workbench-filters input,
+.ledger-workbench-filters select {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.ledger-workbench-filters input:focus,
+.ledger-workbench-filters select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
+}
+
+.ledger-workbench-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 10px;
+  color: var(--text-muted);
+}
+
+.ledger-workbench-list-header span {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ledger-workbench-batch-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ledger-workbench-batch-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ledger-workbench-batch-item.active {
+  border-left: 3px solid var(--gold);
+  background: rgba(240, 192, 79, 0.08);
+}
+
+.ledger-workbench-batch-item strong {
+  color: var(--gold);
+}
+
+.ledger-workbench-batch-item p {
+  margin: 6px 0;
+  color: var(--text);
+}
+
+.ledger-workbench-batch-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ledger-workbench-batch-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.ledger-workbench-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 18px 0;
+  margin: 12px 0 18px;
+}
+
+.ledger-workbench-info-grid strong {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.ledger-workbench-totals {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1150px) {
+  .ledger-workbench-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-workbench-batch-list {
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 800px) {
+  .ledger-workbench-filters,
+  .ledger-workbench-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-workbench-batch-item {
+    flex-direction: column;
+  }
+}
