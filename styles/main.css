@@ -2487,3 +2487,146 @@ button:disabled {
     flex-direction: column;
   }
 }
+/* ================================
+   LEDGER WORKBENCH FIX
+================================ */
+
+.ledger-workbench-layout {
+  display: grid !important;
+  grid-template-columns: minmax(380px, 0.8fr) minmax(620px, 1.2fr) !important;
+  gap: 16px !important;
+  align-items: start !important;
+  width: 100%;
+}
+
+.ledger-workbench-control,
+.ledger-workbench-detail {
+  min-height: 520px;
+  width: 100%;
+}
+
+.ledger-workbench-filters {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin-top: 14px;
+}
+
+.ledger-workbench-filters label {
+  display: grid !important;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ledger-workbench-filters input,
+.ledger-workbench-filters select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.ledger-workbench-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 10px;
+  color: var(--text-muted);
+}
+
+.ledger-workbench-list-header span {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ledger-workbench-batch-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ledger-workbench-batch-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex !important;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ledger-workbench-batch-item.active {
+  border-left: 3px solid var(--gold);
+  background: rgba(240, 192, 79, 0.08) !important;
+}
+
+.ledger-workbench-batch-item strong {
+  color: var(--gold);
+}
+
+.ledger-workbench-batch-item p {
+  margin: 6px 0;
+  color: var(--text);
+}
+
+.ledger-workbench-batch-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ledger-workbench-info-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 18px 0;
+  margin: 12px 0 18px;
+}
+
+.ledger-workbench-info-grid strong {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.ledger-workbench-totals {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1150px) {
+  .ledger-workbench-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ledger-workbench-batch-list {
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 800px) {
+  .ledger-workbench-filters,
+  .ledger-workbench-info-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ledger-workbench-batch-item {
+    flex-direction: column;
+  }
+}
