@@ -943,6 +943,7 @@ window.DMC_PAGES["branch-orders"] = {
   title: "Branch Orders",
   description:
     "Review submitted branch requests and update commissary fulfillment status.",
+  getContent: getBranchOrdersContent,
   content: getBranchOrdersContent(),
   afterRender: setupBranchOrdersEvents
 };
