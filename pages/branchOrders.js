@@ -1,6 +1,7 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_BRANCH_ORDERS_STORAGE_KEY = "dmc_branch_orders";
+const DMC_BRANCH_ORDERS_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
 
 window.DMC_BRANCH_ORDERS_SELECTED_STATUS =
   window.DMC_BRANCH_ORDERS_SELECTED_STATUS || "all";
@@ -31,6 +32,45 @@ function saveBranchOrdersForCommissary(orders) {
   localStorage.setItem(DMC_BRANCH_ORDERS_STORAGE_KEY, JSON.stringify(orders));
 }
 
+function getStoredLedgerEntriesForBranchOrders() {
+  const storedEntries = localStorage.getItem(
+    DMC_BRANCH_ORDERS_LEDGER_STORAGE_KEY
+  );
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function saveLedgerEntriesFromBranchOrders(entries) {
+  localStorage.setItem(
+    DMC_BRANCH_ORDERS_LEDGER_STORAGE_KEY,
+    JSON.stringify(entries)
+  );
+}
+
+function getBranchOrderTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getBranchOrderReadableTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function formatOrderDateTime(value) {
   if (!value) {
     return "-";
@@ -52,7 +92,8 @@ function formatOrderDateTime(value) {
 }
 
 function getOrderTimestamp(order) {
-  const historyTime = order.statusHistory?.[order.statusHistory.length - 1]?.timestamp;
+  const historyTime =
+    order.statusHistory?.[order.statusHistory.length - 1]?.timestamp;
 
   if (historyTime) {
     return new Date(historyTime).getTime();
@@ -87,8 +128,12 @@ function getFilteredBranchOrders() {
       String(order.department || "").toLowerCase().includes(searchValue) ||
       String(order.status || "").toLowerCase().includes(searchValue) ||
       String(order.notes || "").toLowerCase().includes(searchValue) ||
-      String(order.fulfillment?.preparedBy || "").toLowerCase().includes(searchValue) ||
-      String(order.fulfillment?.driver || "").toLowerCase().includes(searchValue) ||
+      String(order.fulfillment?.preparedBy || "")
+        .toLowerCase()
+        .includes(searchValue) ||
+      String(order.fulfillment?.driver || "")
+        .toLowerCase()
+        .includes(searchValue) ||
       (order.lines || []).some(
         (line) =>
           String(line.itemId || "").toLowerCase().includes(searchValue) ||
@@ -326,6 +371,69 @@ function getFulfillmentDraft(order) {
   }
 
   return window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId];
+}
+
+function buildCommissaryTransferOutLedgerEntries(order, fulfillmentDraft) {
+  const submittedAt = new Date().toISOString();
+  const submittedAtDisplay = getBranchOrderReadableTimestamp();
+
+  return (order.lines || [])
+    .map((line) => {
+      const sentQty = Number(
+        fulfillmentDraft.lines?.[line.itemId]?.sentQty || 0
+      );
+
+      if (Number.isNaN(sentQty) || sentQty <= 0) {
+        return null;
+      }
+
+      return {
+        date: getBranchOrderTodayDate(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId: order.orderId,
+        department: "Commissary",
+        section: line.section || "",
+        itemId: line.itemId || "",
+        itemName: line.itemName || "",
+        movementType: "Transfer Out",
+        quantity: sentQty,
+        unit: line.unit || "",
+        source: "Branch Order Delivery",
+        notes: `Sent to ${order.branch || "branch"} / ${
+          order.department || "-"
+        } by ${fulfillmentDraft.driver || "driver not specified"}. Order ${
+          order.orderId
+        }.`
+      };
+    })
+    .filter(Boolean);
+}
+
+function hasCommissaryTransferOutAlreadyLogged(orderId) {
+  return getStoredLedgerEntriesForBranchOrders().some(
+    (entry) =>
+      entry.batchId === orderId &&
+      entry.department === "Commissary" &&
+      entry.movementType === "Transfer Out" &&
+      entry.source === "Branch Order Delivery"
+  );
+}
+
+function writeCommissaryTransferOutToLedger(order, fulfillmentDraft) {
+  if (hasCommissaryTransferOutAlreadyLogged(order.orderId)) {
+    return;
+  }
+
+  const currentLedgerEntries = getStoredLedgerEntriesForBranchOrders();
+
+  const commissaryTransferOutEntries =
+    buildCommissaryTransferOutLedgerEntries(order, fulfillmentDraft);
+
+  saveLedgerEntriesFromBranchOrders([
+    ...currentLedgerEntries,
+    ...commissaryTransferOutEntries
+  ]);
 }
 
 function renderFulfillmentPanel(order) {
@@ -813,10 +921,12 @@ function setupBranchOrdersEvents() {
         return;
       }
 
+      writeCommissaryTransferOutToLedger(selectedOrder, draft);
+
       updateBranchOrderStatus(
         selectedOrder.orderId,
         "On the Way",
-        "Commissary marked the delivery as On the Way.",
+        "Commissary marked the delivery as On the Way. Commissary Transfer Out was logged.",
         {
           fulfillment: {
             ...draft,
