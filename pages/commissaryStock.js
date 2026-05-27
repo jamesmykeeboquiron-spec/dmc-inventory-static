@@ -1,6 +1,7 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_COMMISSARY_STOCK_STORAGE_KEY = "dmc_commissary_stock_items";
+const DMC_COMMISSARY_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
 
 window.DMC_COMMISSARY_STOCK_FILTERS = window.DMC_COMMISSARY_STOCK_FILTERS || {
   status: "all",
@@ -26,6 +27,110 @@ function getStoredCommissaryStockItems() {
   }
 }
 
+function getStoredCommissaryLedgerEntries() {
+  const storedEntries = localStorage.getItem(DMC_COMMISSARY_LEDGER_STORAGE_KEY);
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function getCommissaryLedgerEntries() {
+  return getStoredCommissaryLedgerEntries().filter(
+    (entry) => entry.department === "Commissary"
+  );
+}
+
+function getStartingStock(item) {
+  const startingStock = item.startingStock ?? item.currentStock ?? 0;
+  const parsedValue = Number(startingStock);
+
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+}
+
+function getMovementTotalsForItem(itemId) {
+  const totals = {
+    received: 0,
+    transferIn: 0,
+    usage: 0,
+    waste: 0,
+    transferOut: 0,
+    adjustment: 0
+  };
+
+  getCommissaryLedgerEntries()
+    .filter((entry) => entry.itemId === itemId)
+    .forEach((entry) => {
+      const quantity = Number(entry.quantity || 0);
+
+      if (Number.isNaN(quantity)) {
+        return;
+      }
+
+      if (entry.movementType === "Received") {
+        totals.received += quantity;
+      }
+
+      if (entry.movementType === "Transfer In") {
+        totals.transferIn += quantity;
+      }
+
+      if (entry.movementType === "Usage") {
+        totals.usage += quantity;
+      }
+
+      if (entry.movementType === "Waste") {
+        totals.waste += quantity;
+      }
+
+      if (entry.movementType === "Transfer Out") {
+        totals.transferOut += quantity;
+      }
+
+      if (entry.movementType === "Adjustment") {
+        totals.adjustment += quantity;
+      }
+    });
+
+  return totals;
+}
+
+function getCalculatedCommissaryStock(item) {
+  const startingStock = getStartingStock(item);
+  const totals = getMovementTotalsForItem(item.itemId);
+
+  return (
+    startingStock +
+    totals.received +
+    totals.transferIn -
+    totals.usage -
+    totals.waste -
+    totals.transferOut +
+    totals.adjustment
+  );
+}
+
+function getCommissaryStockRows() {
+  return getStoredCommissaryStockItems().map((item) => {
+    const movementTotals = getMovementTotalsForItem(item.itemId);
+    const startingStock = getStartingStock(item);
+    const currentStock = getCalculatedCommissaryStock(item);
+
+    return {
+      ...item,
+      startingStock,
+      currentStock,
+      movementTotals
+    };
+  });
+}
+
 function getStockStatus(item) {
   const currentStock = Number(item.currentStock || 0);
   const minimumStock = Number(item.minimumStock || 0);
@@ -47,6 +152,28 @@ function getStockStatus(item) {
   }
 
   return "Good";
+}
+
+function getExpiryPriority(expiryDate) {
+  if (!expiryDate) {
+    return "No Date";
+  }
+
+  const today = new Date();
+  const expiry = new Date(expiryDate);
+  const differenceInDays = Math.ceil(
+    (expiry - today) / (1000 * 60 * 60 * 24)
+  );
+
+  if (differenceInDays < 0) {
+    return "Expired";
+  }
+
+  if (differenceInDays <= 14) {
+    return "Expiring Soon";
+  }
+
+  return "OK";
 }
 
 function getStockPriority(item) {
@@ -72,28 +199,6 @@ function getStockPriority(item) {
   return "Normal";
 }
 
-function getExpiryPriority(expiryDate) {
-  if (!expiryDate) {
-    return "No Date";
-  }
-
-  const today = new Date();
-  const expiry = new Date(expiryDate);
-  const differenceInDays = Math.ceil(
-    (expiry - today) / (1000 * 60 * 60 * 24)
-  );
-
-  if (differenceInDays < 0) {
-    return "Expired";
-  }
-
-  if (differenceInDays <= 14) {
-    return "Expiring Soon";
-  }
-
-  return "OK";
-}
-
 function getStatusBadgeClass(status) {
   if (status === "Critical") return "danger-badge";
   if (status === "Low Stock") return "warning-badge";
@@ -113,7 +218,7 @@ function getFilteredCommissaryStockItems() {
   const filters = window.DMC_COMMISSARY_STOCK_FILTERS;
   const searchValue = String(filters.search || "").toLowerCase().trim();
 
-  return getStoredCommissaryStockItems().filter((item) => {
+  return getCommissaryStockRows().filter((item) => {
     const status = getStockStatus(item);
     const priority = getStockPriority(item);
 
@@ -151,7 +256,13 @@ function renderStatusFilterOptions() {
 }
 
 function renderPriorityFilterOptions() {
-  const priorities = ["Normal", "Reorder Soon", "High Priority", "Use First", "Monitor"];
+  const priorities = [
+    "Normal",
+    "Reorder Soon",
+    "High Priority",
+    "Use First",
+    "Monitor"
+  ];
   const current = window.DMC_COMMISSARY_STOCK_FILTERS.priority;
 
   return `
@@ -165,13 +276,62 @@ function renderPriorityFilterOptions() {
   `;
 }
 
+function renderCommissaryMovementSnapshot(item) {
+  const totals = item.movementTotals || {};
+
+  return `
+    <div class="movement-snapshot">
+      ${
+        totals.received
+          ? `<span class="ledger-batch-pill">Received: ${totals.received}</span>`
+          : ""
+      }
+      ${
+        totals.transferIn
+          ? `<span class="ledger-batch-pill">Transfer In: ${totals.transferIn}</span>`
+          : ""
+      }
+      ${
+        totals.transferOut
+          ? `<span class="ledger-batch-pill">Transfer Out: ${totals.transferOut}</span>`
+          : ""
+      }
+      ${
+        totals.usage
+          ? `<span class="ledger-batch-pill">Usage: ${totals.usage}</span>`
+          : ""
+      }
+      ${
+        totals.waste
+          ? `<span class="ledger-batch-pill">Waste: ${totals.waste}</span>`
+          : ""
+      }
+      ${
+        totals.adjustment
+          ? `<span class="ledger-batch-pill">Adjustment: ${totals.adjustment}</span>`
+          : ""
+      }
+      ${
+        !totals.received &&
+        !totals.transferIn &&
+        !totals.transferOut &&
+        !totals.usage &&
+        !totals.waste &&
+        !totals.adjustment
+          ? `<span class="muted-text">No ledger movement</span>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderCommissaryStockRows() {
   const items = getFilteredCommissaryStockItems();
 
   if (items.length === 0) {
     return `
       <tr>
-        <td colspan="10">No commissary stock items match the current filters.</td>
+        <td colspan="11">No commissary stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -187,13 +347,14 @@ function renderCommissaryStockRows() {
           <td>${item.itemId}</td>
           <td>${item.itemName}</td>
           <td>${item.section}</td>
+          <td>${item.startingStock}</td>
           <td>${item.currentStock}</td>
           <td>${item.minimumStock}</td>
           <td>${item.unit}</td>
           <td><span class="badge ${getStatusBadgeClass(status)}">${status}</span></td>
           <td><span class="badge ${getPriorityBadgeClass(priority)}">${priority}</span></td>
           <td>${item.expiryDate || "-"} <span class="badge">${expiryPriority}</span></td>
-          <td>${item.notes || "-"}</td>
+          <td>${renderCommissaryMovementSnapshot(item)}</td>
         </tr>
       `;
     })
@@ -201,7 +362,7 @@ function renderCommissaryStockRows() {
 }
 
 function getCommissaryStockContent() {
-  const allItems = getStoredCommissaryStockItems();
+  const allItems = getCommissaryStockRows();
   const filteredItems = getFilteredCommissaryStockItems();
 
   const lowStockCount = allItems.filter(
@@ -244,12 +405,11 @@ function getCommissaryStockContent() {
         <div>
           <h3>Commissary Stock Overview</h3>
           <p>
-            Review current stock levels, low stock alerts, critical items,
-            priority items, and expiry concerns.
+            Current stock is calculated from starting stock and Commissary Ledger movements.
           </p>
         </div>
 
-        <button class="ghost-button">Stock Overview</button>
+        <button class="ghost-button">Ledger Stock View</button>
       </div>
 
       <div class="filter-bar">
@@ -282,6 +442,14 @@ function getCommissaryStockContent() {
         </button>
       </div>
 
+      <div class="instruction-box">
+        <strong>Stock Formula:</strong>
+        <span>
+          Current Stock = Starting Stock + Received + Transfer In - Transfer Out - Usage - Waste + Adjustment.
+          Branch Order Delivery is counted as Commissary Transfer Out.
+        </span>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -289,13 +457,14 @@ function getCommissaryStockContent() {
               <th>Item ID</th>
               <th>Item Name</th>
               <th>Section</th>
+              <th>Starting Stock</th>
               <th>Current Stock</th>
               <th>Minimum Stock</th>
               <th>Unit</th>
               <th>Status</th>
               <th>Priority</th>
               <th>Expiry / Best Before</th>
-              <th>Notes</th>
+              <th>Movement Snapshot</th>
             </tr>
           </thead>
 
