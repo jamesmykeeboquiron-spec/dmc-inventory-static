@@ -6,7 +6,18 @@ const DMC_PLACE_ORDER_STORAGE_KEY = "dmc_branch_orders";
 window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT =
   window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT || "Bar";
 
-window.DMC_PLACE_ORDER_DRAFT = window.DMC_PLACE_ORDER_DRAFT || {};
+window.DMC_PLACE_ORDER_SELECTED_ITEM_ID =
+  window.DMC_PLACE_ORDER_SELECTED_ITEM_ID || "";
+
+window.DMC_PLACE_ORDER_SEARCH = window.DMC_PLACE_ORDER_SEARCH || "";
+
+window.DMC_PLACE_ORDER_QTY = window.DMC_PLACE_ORDER_QTY || "";
+
+window.DMC_PLACE_ORDER_CART = window.DMC_PLACE_ORDER_CART || [];
+
+window.DMC_PLACE_ORDER_NOTES = window.DMC_PLACE_ORDER_NOTES || "";
+
+window.DMC_PLACE_ORDER_URGENT = window.DMC_PLACE_ORDER_URGENT || false;
 
 function getPlaceOrderMasterListItems() {
   const storedItems = localStorage.getItem(DMC_PLACE_ORDER_MASTER_LIST_KEY);
@@ -84,6 +95,9 @@ function renderPlaceOrderDepartmentOptions() {
 
 function getItemsForPlaceOrder() {
   const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
+  const searchValue = String(window.DMC_PLACE_ORDER_SEARCH || "")
+    .toLowerCase()
+    .trim();
 
   return getPlaceOrderMasterListItems().filter((item) => {
     const matchesDepartment =
@@ -92,44 +106,52 @@ function getItemsForPlaceOrder() {
 
     const isActive = item.active !== false;
 
-    return matchesDepartment && isActive;
+    const matchesSearch =
+      !searchValue ||
+      String(item.itemId || "").toLowerCase().includes(searchValue) ||
+      String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
+      String(item.section || "").toLowerCase().includes(searchValue) ||
+      String(item.unit || "").toLowerCase().includes(searchValue);
+
+    return matchesDepartment && isActive && matchesSearch;
   });
 }
 
-function getDraftQty(itemId) {
-  return window.DMC_PLACE_ORDER_DRAFT[itemId]?.requestedQty || "";
-}
-
-function getDraftNotes(itemId) {
-  return window.DMC_PLACE_ORDER_DRAFT[itemId]?.notes || "";
-}
-
-function getOrderLinesFromDraft() {
+function getSelectedPlaceOrderItem() {
   const items = getItemsForPlaceOrder();
 
-  return items
-    .map((item) => {
-      const draftLine = window.DMC_PLACE_ORDER_DRAFT[item.itemId] || {};
-      const requestedQty = Number(draftLine.requestedQty || 0);
+  if (window.DMC_PLACE_ORDER_SELECTED_ITEM_ID) {
+    const selectedItem = getPlaceOrderMasterListItems().find(
+      (item) => item.itemId === window.DMC_PLACE_ORDER_SELECTED_ITEM_ID
+    );
 
-      if (Number.isNaN(requestedQty) || requestedQty <= 0) {
-        return null;
-      }
+    if (selectedItem) {
+      return selectedItem;
+    }
+  }
 
-      return {
-        itemId: item.itemId,
-        itemName: item.officialItemName,
-        section: item.section,
-        requestedQty,
-        unit: item.unit,
-        notes: draftLine.notes || ""
-      };
-    })
-    .filter(Boolean);
+  return items[0] || null;
 }
 
-function getTodayOrderDate() {
-  return new Date().toISOString().slice(0, 10);
+function renderPlaceOrderItemOptions() {
+  const items = getItemsForPlaceOrder();
+  const selectedItem = getSelectedPlaceOrderItem();
+
+  if (items.length === 0) {
+    return `<option value="">No items found</option>`;
+  }
+
+  return items
+    .map(
+      (item) => `
+        <option value="${item.itemId}" ${
+        selectedItem?.itemId === item.itemId ? "selected" : ""
+      }>
+          ${item.itemId} — ${item.officialItemName}
+        </option>
+      `
+    )
+    .join("");
 }
 
 function createOrderId() {
@@ -140,198 +162,203 @@ function createOrderId() {
   return `BR-${datePart}-${timePart}`;
 }
 
-function renderPlaceOrderRows() {
-  const items = getItemsForPlaceOrder();
-
-  if (items.length === 0) {
-    return `
-      <tr>
-        <td colspan="7">
-          No active ${window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT} items found.
-          Add active items in Master List first.
-        </td>
-      </tr>
-    `;
-  }
-
-  return items
-    .map(
-      (item) => `
-        <tr>
-          <td>${item.section || "-"}</td>
-          <td>${item.itemId || "-"}</td>
-          <td>${item.officialItemName || "-"}</td>
-          <td>${item.unit || "-"}</td>
-          <td>
-            <input
-              class="order-qty-input"
-              data-order-item="${item.itemId}"
-              type="number"
-              min="0"
-              step="any"
-              placeholder="0"
-              value="${getDraftQty(item.itemId)}"
-            />
-          </td>
-          <td>
-            <input
-              class="order-notes-input"
-              data-order-notes="${item.itemId}"
-              type="text"
-              placeholder="Optional"
-              value="${getDraftNotes(item.itemId)}"
-            />
-          </td>
-          <td>
-            ${
-              Number(getDraftQty(item.itemId) || 0) > 0
-                ? `<span class="badge">Ready</span>`
-                : `<span class="badge muted-badge">No Qty</span>`
-            }
-          </td>
-        </tr>
-      `
-    )
-    .join("");
+function getTodayOrderDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function renderPlaceOrderPreview() {
-  const lines = getOrderLinesFromDraft();
+function getCartItemCount() {
+  return window.DMC_PLACE_ORDER_CART.length;
+}
 
-  if (lines.length === 0) {
+function getCartRequestedTotal() {
+  return window.DMC_PLACE_ORDER_CART.reduce(
+    (total, line) => total + Number(line.requestedQty || 0),
+    0
+  );
+}
+
+function renderOrderCart() {
+  const cart = window.DMC_PLACE_ORDER_CART;
+
+  if (cart.length === 0) {
     return `
-      <p class="submit-preview-empty">
-        No order lines yet. Enter a requested quantity to preview the order.
-      </p>
+      <div class="order-cart-empty">
+        <p>Cart is empty</p>
+        <span>Pick items and add them to this order.</span>
+      </div>
     `;
   }
 
   return `
-    <ul class="submit-preview-list">
-      ${lines
+    <div class="order-cart-list">
+      ${cart
         .map(
-          (line) => `
-            <li>
-              <strong>${line.itemName}</strong>
-              <span>Request: ${line.requestedQty} ${line.unit}</span>
-            </li>
+          (line, index) => `
+            <div class="order-cart-item">
+              <div>
+                <strong>${line.itemName}</strong>
+                <p>${line.itemId} • ${line.section || "-"} • ${line.unit}</p>
+              </div>
+
+              <div class="order-cart-qty">
+                <span>${line.requestedQty} ${line.unit}</span>
+                <button class="tiny-button danger" data-remove-cart-line="${index}">
+                  Remove
+                </button>
+              </div>
+            </div>
           `
         )
         .join("")}
-    </ul>
+    </div>
   `;
-}
-
-function getPlaceOrderSummary() {
-  const items = getItemsForPlaceOrder();
-  const lines = getOrderLinesFromDraft();
-
-  return {
-    availableItems: items.length,
-    orderLines: lines.length,
-    totalRequested: lines.reduce(
-      (total, line) => total + Number(line.requestedQty || 0),
-      0
-    ),
-    submittedOrders: getStoredBranchOrders().length
-  };
 }
 
 function getPlaceOrderContent() {
   const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
-  const summary = getPlaceOrderSummary();
+  const filteredItems = getItemsForPlaceOrder();
+  const selectedItem = getSelectedPlaceOrderItem();
+  const submittedOrders = getStoredBranchOrders();
 
   return `
     <section class="grid">
       <div class="card">
-        <p>${selectedDepartment} Items</p>
-        <strong>${summary.availableItems}</strong>
+        <p>${selectedDepartment} Items Found</p>
+        <strong>${filteredItems.length}</strong>
       </div>
 
       <div class="card">
-        <p>Order Lines</p>
-        <strong>${summary.orderLines}</strong>
+        <p>Cart Items</p>
+        <strong>${getCartItemCount()}</strong>
       </div>
 
       <div class="card">
         <p>Total Requested</p>
-        <strong>${summary.totalRequested}</strong>
+        <strong>${getCartRequestedTotal()}</strong>
       </div>
 
       <div class="card">
         <p>Submitted Orders</p>
-        <strong>${summary.submittedOrders}</strong>
+        <strong>${submittedOrders.length}</strong>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Place Branch Order</h3>
-          <p>
-            Request stock from commissary. Submitting an order does not change stock yet.
-          </p>
+    <section class="place-order-layout">
+      <div class="panel place-order-builder">
+        <div class="panel-header">
+          <div>
+            <h3>Add Item to Order</h3>
+            <p>Select an item, enter quantity, then add it to the order cart.</p>
+          </div>
         </div>
 
-        <div class="form-actions">
-          <button class="primary-button" id="submit-branch-order">
-            Submit Order
+        <div class="order-builder-form">
+          <label>
+            Department
+            <select id="place-order-department-select">
+              ${renderPlaceOrderDepartmentOptions()}
+            </select>
+          </label>
+
+          <label>
+            Search Item
+            <input
+              id="place-order-search"
+              type="text"
+              placeholder="Type item name, item ID, section, unit..."
+              value="${window.DMC_PLACE_ORDER_SEARCH}"
+            />
+          </label>
+
+          <label class="form-full">
+            Select Item
+            <select id="place-order-item-select">
+              ${renderPlaceOrderItemOptions()}
+            </select>
+          </label>
+
+          <div class="selected-order-item form-full">
+            ${
+              selectedItem
+                ? `
+                  <p class="eyebrow">Selected Item</p>
+                  <h4>${selectedItem.officialItemName}</h4>
+                  <span>${selectedItem.itemId} • ${selectedItem.section || "-"} • ${selectedItem.unit || "-"}</span>
+                `
+                : `
+                  <p class="eyebrow">Selected Item</p>
+                  <h4>No item selected</h4>
+                  <span>Try adjusting the department or search field.</span>
+                `
+            }
+          </div>
+
+          <label>
+            Quantity Requested
+            <input
+              id="place-order-qty"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0"
+              value="${window.DMC_PLACE_ORDER_QTY}"
+            />
+          </label>
+
+          <label>
+            Requested By
+            <input type="text" value="Branch Manager" disabled />
+          </label>
+
+          <button class="primary-button form-full" id="add-item-to-order">
+            + Add to Order
           </button>
-
-          <button class="ghost-button" id="clear-place-order-draft">
-            Clear Draft
-          </button>
         </div>
       </div>
 
-      <div class="filter-bar">
-        <label>
-          Department
-          <select id="place-order-department-select">
-            ${renderPlaceOrderDepartmentOptions()}
-          </select>
-        </label>
+      <div class="panel place-order-cart">
+        <div class="panel-header">
+          <div>
+            <h3>Order Cart</h3>
+            <p>${getCartItemCount()} items ready for commissary request.</p>
+          </div>
 
-        <label class="filter-search">
-          Order Status
-          <input type="text" value="Draft" disabled />
-        </label>
-      </div>
-
-      <div class="instruction-box">
-        <strong>Order Note:</strong>
-        <span>
-          This creates a request for commissary. Stock will only move later when commissary sends delivery and branch confirms received items.
-        </span>
-      </div>
-
-      <div class="submit-preview-box">
-        <div>
-          <h4>Order Preview</h4>
-          <p>Only items with requested quantity greater than 0 will be submitted.</p>
+          <span class="badge">${getCartItemCount()} Items</span>
         </div>
 
-        ${renderPlaceOrderPreview()}
-      </div>
+        <div class="order-cart-body">
+          ${renderOrderCart()}
+        </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Section</th>
-              <th>Item ID</th>
-              <th>Item Name</th>
-              <th>Unit</th>
-              <th>Requested Qty</th>
-              <th>Line Notes</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+        <div class="order-submit-area">
+          <label class="urgent-check">
+            <input
+              id="place-order-urgent"
+              type="checkbox"
+              ${window.DMC_PLACE_ORDER_URGENT ? "checked" : ""}
+            />
+            <span>Mark as urgent</span>
+          </label>
 
-          <tbody>
-            ${renderPlaceOrderRows()}
-          </tbody>
-        </table>
+          <label>
+            Notes
+            <textarea
+              id="place-order-notes"
+              rows="3"
+              placeholder="Special instructions for commissary..."
+            >${window.DMC_PLACE_ORDER_NOTES}</textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="ghost-button" id="clear-place-order-cart">
+              Clear Cart
+            </button>
+
+            <button class="primary-button" id="submit-branch-order">
+              Submit Order
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   `;
@@ -346,38 +373,104 @@ function setupPlaceOrderEvents() {
   const departmentSelect = document.getElementById(
     "place-order-department-select"
   );
+  const searchInput = document.getElementById("place-order-search");
+  const itemSelect = document.getElementById("place-order-item-select");
+  const qtyInput = document.getElementById("place-order-qty");
+  const addButton = document.getElementById("add-item-to-order");
+  const clearButton = document.getElementById("clear-place-order-cart");
   const submitButton = document.getElementById("submit-branch-order");
-  const clearButton = document.getElementById("clear-place-order-draft");
+  const urgentInput = document.getElementById("place-order-urgent");
+  const notesInput = document.getElementById("place-order-notes");
 
   if (departmentSelect) {
     departmentSelect.addEventListener("change", () => {
       window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT = departmentSelect.value;
-      window.DMC_PLACE_ORDER_DRAFT = {};
+      window.DMC_PLACE_ORDER_SELECTED_ITEM_ID = "";
+      window.DMC_PLACE_ORDER_SEARCH = "";
+      window.DMC_PLACE_ORDER_QTY = "";
       refreshPlaceOrderPage();
     });
   }
 
-  document.querySelectorAll("[data-order-item]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const itemId = input.dataset.orderItem;
-
-      window.DMC_PLACE_ORDER_DRAFT[itemId] =
-        window.DMC_PLACE_ORDER_DRAFT[itemId] || {};
-
-      window.DMC_PLACE_ORDER_DRAFT[itemId].requestedQty = input.value;
-
+  if (searchInput) {
+    searchInput.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_SEARCH = searchInput.value;
+      window.DMC_PLACE_ORDER_SELECTED_ITEM_ID = "";
       refreshPlaceOrderPage();
     });
-  });
+  }
 
-  document.querySelectorAll("[data-order-notes]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const itemId = input.dataset.orderNotes;
+  if (itemSelect) {
+    itemSelect.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_SELECTED_ITEM_ID = itemSelect.value;
+      refreshPlaceOrderPage();
+    });
+  }
 
-      window.DMC_PLACE_ORDER_DRAFT[itemId] =
-        window.DMC_PLACE_ORDER_DRAFT[itemId] || {};
+  if (qtyInput) {
+    qtyInput.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_QTY = qtyInput.value;
+    });
+  }
 
-      window.DMC_PLACE_ORDER_DRAFT[itemId].notes = input.value;
+  if (urgentInput) {
+    urgentInput.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_URGENT = urgentInput.checked;
+    });
+  }
+
+  if (notesInput) {
+    notesInput.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_NOTES = notesInput.value;
+    });
+  }
+
+  if (addButton) {
+    addButton.addEventListener("click", () => {
+      const selectedItem = getSelectedPlaceOrderItem();
+      const requestedQty = Number(window.DMC_PLACE_ORDER_QTY || 0);
+
+      if (!selectedItem) {
+        alert("Please select an item first.");
+        return;
+      }
+
+      if (Number.isNaN(requestedQty) || requestedQty <= 0) {
+        alert("Please enter a requested quantity greater than 0.");
+        return;
+      }
+
+      const existingIndex = window.DMC_PLACE_ORDER_CART.findIndex(
+        (line) => line.itemId === selectedItem.itemId
+      );
+
+      const cartLine = {
+        itemId: selectedItem.itemId,
+        itemName: selectedItem.officialItemName,
+        section: selectedItem.section,
+        requestedQty,
+        unit: selectedItem.unit,
+        notes: ""
+      };
+
+      if (existingIndex >= 0) {
+        window.DMC_PLACE_ORDER_CART[existingIndex] = cartLine;
+      } else {
+        window.DMC_PLACE_ORDER_CART.push(cartLine);
+      }
+
+      window.DMC_PLACE_ORDER_QTY = "";
+      refreshPlaceOrderPage();
+    });
+  }
+
+  document.querySelectorAll("[data-remove-cart-line]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.removeCartLine);
+
+      window.DMC_PLACE_ORDER_CART = window.DMC_PLACE_ORDER_CART.filter(
+        (_, lineIndex) => lineIndex !== index
+      );
 
       refreshPlaceOrderPage();
     });
@@ -385,30 +478,34 @@ function setupPlaceOrderEvents() {
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      const confirmed = confirm("Clear this order draft?");
+      const confirmed = confirm("Clear this order cart?");
 
       if (!confirmed) {
         return;
       }
 
-      window.DMC_PLACE_ORDER_DRAFT = {};
+      window.DMC_PLACE_ORDER_CART = [];
+      window.DMC_PLACE_ORDER_QTY = "";
+      window.DMC_PLACE_ORDER_NOTES = "";
+      window.DMC_PLACE_ORDER_URGENT = false;
+
       refreshPlaceOrderPage();
     });
   }
 
   if (submitButton) {
     submitButton.addEventListener("click", () => {
-      const orderLines = getOrderLinesFromDraft();
+      const cart = window.DMC_PLACE_ORDER_CART;
 
-      if (orderLines.length === 0) {
-        alert("No order lines to submit.");
+      if (cart.length === 0) {
+        alert("No items in the order cart.");
         return;
       }
 
       const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
 
       const confirmed = confirm(
-        `Submit ${orderLines.length} order lines for ${selectedDepartment}?`
+        `Submit ${cart.length} item request(s) for ${selectedDepartment}?`
       );
 
       if (!confirmed) {
@@ -422,6 +519,8 @@ function setupPlaceOrderEvents() {
         branch: "DMC-Iriga Branch",
         department: selectedDepartment,
         orderDate: getTodayOrderDate(),
+        urgent: window.DMC_PLACE_ORDER_URGENT,
+        notes: window.DMC_PLACE_ORDER_NOTES,
         status: "Submitted",
         statusHistory: [
           {
@@ -430,12 +529,15 @@ function setupPlaceOrderEvents() {
             note: "Branch submitted order request."
           }
         ],
-        lines: orderLines
+        lines: cart
       };
 
       saveBranchOrders([newOrder, ...orders]);
 
-      window.DMC_PLACE_ORDER_DRAFT = {};
+      window.DMC_PLACE_ORDER_CART = [];
+      window.DMC_PLACE_ORDER_QTY = "";
+      window.DMC_PLACE_ORDER_NOTES = "";
+      window.DMC_PLACE_ORDER_URGENT = false;
 
       alert("Order submitted to Commissary Branch Orders.");
       refreshPlaceOrderPage();
