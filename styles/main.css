@@ -2225,3 +2225,112 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.incoming-delivery-lines {
+  display: grid;
+  gap: 12px;
+}
+
+.incoming-delivery-line {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 90px 130px 150px minmax(160px, 0.8fr) 90px;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.incoming-delivery-line strong {
+  color: var(--text);
+}
+
+.incoming-delivery-line span {
+  display: block;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.incoming-delivery-line label,
+.incoming-receiving-meta label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.incoming-received-input,
+.incoming-condition-input,
+.incoming-notes-input,
+.incoming-receiving-meta input,
+.incoming-receiving-meta textarea {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.incoming-received-input:focus,
+.incoming-condition-input:focus,
+.incoming-notes-input:focus,
+.incoming-receiving-meta input:focus,
+.incoming-receiving-meta textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
+}
+
+.incoming-qty-box,
+.incoming-variance-box {
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.045);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+}
+
+.incoming-qty-box span,
+.incoming-variance-box span {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.incoming-qty-box strong,
+.incoming-variance-box strong {
+  color: var(--gold);
+  font-size: 18px;
+}
+
+.danger-text {
+  color: #ff9a9a !important;
+}
+
+.incoming-receiving-meta {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.incoming-delivery-actions {
+  margin-top: 18px;
+}
+
+@media (max-width: 1200px) {
+  .incoming-delivery-line {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .incoming-delivery-line,
+  .incoming-receiving-meta {
+    grid-template-columns: 1fr;
+  }
+}
