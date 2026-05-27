@@ -2657,3 +2657,56 @@ button:disabled {
   border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
 }
+
+/* ================================
+   FORM VISIBILITY FIX
+   Dropdown options + date picker icon
+================================ */
+
+/* Make select dropdown choices readable */
+select option {
+  background: #090806;
+  color: #f5efe2;
+}
+
+select option:checked,
+select option:hover {
+  background: #2a2112;
+  color: #f0c04f;
+}
+
+/* Improve select field visibility */
+select {
+  color: var(--text);
+  background-color: #090806;
+}
+
+/* Make date fields readable */
+input[type="date"] {
+  color: var(--text);
+  background-color: #090806;
+  color-scheme: dark;
+}
+
+/* Make the mini calendar icon more visible in Chrome/Edge */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(350deg);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Keep dropdown arrow and form icons easier to see */
+input[type="date"],
+select {
+  border-color: var(--border);
+}
+
+input[type="date"]:focus,
+select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
+}
