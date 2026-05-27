@@ -2630,3 +2630,30 @@ button:disabled {
     flex-direction: column;
   }
 }
+
+.commissary-log-input {
+  width: 110px;
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.08);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.commissary-log-notes {
+  width: 180px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.commissary-log-input:focus,
+.commissary-log-notes:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(240, 192, 79, 0.16);
+}
