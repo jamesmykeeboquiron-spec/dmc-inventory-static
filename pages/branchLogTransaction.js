@@ -688,6 +688,7 @@ window.DMC_PAGES["branch-log-transaction"] = {
   title: "Log Transaction",
   description:
     "Daily input screen for branch/station transactions by department.",
+  getContent: getBranchLogTransactionContent,
   content: getBranchLogTransactionContent(),
   afterRender: setupBranchLogTransactionEvents
 };
