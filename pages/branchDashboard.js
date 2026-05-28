@@ -4,6 +4,9 @@ const DMC_BRANCH_DASHBOARD_ORDERS_KEY = "dmc_branch_orders";
 const DMC_BRANCH_DASHBOARD_ISSUES_KEY = "dmc_delivery_issues";
 const DMC_BRANCH_DASHBOARD_LEDGER_KEY = "dmc_inventory_ledger_entries";
 
+window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL =
+  window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL || "";
+
 function getBranchDashboardOrders() {
   const storedOrders = localStorage.getItem(DMC_BRANCH_DASHBOARD_ORDERS_KEY);
 
@@ -116,17 +119,17 @@ function getBranchDashboardSummary() {
   };
 }
 
-function getRecentBranchDashboardOrders() {
+function getRecentBranchDashboardOrders(limit = 6) {
   return [...getBranchDashboardOrders()]
     .sort(
       (a, b) =>
         getBranchDashboardOrderTimestamp(b) -
         getBranchDashboardOrderTimestamp(a)
     )
-    .slice(0, 6);
+    .slice(0, limit);
 }
 
-function getRecentBranchDashboardLedgerEntries() {
+function getRecentBranchDashboardLedgerEntries(limit = 6) {
   return [...getBranchDashboardLedgerEntries()]
     .filter((entry) => entry.department && entry.department !== "Commissary")
     .sort(
@@ -134,10 +137,10 @@ function getRecentBranchDashboardLedgerEntries() {
         getBranchDashboardLedgerTimestamp(b) -
         getBranchDashboardLedgerTimestamp(a)
     )
-    .slice(0, 6);
+    .slice(0, limit);
 }
 
-function getRecentBranchDashboardIssues() {
+function getRecentBranchDashboardIssues(limit = 5) {
   return [...getBranchDashboardIssues()]
     .sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -145,7 +148,18 @@ function getRecentBranchDashboardIssues() {
 
       return bTime - aTime;
     })
-    .slice(0, 5);
+    .slice(0, limit);
+}
+
+function getBranchDashboardIncomingDeliveries(limit = 5) {
+  return getBranchDashboardOrders()
+    .filter((order) => order.status === "On the Way")
+    .sort(
+      (a, b) =>
+        getBranchDashboardOrderTimestamp(b) -
+        getBranchDashboardOrderTimestamp(a)
+    )
+    .slice(0, limit);
 }
 
 function getBranchDashboardStatusBadgeClass(status) {
@@ -171,8 +185,8 @@ function renderBranchDashboardStatCard(label, value, helper, variant) {
   `;
 }
 
-function renderBranchDashboardOrderList() {
-  const orders = getRecentBranchDashboardOrders();
+function renderBranchDashboardOrderList(limit = 3) {
+  const orders = getRecentBranchDashboardOrders(limit);
 
   if (orders.length === 0) {
     return `
@@ -213,15 +227,8 @@ function renderBranchDashboardOrderList() {
   `;
 }
 
-function renderBranchDashboardIncomingDeliveries() {
-  const incomingOrders = getBranchDashboardOrders()
-    .filter((order) => order.status === "On the Way")
-    .sort(
-      (a, b) =>
-        getBranchDashboardOrderTimestamp(b) -
-        getBranchDashboardOrderTimestamp(a)
-    )
-    .slice(0, 5);
+function renderBranchDashboardIncomingDeliveries(limit = 3) {
+  const incomingOrders = getBranchDashboardIncomingDeliveries(limit);
 
   if (incomingOrders.length === 0) {
     return `
@@ -257,8 +264,8 @@ function renderBranchDashboardIncomingDeliveries() {
   `;
 }
 
-function renderBranchDashboardIssues() {
-  const issues = getRecentBranchDashboardIssues();
+function renderBranchDashboardIssues(limit = 2) {
+  const issues = getRecentBranchDashboardIssues(limit);
 
   if (issues.length === 0) {
     return `
@@ -297,8 +304,8 @@ function renderBranchDashboardIssues() {
   `;
 }
 
-function renderBranchDashboardLedgerActivity() {
-  const entries = getRecentBranchDashboardLedgerEntries();
+function renderBranchDashboardLedgerActivity(limit = 3) {
+  const entries = getRecentBranchDashboardLedgerEntries(limit);
 
   if (entries.length === 0) {
     return `
@@ -330,6 +337,109 @@ function renderBranchDashboardLedgerActivity() {
           `
         )
         .join("")}
+    </div>
+  `;
+}
+
+function renderBranchDashboardPanel(panelKey, title, description, tag, tagClass, content) {
+  return `
+    <section class="branch-dashboard-glass-panel" data-dashboard-panel="${panelKey}">
+      <button class="branch-dashboard-panel-click" data-open-dashboard-panel="${panelKey}" aria-label="Open ${title}"></button>
+
+      <div class="branch-dashboard-panel-header">
+        <div>
+          <h3>${title}</h3>
+          <p>${description}</p>
+        </div>
+        <span class="branch-dashboard-tag ${tagClass || ""}">
+          ${tagClass === "live-tag" ? `<span class="live-dot"></span>` : ""}
+          ${tag}
+        </span>
+      </div>
+
+      ${content}
+
+      <div class="branch-dashboard-expand-hint">
+        Click to expand
+      </div>
+    </section>
+  `;
+}
+
+function getBranchDashboardExpandedPanelConfig() {
+  const activePanel = window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL;
+
+  const panels = {
+    incoming: {
+      title: "Incoming Deliveries",
+      eyebrow: "Live Delivery Monitor",
+      description: "All deliveries currently on the way to the branch.",
+      tag: "Live",
+      tagClass: "live-tag",
+      content: renderBranchDashboardIncomingDeliveries(20)
+    },
+    orders: {
+      title: "Recent Branch Orders",
+      eyebrow: "Order Activity",
+      description: "Recent branch order activity and fulfillment statuses.",
+      tag: "Orders",
+      tagClass: "",
+      content: renderBranchDashboardOrderList(20)
+    },
+    issues: {
+      title: "Delivery Issues",
+      eyebrow: "Variance Review",
+      description: "Recent missing, damaged, short received, or resolved delivery issues.",
+      tag: "Review",
+      tagClass: "review-tag",
+      content: renderBranchDashboardIssues(20)
+    },
+    ledger: {
+      title: "Recent Stock Activity",
+      eyebrow: "Ledger Activity",
+      description: "Recent branch-side stock movements from the Ledger.",
+      tag: "Ledger",
+      tagClass: "",
+      content: renderBranchDashboardLedgerActivity(20)
+    }
+  };
+
+  return panels[activePanel] || null;
+}
+
+function renderBranchDashboardExpandedPanel() {
+  const panel = getBranchDashboardExpandedPanelConfig();
+
+  if (!panel) {
+    return "";
+  }
+
+  return `
+    <div class="branch-dashboard-focus-overlay" data-close-dashboard-panel="true">
+      <section class="branch-dashboard-focus-panel" role="dialog" aria-modal="true">
+        <div class="branch-dashboard-focus-header">
+          <div>
+            <p class="eyebrow">${panel.eyebrow}</p>
+            <h3>${panel.title}</h3>
+            <span>${panel.description}</span>
+          </div>
+
+          <div class="branch-dashboard-focus-actions">
+            <span class="branch-dashboard-tag ${panel.tagClass || ""}">
+              ${panel.tagClass === "live-tag" ? `<span class="live-dot"></span>` : ""}
+              ${panel.tag}
+            </span>
+
+            <button class="ghost-button" data-close-dashboard-panel="true">
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div class="branch-dashboard-focus-content">
+          ${panel.content}
+        </div>
+      </section>
     </div>
   `;
 }
@@ -384,57 +494,44 @@ function getBranchDashboardContent() {
     </section>
 
     <section class="branch-dashboard-live-grid">
-      <section class="branch-dashboard-glass-panel">
-        <div class="branch-dashboard-panel-header">
-          <div>
-            <h3>Incoming Deliveries</h3>
-            <p>Deliveries currently on the way to the branch.</p>
-          </div>
-          <span class="branch-dashboard-tag live-tag">
-            <span class="live-dot"></span>
-            Live
-          </span>
-        </div>
+      ${renderBranchDashboardPanel(
+        "incoming",
+        "Incoming Deliveries",
+        "Deliveries currently on the way to the branch.",
+        "Live",
+        "live-tag",
+        renderBranchDashboardIncomingDeliveries(3)
+      )}
 
-        ${renderBranchDashboardIncomingDeliveries()}
-      </section>
+      ${renderBranchDashboardPanel(
+        "orders",
+        "Recent Branch Orders",
+        "Latest order activity and fulfillment status.",
+        "Orders",
+        "",
+        renderBranchDashboardOrderList(3)
+      )}
 
-      <section class="branch-dashboard-glass-panel">
-        <div class="branch-dashboard-panel-header">
-          <div>
-            <h3>Recent Branch Orders</h3>
-            <p>Latest order activity and fulfillment status.</p>
-          </div>
-          <span class="branch-dashboard-tag">Orders</span>
-        </div>
+      ${renderBranchDashboardPanel(
+        "issues",
+        "Delivery Issues",
+        "Recent variance, missing, damaged, or resolved issues.",
+        "Review",
+        "review-tag",
+        renderBranchDashboardIssues(2)
+      )}
 
-        ${renderBranchDashboardOrderList()}
-      </section>
-
-      <section class="branch-dashboard-glass-panel">
-        <div class="branch-dashboard-panel-header">
-          <div>
-            <h3>Delivery Issues</h3>
-            <p>Recent variance, missing, damaged, or resolved issues.</p>
-          </div>
-          <span class="branch-dashboard-tag review-tag">Review</span>
-        </div>
-
-        ${renderBranchDashboardIssues()}
-      </section>
-
-      <section class="branch-dashboard-glass-panel">
-        <div class="branch-dashboard-panel-header">
-          <div>
-            <h3>Recent Stock Activity</h3>
-            <p>Latest branch-side Ledger movements.</p>
-          </div>
-          <span class="branch-dashboard-tag">Ledger</span>
-        </div>
-
-        ${renderBranchDashboardLedgerActivity()}
-      </section>
+      ${renderBranchDashboardPanel(
+        "ledger",
+        "Recent Stock Activity",
+        "Latest branch-side Ledger movements.",
+        "Ledger",
+        "",
+        renderBranchDashboardLedgerActivity(3)
+      )}
     </section>
+
+    ${renderBranchDashboardExpandedPanel()}
   `;
 }
 
@@ -443,11 +540,43 @@ function refreshBranchDashboardPage() {
   renderPage("branch-dashboard");
 }
 
+function setupBranchDashboardEvents() {
+  document.querySelectorAll("[data-open-dashboard-panel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL =
+        button.dataset.openDashboardPanel;
+
+      refreshBranchDashboardPage();
+    });
+  });
+
+  document.querySelectorAll("[data-close-dashboard-panel]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      if (
+        event.target.dataset.closeDashboardPanel === "true" ||
+        event.currentTarget.dataset.closeDashboardPanel === "true"
+      ) {
+        window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL = "";
+        refreshBranchDashboardPage();
+      }
+    });
+  });
+
+  const focusPanel = document.querySelector(".branch-dashboard-focus-panel");
+
+  if (focusPanel) {
+    focusPanel.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+}
+
 window.DMC_PAGES["branch-dashboard"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Dashboard",
   description:
     "Live branch command overview for orders, incoming deliveries, issues, and recent stock movement.",
   getContent: getBranchDashboardContent,
-  content: getBranchDashboardContent()
+  content: getBranchDashboardContent(),
+  afterRender: setupBranchDashboardEvents
 };
