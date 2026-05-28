@@ -3525,3 +3525,20 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.purchase-order-receiving-panel {
+  border: 1px solid var(--border);
+  background: rgba(240, 192, 79, 0.035);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.purchase-order-receive-note-input {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font: inherit;
+  min-width: 160px;
+}
