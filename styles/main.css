@@ -3441,3 +3441,39 @@ select:focus {
     align-items: flex-start;
   }
 }
+
+/* ================================
+   BRANCH DASHBOARD — TIGHTER PANELS
+================================ */
+
+.branch-dashboard-live-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.branch-dashboard-glass-panel {
+  min-height: 220px;
+}
+
+.branch-dashboard-panel-preview {
+  min-height: 118px;
+  padding: 16px;
+}
+
+.branch-dashboard-panel-preview strong {
+  font-size: 36px;
+}
+
+.branch-dashboard-panel-preview span {
+  max-width: 300px;
+  font-size: 12px;
+}
+
+.branch-dashboard-expand-hint {
+  margin-top: 8px;
+}
+
+@media (max-width: 760px) {
+  .branch-dashboard-glass-panel {
+    min-height: auto;
+  }
+}
