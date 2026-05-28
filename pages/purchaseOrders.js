@@ -21,6 +21,9 @@ window.DMC_PURCHASE_ORDER_DRAFT =
     lines: {}
   };
 
+window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT =
+  window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT || {};
+
 function getStoredPurchaseOrders() {
   const storedOrders = localStorage.getItem(DMC_PURCHASE_ORDERS_STORAGE_KEY);
 
@@ -40,7 +43,9 @@ function savePurchaseOrders(orders) {
 }
 
 function getPurchaseOrderCommissaryStockItems() {
-  const storedItems = localStorage.getItem(DMC_PURCHASE_ORDERS_COMMISSARY_STOCK_KEY);
+  const storedItems = localStorage.getItem(
+    DMC_PURCHASE_ORDERS_COMMISSARY_STOCK_KEY
+  );
 
   if (storedItems) {
     try {
@@ -65,6 +70,10 @@ function getPurchaseOrderLedgerEntries() {
   } catch {
     return window.DMC_DATA?.ledger || [];
   }
+}
+
+function savePurchaseOrderLedgerEntries(entries) {
+  localStorage.setItem(DMC_PURCHASE_ORDERS_LEDGER_KEY, JSON.stringify(entries));
 }
 
 function getPurchaseOrderTodayDate() {
@@ -310,6 +319,7 @@ function getPurchaseOrderPreparedLines() {
         targetStock: item.targetStock,
         suggestedQty: item.suggestedQty,
         orderQty,
+        receivedQty: 0,
         status: item.status
       };
     })
@@ -324,6 +334,8 @@ function getPurchaseOrdersSummary() {
     totalPOs: orders.length,
     drafts: orders.filter((order) => order.status === "Draft").length,
     submitted: orders.filter((order) => order.status === "Submitted").length,
+    partial: orders.filter((order) => order.status === "Partially Received")
+      .length,
     completed: orders.filter((order) => order.status === "Completed").length,
     suggestedItems: suggestions.length
   };
@@ -343,7 +355,9 @@ function getFilteredPurchaseOrders() {
       }
 
       return (
-        String(order.purchaseOrderId || "").toLowerCase().includes(searchValue) ||
+        String(order.purchaseOrderId || "")
+          .toLowerCase()
+          .includes(searchValue) ||
         String(order.supplier || "").toLowerCase().includes(searchValue) ||
         String(order.status || "").toLowerCase().includes(searchValue) ||
         String(order.expectedDate || "").toLowerCase().includes(searchValue) ||
@@ -390,9 +404,31 @@ function getPurchaseOrderStockStatusBadgeClass(status) {
   return "";
 }
 
+function getPurchaseOrderLineReceivedQty(line) {
+  const value = Number(line.receivedQty || 0);
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function getPurchaseOrderLineRemainingQty(line) {
+  const orderQty = Number(line.orderQty || 0);
+  const receivedQty = getPurchaseOrderLineReceivedQty(line);
+
+  return Math.max(orderQty - receivedQty, 0);
+}
+
+function canPurchaseOrderReceive(order) {
+  return ["Submitted", "Partially Received"].includes(order?.status);
+}
+
 function renderPurchaseOrderStatusOptions() {
   const current = window.DMC_PURCHASE_ORDERS_STATUS_FILTER;
-  const statuses = ["Draft", "Submitted", "Partially Received", "Completed", "Cancelled"];
+  const statuses = [
+    "Draft",
+    "Submitted",
+    "Partially Received",
+    "Completed",
+    "Cancelled"
+  ];
 
   return `
     <option value="all" ${current === "all" ? "selected" : ""}>All Purchase Orders</option>
@@ -573,7 +609,7 @@ function renderPurchaseOrderBuilder() {
         <strong>Purchase Order Rule:</strong>
         <span>
           Creating or submitting a Purchase Order does not change stock.
-          Commissary Stock only increases when the PO is received in the next step.
+          Commissary Stock only increases when the PO is received.
         </span>
       </div>
 
@@ -624,6 +660,350 @@ function renderPurchaseOrderBuilder() {
         </table>
       </div>
     </section>
+  `;
+}
+
+function getReceivingDraftForPurchaseOrder(order) {
+  if (!order) {
+    return {};
+  }
+
+  window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId] =
+    window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId] || {};
+
+  const draft = window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId];
+
+  (order.lines || []).forEach((line) => {
+    const remainingQty = getPurchaseOrderLineRemainingQty(line);
+
+    if (!draft[line.itemId]) {
+      draft[line.itemId] = {
+        receivedNowQty: "",
+        notes: ""
+      };
+    }
+
+    if (draft[line.itemId].receivedNowQty === "" && remainingQty > 0) {
+      draft[line.itemId].receivedNowQty = "";
+    }
+  });
+
+  return draft;
+}
+
+function saveReceivingDraftFromInputs(order) {
+  if (!order) {
+    return;
+  }
+
+  const draft = getReceivingDraftForPurchaseOrder(order);
+
+  document.querySelectorAll("[data-po-receive-qty]").forEach((input) => {
+    const itemId = input.dataset.poReceiveQty;
+
+    draft[itemId] = draft[itemId] || {};
+    draft[itemId].receivedNowQty = input.value;
+  });
+
+  document.querySelectorAll("[data-po-receive-notes]").forEach((input) => {
+    const itemId = input.dataset.poReceiveNotes;
+
+    draft[itemId] = draft[itemId] || {};
+    draft[itemId].notes = input.value;
+  });
+
+  window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId] = draft;
+}
+
+function receivePurchaseOrderFull(order) {
+  if (!order || !canPurchaseOrderReceive(order)) {
+    return;
+  }
+
+  const draft = getReceivingDraftForPurchaseOrder(order);
+
+  (order.lines || []).forEach((line) => {
+    const remainingQty = getPurchaseOrderLineRemainingQty(line);
+
+    draft[line.itemId] = draft[line.itemId] || {};
+    draft[line.itemId].receivedNowQty = remainingQty > 0 ? remainingQty : "";
+  });
+
+  window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId] = draft;
+  refreshPurchaseOrdersPage();
+}
+
+function getPurchaseOrderReceivingLines(order) {
+  if (!order) {
+    return [];
+  }
+
+  const draft = getReceivingDraftForPurchaseOrder(order);
+
+  return (order.lines || [])
+    .map((line) => {
+      const receivedNowQty = Number(draft[line.itemId]?.receivedNowQty || 0);
+      const remainingQty = getPurchaseOrderLineRemainingQty(line);
+
+      if (
+        Number.isNaN(receivedNowQty) ||
+        receivedNowQty <= 0 ||
+        remainingQty <= 0
+      ) {
+        return null;
+      }
+
+      return {
+        ...line,
+        receivedNowQty: Math.min(receivedNowQty, remainingQty),
+        receivingNotes: draft[line.itemId]?.notes || ""
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildPurchaseOrderReceivingLedgerEntries(order, receivingLines) {
+  const submittedAt = new Date().toISOString();
+  const submittedAtDisplay = getPurchaseOrderReadableTimestamp();
+
+  return receivingLines.map((line) => ({
+    date: getPurchaseOrderTodayDate(),
+    submittedAt,
+    submittedAtDisplay,
+    batchId: order.purchaseOrderId,
+    purchaseOrderId: order.purchaseOrderId,
+    department: "Commissary",
+    section: line.section || "",
+    itemId: line.itemId || "",
+    itemName: line.itemName || "",
+    movementType: "Received",
+    quantity: line.receivedNowQty,
+    unit: line.unit || "",
+    source: "Purchase Order Receiving",
+    notes: `Received from ${order.supplier || "supplier"} for PO ${
+      order.purchaseOrderId
+    }. ${line.receivingNotes || ""}`.trim()
+  }));
+}
+
+function confirmPurchaseOrderReceiving(order) {
+  if (!order || !canPurchaseOrderReceive(order)) {
+    return;
+  }
+
+  saveReceivingDraftFromInputs(order);
+
+  const receivingLines = getPurchaseOrderReceivingLines(order);
+
+  if (receivingLines.length === 0) {
+    alert("No received quantities entered.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Confirm receiving ${receivingLines.length} purchase order line(s) for ${order.purchaseOrderId}?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const currentLedgerEntries = getPurchaseOrderLedgerEntries();
+  const newLedgerEntries = buildPurchaseOrderReceivingLedgerEntries(
+    order,
+    receivingLines
+  );
+
+  savePurchaseOrderLedgerEntries([...currentLedgerEntries, ...newLedgerEntries]);
+
+  const now = new Date().toISOString();
+  const orders = getStoredPurchaseOrders();
+
+  const updatedOrders = orders.map((storedOrder) => {
+    if (storedOrder.purchaseOrderId !== order.purchaseOrderId) {
+      return storedOrder;
+    }
+
+    const updatedLines = (storedOrder.lines || []).map((line) => {
+      const receivedLine = receivingLines.find(
+        (item) => item.itemId === line.itemId
+      );
+
+      if (!receivedLine) {
+        return line;
+      }
+
+      return {
+        ...line,
+        receivedQty:
+          getPurchaseOrderLineReceivedQty(line) + receivedLine.receivedNowQty
+      };
+    });
+
+    const allCompleted = updatedLines.every(
+      (line) => getPurchaseOrderLineRemainingQty(line) <= 0
+    );
+
+    const nextStatus = allCompleted ? "Completed" : "Partially Received";
+
+    return {
+      ...storedOrder,
+      lines: updatedLines,
+      status: nextStatus,
+      updatedAt: now,
+      receivedAt: allCompleted ? now : storedOrder.receivedAt || "",
+      statusHistory: [
+        ...(storedOrder.statusHistory || []),
+        {
+          status: nextStatus,
+          timestamp: now,
+          note: `Received ${receivingLines.length} purchase order line(s). Ledger Received entries created.`
+        }
+      ]
+    };
+  });
+
+  savePurchaseOrders(updatedOrders);
+
+  delete window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId];
+
+  alert("Purchase Order receiving confirmed. Commissary stock was updated through the Ledger.");
+
+  refreshPurchaseOrdersPage();
+}
+
+function renderPurchaseOrderReceivingPanel(order) {
+  if (!order) {
+    return "";
+  }
+
+  if (order.status === "Draft") {
+    return `
+      <div class="branch-order-section purchase-order-receiving-panel">
+        <h4>Receiving</h4>
+        <div class="instruction-box">
+          <strong>Draft PO:</strong>
+          <span>Submit this Purchase Order before receiving supplier delivery.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (order.status === "Completed") {
+    return `
+      <div class="branch-order-section purchase-order-receiving-panel">
+        <h4>Receiving</h4>
+        <div class="instruction-box">
+          <strong>Completed:</strong>
+          <span>This Purchase Order is fully received and locked.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (order.status === "Cancelled") {
+    return `
+      <div class="branch-order-section purchase-order-receiving-panel">
+        <h4>Receiving</h4>
+        <div class="instruction-box">
+          <strong>Cancelled:</strong>
+          <span>This Purchase Order is cancelled and cannot be received.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const draft = getReceivingDraftForPurchaseOrder(order);
+  const receivingLines = getPurchaseOrderReceivingLines(order);
+
+  return `
+    <div class="branch-order-section purchase-order-receiving-panel">
+      <div class="panel-header">
+        <div>
+          <h4>Receive Purchase Order</h4>
+          <p>
+            Enter received quantities from the supplier. Confirming receiving
+            creates Commissary / Received Ledger entries and increases Commissary Stock.
+          </p>
+        </div>
+
+        <div class="form-actions">
+          <button class="ghost-button" id="receive-full-purchase-order">
+            Receive Remaining
+          </button>
+
+          <button class="primary-button" id="confirm-purchase-order-receiving">
+            Confirm Receiving
+          </button>
+        </div>
+      </div>
+
+      <div class="instruction-box">
+        <strong>Receiving Preview:</strong>
+        <span>
+          ${receivingLines.length} line(s) ready to receive. Only entered quantities will be added to stock.
+        </span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Ordered</th>
+              <th>Received</th>
+              <th>Remaining</th>
+              <th>Receive Now</th>
+              <th>Unit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${(order.lines || [])
+              .map((line) => {
+                const receivedQty = getPurchaseOrderLineReceivedQty(line);
+                const remainingQty = getPurchaseOrderLineRemainingQty(line);
+                const lineDraft = draft[line.itemId] || {};
+
+                return `
+                  <tr>
+                    <td>${line.itemName || "-"}</td>
+                    <td>${line.orderQty}</td>
+                    <td>${receivedQty}</td>
+                    <td>${remainingQty}</td>
+                    <td>
+                      <input
+                        class="purchase-order-qty-input"
+                        data-po-receive-qty="${line.itemId}"
+                        type="number"
+                        min="0"
+                        max="${remainingQty}"
+                        step="any"
+                        placeholder="0"
+                        value="${lineDraft.receivedNowQty || ""}"
+                        ${remainingQty <= 0 ? "disabled" : ""}
+                      />
+                    </td>
+                    <td>${line.unit || "-"}</td>
+                    <td>
+                      <input
+                        class="purchase-order-receive-note-input"
+                        data-po-receive-notes="${line.itemId}"
+                        type="text"
+                        placeholder="Optional"
+                        value="${lineDraft.notes || ""}"
+                        ${remainingQty <= 0 ? "disabled" : ""}
+                      />
+                    </td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
@@ -692,6 +1072,8 @@ function renderSelectedPurchaseOrder() {
                 <th>Target</th>
                 <th>Suggested</th>
                 <th>Ordered</th>
+                <th>Received</th>
+                <th>Remaining</th>
                 <th>Unit</th>
               </tr>
             </thead>
@@ -707,6 +1089,8 @@ function renderSelectedPurchaseOrder() {
                       <td>${line.targetStock}</td>
                       <td>${line.suggestedQty}</td>
                       <td>${line.orderQty}</td>
+                      <td>${getPurchaseOrderLineReceivedQty(line)}</td>
+                      <td>${getPurchaseOrderLineRemainingQty(line)}</td>
                       <td>${line.unit || "-"}</td>
                     </tr>
                   `
@@ -716,6 +1100,8 @@ function renderSelectedPurchaseOrder() {
           </table>
         </div>
       </div>
+
+      ${renderPurchaseOrderReceivingPanel(order)}
 
       <div class="branch-order-section">
         <h4>Notes</h4>
@@ -746,6 +1132,11 @@ function getPurchaseOrdersContent() {
       <div class="card">
         <p>Submitted</p>
         <strong>${summary.submitted}</strong>
+      </div>
+
+      <div class="card">
+        <p>Partial</p>
+        <strong>${summary.partial}</strong>
       </div>
 
       <div class="card">
@@ -796,7 +1187,9 @@ function refreshPurchaseOrdersPage() {
 
 function savePurchaseOrderDraftFromInputs() {
   const supplierInput = document.getElementById("purchase-order-supplier");
-  const expectedDateInput = document.getElementById("purchase-order-expected-date");
+  const expectedDateInput = document.getElementById(
+    "purchase-order-expected-date"
+  );
   const notesInput = document.getElementById("purchase-order-notes");
 
   window.DMC_PURCHASE_ORDER_DRAFT.supplier = supplierInput?.value || "";
@@ -945,6 +1338,38 @@ function setupPurchaseOrdersEvents() {
     });
   });
 
+  const selectedOrder = getSelectedPurchaseOrder();
+
+  document.querySelectorAll("[data-po-receive-qty]").forEach((input) => {
+    input.addEventListener("change", () => {
+      saveReceivingDraftFromInputs(selectedOrder);
+      refreshPurchaseOrdersPage();
+    });
+  });
+
+  document.querySelectorAll("[data-po-receive-notes]").forEach((input) => {
+    input.addEventListener("change", () => {
+      saveReceivingDraftFromInputs(selectedOrder);
+    });
+  });
+
+  const receiveFullButton = document.getElementById("receive-full-purchase-order");
+  const confirmReceivingButton = document.getElementById(
+    "confirm-purchase-order-receiving"
+  );
+
+  if (receiveFullButton) {
+    receiveFullButton.addEventListener("click", () => {
+      receivePurchaseOrderFull(selectedOrder);
+    });
+  }
+
+  if (confirmReceivingButton) {
+    confirmReceivingButton.addEventListener("click", () => {
+      confirmPurchaseOrderReceiving(selectedOrder);
+    });
+  }
+
   const clearButton = document.getElementById("clear-purchase-order-draft");
   const saveDraftButton = document.getElementById("save-purchase-order-draft");
   const submitButton = document.getElementById("submit-purchase-order");
@@ -985,7 +1410,7 @@ window.DMC_PAGES["purchase-orders"] = {
   eyebrow: "Commissary",
   title: "Purchase Orders",
   description:
-    "Create supplier purchase orders from low-stock commissary suggestions.",
+    "Create supplier purchase orders from low-stock commissary suggestions and receive supplier deliveries.",
   getContent: getPurchaseOrdersContent,
   content: getPurchaseOrdersContent(),
   afterRender: setupPurchaseOrdersEvents
