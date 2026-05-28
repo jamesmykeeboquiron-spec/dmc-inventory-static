@@ -1,7 +1,10 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_DELIVERY_ISSUES_STORAGE_KEY = "dmc_delivery_issues";
+const DMC_DELIVERY_ISSUES_PAGE_STORAGE_KEY = "dmc_delivery_issues";
 const DMC_DELIVERY_ISSUES_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
+const DMC_DELIVERY_ISSUES_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
+const DMC_DELIVERY_ISSUES_REASON_SYNC_KEY =
+  "dmc_delivery_issue_reason_settings";
 
 const DMC_DELIVERY_STOCK_ACTIONS = {
   NONE: "No Stock Movement",
@@ -10,44 +13,60 @@ const DMC_DELIVERY_STOCK_ACTIONS = {
 
 const DMC_DEFAULT_DELIVERY_ISSUE_REASONS = [
   {
+    id: "returned-usable-stock",
     name: "Returned to Usable Stock",
     category: "Recovered Stock",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY,
+    active: true
   },
   {
+    id: "confirmed-waste",
     name: "Confirmed Waste",
     category: "Waste",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "damaged-during-delivery",
     name: "Damaged During Delivery",
     category: "Waste / Delivery Damage",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "spoiled-during-delivery",
     name: "Spoiled During Delivery",
     category: "Waste / Spoilage",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "missing-driver-issue",
     name: "Missing / Driver Issue",
     category: "Missing / Accountability",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "packing-error",
     name: "Packing Error",
     category: "Commissary Error",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "branch-receiving-error",
     name: "Branch Receiving Error",
     category: "Branch Error",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   },
   {
+    id: "input-error",
     name: "Input Error",
     category: "System / Data Correction",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: true
   }
 ];
 
@@ -68,7 +87,7 @@ window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT =
   };
 
 function getStoredDeliveryIssues() {
-  const storedIssues = localStorage.getItem(DMC_DELIVERY_ISSUES_STORAGE_KEY);
+  const storedIssues = localStorage.getItem(DMC_DELIVERY_ISSUES_PAGE_STORAGE_KEY);
 
   if (!storedIssues) {
     return [];
@@ -82,11 +101,16 @@ function getStoredDeliveryIssues() {
 }
 
 function saveDeliveryIssues(issues) {
-  localStorage.setItem(DMC_DELIVERY_ISSUES_STORAGE_KEY, JSON.stringify(issues));
+  localStorage.setItem(
+    DMC_DELIVERY_ISSUES_PAGE_STORAGE_KEY,
+    JSON.stringify(issues)
+  );
 }
 
 function getStoredDeliveryIssueLedgerEntries() {
-  const storedEntries = localStorage.getItem(DMC_DELIVERY_ISSUES_LEDGER_STORAGE_KEY);
+  const storedEntries = localStorage.getItem(
+    DMC_DELIVERY_ISSUES_LEDGER_STORAGE_KEY
+  );
 
   if (!storedEntries) {
     return window.DMC_DATA?.ledger || [];
@@ -106,8 +130,59 @@ function saveDeliveryIssueLedgerEntries(entries) {
   );
 }
 
-function getDeliveryIssueReasons() {
+function normalizeDeliveryIssueReasons(reasons) {
+  if (!Array.isArray(reasons)) {
+    return DMC_DEFAULT_DELIVERY_ISSUE_REASONS;
+  }
+
+  return reasons.map((reason) => ({
+    id: reason.id || reason.name || `reason-${Date.now()}`,
+    name: reason.name || "Unnamed Reason",
+    category: reason.category || "Uncategorized",
+    stockAction:
+      reason.stockAction || DMC_DELIVERY_STOCK_ACTIONS.NONE,
+    active: reason.active !== false
+  }));
+}
+
+function getDeliveryIssueReasonsFromSettings() {
+  const syncedReasons = localStorage.getItem(
+    DMC_DELIVERY_ISSUES_REASON_SYNC_KEY
+  );
+
+  if (syncedReasons) {
+    try {
+      return normalizeDeliveryIssueReasons(JSON.parse(syncedReasons));
+    } catch {
+      // continue to full settings fallback
+    }
+  }
+
+  const storedSettings = localStorage.getItem(
+    DMC_DELIVERY_ISSUES_SETTINGS_STORAGE_KEY
+  );
+
+  if (storedSettings) {
+    try {
+      const settings = JSON.parse(storedSettings);
+
+      if (settings.deliveryIssueReasons) {
+        return normalizeDeliveryIssueReasons(settings.deliveryIssueReasons);
+      }
+    } catch {
+      // continue to default fallback
+    }
+  }
+
   return DMC_DEFAULT_DELIVERY_ISSUE_REASONS;
+}
+
+function getDeliveryIssueReasons() {
+  return getDeliveryIssueReasonsFromSettings();
+}
+
+function getActiveDeliveryIssueReasons() {
+  return getDeliveryIssueReasons().filter((reason) => reason.active !== false);
 }
 
 function getDeliveryIssueReasonConfig(reasonName) {
@@ -115,7 +190,8 @@ function getDeliveryIssueReasonConfig(reasonName) {
     getDeliveryIssueReasons().find((reason) => reason.name === reasonName) || {
       name: reasonName || "",
       category: "Uncategorized",
-      stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE
+      stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
+      active: true
     }
   );
 }
@@ -128,26 +204,6 @@ function getDeliveryIssueReadableTimestamp() {
   const now = new Date();
 
   return now.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function formatDeliveryIssueDateTime(value) {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -193,7 +249,9 @@ function getFilteredDeliveryIssues() {
       String(issue.receivedBy || "").toLowerCase().includes(searchValue) ||
       String(issue.status || "").toLowerCase().includes(searchValue) ||
       String(issue.resolution || "").toLowerCase().includes(searchValue) ||
-      String(issue.resolutionCategory || "").toLowerCase().includes(searchValue);
+      String(issue.resolutionCategory || "")
+        .toLowerCase()
+        .includes(searchValue);
 
     return matchesStatus && matchesSearch;
   });
@@ -264,9 +322,27 @@ function renderDeliveryIssueStatusOptions() {
 }
 
 function renderDeliveryIssueResolutionOptions(currentResolution) {
+  const reasons = getActiveDeliveryIssueReasons();
+  const savedReasonStillExists = getDeliveryIssueReasonConfig(currentResolution);
+
+  const shouldIncludeCurrentInactiveReason =
+    currentResolution &&
+    !reasons.some((reason) => reason.name === currentResolution);
+
   return `
     <option value="">Select resolution</option>
-    ${getDeliveryIssueReasons()
+
+    ${
+      shouldIncludeCurrentInactiveReason
+        ? `
+          <option value="${currentResolution}" selected>
+            ${currentResolution} (inactive)
+          </option>
+        `
+        : ""
+    }
+
+    ${reasons
       .map(
         (reason) => `
           <option
@@ -331,7 +407,10 @@ function buildDeliveryIssueLedgerEntry(issue, reasonConfig) {
 }
 
 function writeDeliveryIssueStockReturnToLedger(issue, reasonConfig) {
-  if (reasonConfig.stockAction !== DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY) {
+  if (
+    reasonConfig.stockAction !==
+    DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+  ) {
     return false;
   }
 
@@ -453,8 +532,8 @@ function renderDeliveryIssueResolutionPanel(issue) {
         <div>
           <h4>Resolution Panel</h4>
           <p>
-            Only “Add Back to Commissary Stock” affects inventory. All other
-            resolutions are recorded for reporting and accountability only.
+            Resolution reasons are now controlled from Settings. Only “Add Back
+            to Commissary Stock” affects inventory.
           </p>
         </div>
 
@@ -470,8 +549,16 @@ function renderDeliveryIssueResolutionPanel(issue) {
               <strong>Resolved:</strong>
               <span>
                 Resolution: ${issue.resolution || "-"}.
-                Category: ${issue.resolutionCategory || savedReasonConfig.category || "-"}.
-                Stock Action: ${issue.stockAction || savedReasonConfig.stockAction || DMC_DELIVERY_STOCK_ACTIONS.NONE}.
+                Category: ${
+                  issue.resolutionCategory ||
+                  savedReasonConfig.category ||
+                  "-"
+                }.
+                Stock Action: ${
+                  issue.stockAction ||
+                  savedReasonConfig.stockAction ||
+                  DMC_DELIVERY_STOCK_ACTIONS.NONE
+                }.
                 Notes: ${issue.resolutionNotes || "-"}
               </span>
             </div>
@@ -705,7 +792,8 @@ function saveSelectedDeliveryIssueReview(issue) {
 
   const shouldAddBackToStock =
     draft.status === "Resolved" &&
-    reasonConfig.stockAction === DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY;
+    reasonConfig.stockAction ===
+      DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY;
 
   const confirmed = confirm(
     shouldAddBackToStock
@@ -737,7 +825,8 @@ function saveSelectedDeliveryIssueReview(issue) {
       resolutionCategory: reasonConfig.category,
       stockAction: reasonConfig.stockAction,
       stockActionApplied:
-        reasonConfig.stockAction === DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+        reasonConfig.stockAction ===
+        DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
           ? true
           : false,
       ledgerEntryCreated,
