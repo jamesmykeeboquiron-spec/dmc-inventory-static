@@ -3,6 +3,9 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_BRANCH_DASHBOARD_ORDERS_KEY = "dmc_branch_orders";
 const DMC_BRANCH_DASHBOARD_ISSUES_KEY = "dmc_delivery_issues";
 const DMC_BRANCH_DASHBOARD_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_BRANCH_DASHBOARD_STOCK_KEY = "dmc_branch_stock_items";
+
+const DMC_BRANCH_DASHBOARD_BRANCH_NAME = "DMC-Iriga Branch";
 
 window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL =
   window.DMC_BRANCH_DASHBOARD_ACTIVE_PANEL || "";
@@ -47,6 +50,20 @@ function getBranchDashboardLedgerEntries() {
   } catch {
     return window.DMC_DATA?.ledger || [];
   }
+}
+
+function getBranchDashboardBaseStockItems() {
+  const storedItems = localStorage.getItem(DMC_BRANCH_DASHBOARD_STOCK_KEY);
+
+  if (storedItems) {
+    try {
+      return JSON.parse(storedItems);
+    } catch {
+      return window.DMC_DATA?.branchStock || [];
+    }
+  }
+
+  return window.DMC_DATA?.branchStock || [];
 }
 
 function formatBranchDashboardDateTime(value) {
@@ -103,9 +120,18 @@ function getBranchDashboardLedgerTimestamp(entry) {
   return 0;
 }
 
+function isBranchDashboardBranchEntry(entry) {
+  return entry.department && entry.department !== "Commissary";
+}
+
+function getBranchDashboardBranchLedgerEntries() {
+  return getBranchDashboardLedgerEntries().filter(isBranchDashboardBranchEntry);
+}
+
 function getBranchDashboardSummary() {
   const orders = getBranchDashboardOrders();
   const issues = getBranchDashboardIssues();
+  const stockAlerts = getBranchDashboardStockAlerts();
 
   return {
     pendingOrders: orders.filter((order) =>
@@ -115,7 +141,8 @@ function getBranchDashboardSummary() {
       .length,
     completedDeliveries: orders.filter((order) => order.status === "Completed")
       .length,
-    openIssues: issues.filter((issue) => issue.status !== "Resolved").length
+    openIssues: issues.filter((issue) => issue.status !== "Resolved").length,
+    stockAlerts: stockAlerts.length
   };
 }
 
@@ -130,8 +157,7 @@ function getRecentBranchDashboardOrders(limit = 6) {
 }
 
 function getRecentBranchDashboardLedgerEntries(limit = 6) {
-  return [...getBranchDashboardLedgerEntries()]
-    .filter((entry) => entry.department && entry.department !== "Commissary")
+  return getBranchDashboardBranchLedgerEntries()
     .sort(
       (a, b) =>
         getBranchDashboardLedgerTimestamp(b) -
@@ -163,12 +189,174 @@ function getBranchDashboardIncomingDeliveries(limit = 5) {
 }
 
 function getBranchDashboardStatusBadgeClass(status) {
+  if (status === "Critical") return "danger-badge";
+  if (status === "Low Stock") return "warning-badge";
   if (status === "Variance") return "warning-badge";
   if (status === "On the Way") return "info-badge";
   if (status === "Resolved") return "info-badge";
   if (status === "Open") return "danger-badge";
   if (status === "Under Review") return "warning-badge";
   return "";
+}
+
+function getBranchDashboardItemId(item) {
+  return item.itemId || item.id || "";
+}
+
+function getBranchDashboardItemName(item) {
+  return item.itemName || item.officialItemName || item.name || "-";
+}
+
+function getBranchDashboardStartingStock(item) {
+  const value = Number(item.startingStock ?? item.currentStock ?? 0);
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function getBranchDashboardMinimumStock(item) {
+  const value = Number(
+    item.minimumStock ?? item.minStock ?? item.reorderLevel ?? item.parLevel ?? 0
+  );
+
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function getBranchDashboardMovementTotals(itemId) {
+  const totals = {
+    received: 0,
+    transferIn: 0,
+    usage: 0,
+    waste: 0,
+    transferOut: 0,
+    adjustment: 0
+  };
+
+  getBranchDashboardBranchLedgerEntries()
+    .filter((entry) => entry.itemId === itemId)
+    .forEach((entry) => {
+      const quantity = Number(entry.quantity || 0);
+
+      if (Number.isNaN(quantity)) {
+        return;
+      }
+
+      if (entry.movementType === "Received") {
+        totals.received += quantity;
+      }
+
+      if (entry.movementType === "Transfer In") {
+        totals.transferIn += quantity;
+      }
+
+      if (entry.movementType === "Usage") {
+        totals.usage += quantity;
+      }
+
+      if (entry.movementType === "Waste") {
+        totals.waste += quantity;
+      }
+
+      if (entry.movementType === "Transfer Out") {
+        totals.transferOut += quantity;
+      }
+
+      if (entry.movementType === "Adjustment") {
+        totals.adjustment += quantity;
+      }
+    });
+
+  return totals;
+}
+
+function getBranchDashboardCalculatedStock(item) {
+  const itemId = getBranchDashboardItemId(item);
+  const startingStock = getBranchDashboardStartingStock(item);
+  const totals = getBranchDashboardMovementTotals(itemId);
+
+  return (
+    startingStock +
+    totals.received +
+    totals.transferIn -
+    totals.usage -
+    totals.waste -
+    totals.transferOut +
+    totals.adjustment
+  );
+}
+
+function getBranchDashboardStockRows() {
+  const stockItems = getBranchDashboardBaseStockItems();
+  const itemMap = new Map();
+
+  stockItems.forEach((item) => {
+    const itemId = getBranchDashboardItemId(item);
+
+    if (!itemId) {
+      return;
+    }
+
+    itemMap.set(itemId, {
+      ...item,
+      itemId,
+      itemName: getBranchDashboardItemName(item),
+      unit: item.unit || "",
+      section: item.section || "",
+      minimumStock: getBranchDashboardMinimumStock(item),
+      startingStock: getBranchDashboardStartingStock(item)
+    });
+  });
+
+  getBranchDashboardBranchLedgerEntries().forEach((entry) => {
+    if (!entry.itemId || itemMap.has(entry.itemId)) {
+      return;
+    }
+
+    itemMap.set(entry.itemId, {
+      itemId: entry.itemId,
+      itemName: entry.itemName || entry.itemId,
+      unit: entry.unit || "",
+      section: entry.section || "",
+      minimumStock: 0,
+      startingStock: 0
+    });
+  });
+
+  return [...itemMap.values()].map((item) => {
+    const currentStock = getBranchDashboardCalculatedStock(item);
+    const minimumStock = getBranchDashboardMinimumStock(item);
+
+    let status = "Good";
+
+    if (currentStock <= 0) {
+      status = "Critical";
+    } else if (minimumStock > 0 && currentStock <= minimumStock * 0.5) {
+      status = "Critical";
+    } else if (minimumStock > 0 && currentStock < minimumStock) {
+      status = "Low Stock";
+    }
+
+    return {
+      ...item,
+      currentStock,
+      minimumStock,
+      status
+    };
+  });
+}
+
+function getBranchDashboardStockAlerts(limit = 1000) {
+  return getBranchDashboardStockRows()
+    .filter((item) => item.status === "Critical" || item.status === "Low Stock")
+    .sort((a, b) => {
+      const priorityA = a.status === "Critical" ? 0 : 1;
+      const priorityB = b.status === "Critical" ? 0 : 1;
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      return Number(a.currentStock || 0) - Number(b.currentStock || 0);
+    })
+    .slice(0, limit);
 }
 
 function renderBranchDashboardStatCard(label, value, helper, variant) {
@@ -351,6 +539,50 @@ function renderBranchDashboardLedgerActivity(limit = 20) {
   `;
 }
 
+function renderBranchDashboardStockAlerts(limit = 20) {
+  const alerts = getBranchDashboardStockAlerts(limit);
+
+  if (alerts.length === 0) {
+    return `
+      <div class="branch-dashboard-empty">
+        <p>No low stock alerts.</p>
+        <span>${DMC_BRANCH_DASHBOARD_BRANCH_NAME} has no critical or low stock items right now.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="branch-dashboard-feed">
+      ${alerts
+        .map(
+          (item) => `
+            <div class="branch-dashboard-feed-item">
+              <div>
+                <strong>${item.itemName || "-"}</strong>
+                <p>${item.section || DMC_BRANCH_DASHBOARD_BRANCH_NAME}</p>
+                <span>
+                  Current: ${item.currentStock} ${item.unit || ""}
+                  ${
+                    item.minimumStock > 0
+                      ? `• Minimum: ${item.minimumStock} ${item.unit || ""}`
+                      : "• No minimum set"
+                  }
+                </span>
+              </div>
+
+              <span class="badge ${getBranchDashboardStatusBadgeClass(
+                item.status
+              )}">
+                ${item.status}
+              </span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderBranchDashboardPanel(panelKey, title, description, tag, tagClass, content) {
   return `
     <section class="branch-dashboard-glass-panel" data-dashboard-panel="${panelKey}">
@@ -411,6 +643,14 @@ function getBranchDashboardExpandedPanelConfig() {
       tag: "Ledger",
       tagClass: "",
       content: renderBranchDashboardLedgerActivity(20)
+    },
+    stock: {
+      title: "Stock Alerts",
+      eyebrow: "Branch Stock Monitor",
+      description: `${DMC_BRANCH_DASHBOARD_BRANCH_NAME} items that are low or critical.`,
+      tag: "Alerts",
+      tagClass: "review-tag",
+      content: renderBranchDashboardStockAlerts(20)
     }
   };
 
@@ -460,14 +700,15 @@ function getBranchDashboardContent() {
   const recentOrderCount = getRecentBranchDashboardOrders(1000).length;
   const recentIssueCount = getRecentBranchDashboardIssues(1000).length;
   const recentLedgerCount = getRecentBranchDashboardLedgerEntries(1000).length;
+  const stockAlertCount = getBranchDashboardStockAlerts(1000).length;
 
   return `
     <section class="branch-dashboard-hero">
       <div>
         <p class="eyebrow">Live Branch Command</p>
-        <h3>DMC-Iriga Branch Dashboard</h3>
+        <h3>${DMC_BRANCH_DASHBOARD_BRANCH_NAME} Dashboard</h3>
         <span>
-          Monitor branch orders, incoming deliveries, delivery issues, and recent stock movement.
+          Monitor branch orders, incoming deliveries, stock alerts, delivery issues, and recent stock movement.
         </span>
       </div>
 
@@ -493,10 +734,10 @@ function getBranchDashboardContent() {
       )}
 
       ${renderBranchDashboardStatCard(
-        "Completed",
-        summary.completedDeliveries,
-        "Deliveries received successfully",
-        "green-stat"
+        "Stock Alerts",
+        summary.stockAlerts,
+        "Low or critical stock items",
+        summary.stockAlerts > 0 ? "red-stat" : "green-stat"
       )}
 
       ${renderBranchDashboardStatCard(
@@ -508,6 +749,19 @@ function getBranchDashboardContent() {
     </section>
 
     <section class="branch-dashboard-live-grid">
+      ${renderBranchDashboardPanel(
+        "stock",
+        "Stock Alerts",
+        `Low or critical items for ${DMC_BRANCH_DASHBOARD_BRANCH_NAME}.`,
+        "Alerts",
+        stockAlertCount > 0 ? "review-tag" : "",
+        renderBranchDashboardPanelPreview(
+          stockAlertCount,
+          stockAlertCount === 1 ? "item needs attention" : "items need attention",
+          "Open to view current stock, minimum stock, and alert status."
+        )
+      )}
+
       ${renderBranchDashboardPanel(
         "incoming",
         "Incoming Deliveries",
@@ -605,7 +859,7 @@ window.DMC_PAGES["branch-dashboard"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Dashboard",
   description:
-    "Live branch command overview for orders, incoming deliveries, issues, and recent stock movement.",
+    "Live branch command overview for orders, incoming deliveries, stock alerts, issues, and recent stock movement.",
   getContent: getBranchDashboardContent,
   content: getBranchDashboardContent(),
   afterRender: setupBranchDashboardEvents
