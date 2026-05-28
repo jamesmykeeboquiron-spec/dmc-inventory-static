@@ -3290,3 +3290,154 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================
+   BRANCH DASHBOARD — ZOOM PANELS
+================================ */
+
+.branch-dashboard-glass-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.branch-dashboard-panel-click {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.branch-dashboard-glass-panel .branch-dashboard-panel-header,
+.branch-dashboard-glass-panel .branch-dashboard-feed,
+.branch-dashboard-glass-panel .branch-dashboard-empty,
+.branch-dashboard-glass-panel .branch-dashboard-expand-hint {
+  position: relative;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.branch-dashboard-glass-panel:hover {
+  transform: translateY(-2px) scale(1.005);
+  border-color: rgba(240, 192, 79, 0.32);
+  box-shadow:
+    0 0 30px rgba(240, 192, 79, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.branch-dashboard-expand-hint {
+  margin-top: 12px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  opacity: 0.65;
+}
+
+.branch-dashboard-focus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at center, rgba(240, 192, 79, 0.08), transparent 42%),
+    rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(7px);
+  animation: branchDashboardOverlayIn 160ms ease both;
+}
+
+.branch-dashboard-focus-panel {
+  width: min(1120px, 94vw);
+  max-height: 84vh;
+  overflow: auto;
+  border: 1px solid rgba(240, 192, 79, 0.32);
+  background:
+    radial-gradient(circle at top left, rgba(240, 192, 79, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
+    rgba(8, 8, 7, 0.94);
+  border-radius: 26px;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(240, 192, 79, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 22px;
+  animation: branchDashboardZoomIn 190ms ease both;
+}
+
+.branch-dashboard-focus-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(240, 192, 79, 0.15);
+}
+
+.branch-dashboard-focus-header h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 28px;
+}
+
+.branch-dashboard-focus-header span {
+  color: var(--text-muted);
+}
+
+.branch-dashboard-focus-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.branch-dashboard-focus-content .branch-dashboard-feed {
+  display: grid;
+  gap: 12px;
+}
+
+.branch-dashboard-focus-content .branch-dashboard-feed-item {
+  padding: 16px;
+}
+
+@keyframes branchDashboardOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes branchDashboardZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .branch-dashboard-focus-overlay {
+    padding: 14px;
+  }
+
+  .branch-dashboard-focus-panel {
+    width: 96vw;
+    max-height: 88vh;
+    padding: 16px;
+  }
+
+  .branch-dashboard-focus-header,
+  .branch-dashboard-focus-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
