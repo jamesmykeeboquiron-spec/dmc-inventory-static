@@ -1,13 +1,81 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_SETTINGS_STORAGE_KEY = "dmc_inventory_settings";
+const DMC_SETTINGS_REASON_SYNC_KEY = "dmc_delivery_issue_reason_settings";
+
+const DMC_SETTINGS_STOCK_ACTIONS = {
+  NONE: "No Stock Movement",
+  ADD_BACK_TO_COMMISSARY: "Add Back to Commissary Stock"
+};
+
+function getDefaultDeliveryIssueReasons() {
+  return [
+    {
+      id: "returned-usable-stock",
+      name: "Returned to Usable Stock",
+      category: "Recovered Stock",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY,
+      active: true
+    },
+    {
+      id: "confirmed-waste",
+      name: "Confirmed Waste",
+      category: "Waste",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "damaged-during-delivery",
+      name: "Damaged During Delivery",
+      category: "Waste / Delivery Damage",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "spoiled-during-delivery",
+      name: "Spoiled During Delivery",
+      category: "Waste / Spoilage",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "missing-driver-issue",
+      name: "Missing / Driver Issue",
+      category: "Missing / Accountability",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "packing-error",
+      name: "Packing Error",
+      category: "Commissary Error",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "branch-receiving-error",
+      name: "Branch Receiving Error",
+      category: "Branch Error",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    },
+    {
+      id: "input-error",
+      name: "Input Error",
+      category: "System / Data Correction",
+      stockAction: DMC_SETTINGS_STOCK_ACTIONS.NONE,
+      active: true
+    }
+  ];
+}
 
 function getDefaultSettings() {
   return window.DMC_DATA?.settings || {
     operatingAreas: [],
     departments: [],
     sections: [],
-    units: []
+    units: [],
+    deliveryIssueReasons: getDefaultDeliveryIssueReasons()
   };
 }
 
@@ -16,7 +84,9 @@ function normalizeSettings(settings) {
     operatingAreas: settings.operatingAreas || [],
     departments: settings.departments || [],
     sections: settings.sections || [],
-    units: settings.units || []
+    units: settings.units || [],
+    deliveryIssueReasons:
+      settings.deliveryIssueReasons || getDefaultDeliveryIssueReasons()
   };
 }
 
@@ -35,9 +105,16 @@ function getStoredSettings() {
 }
 
 function saveSettings(settings) {
+  const normalizedSettings = normalizeSettings(settings);
+
   localStorage.setItem(
     DMC_SETTINGS_STORAGE_KEY,
-    JSON.stringify(normalizeSettings(settings))
+    JSON.stringify(normalizedSettings)
+  );
+
+  localStorage.setItem(
+    DMC_SETTINGS_REASON_SYNC_KEY,
+    JSON.stringify(normalizedSettings.deliveryIssueReasons)
   );
 }
 
@@ -73,6 +150,24 @@ function renderDepartmentOptions(settings) {
         `<option value="${department.id}">${department.name}</option>`
     )
     .join("");
+}
+
+function renderDeliveryReasonStockActionOptions(currentAction) {
+  return `
+    <option value="${DMC_SETTINGS_STOCK_ACTIONS.NONE}" ${
+    currentAction === DMC_SETTINGS_STOCK_ACTIONS.NONE ? "selected" : ""
+  }>
+      ${DMC_SETTINGS_STOCK_ACTIONS.NONE}
+    </option>
+
+    <option value="${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}" ${
+    currentAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+      ? "selected"
+      : ""
+  }>
+      ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}
+    </option>
+  `;
 }
 
 function renderOperatingAreaRows(settings) {
@@ -165,6 +260,51 @@ function renderUnitRows(settings) {
             <div class="row-actions">
               <button class="tiny-button" data-edit-unit="${unit.id}">Edit</button>
               <button class="tiny-button danger" data-remove-unit="${unit.id}">Remove</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderDeliveryIssueReasonRows(settings) {
+  if (settings.deliveryIssueReasons.length === 0) {
+    return `<tr><td colspan="6">No delivery issue reasons yet.</td></tr>`;
+  }
+
+  return settings.deliveryIssueReasons
+    .map(
+      (reason) => `
+        <tr>
+          <td>${reason.name}</td>
+          <td>${reason.category || "-"}</td>
+          <td>${reason.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE}</td>
+          <td>
+            <span class="badge ${
+              reason.stockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+                ? "info-badge"
+                : "muted-badge"
+            }">
+              ${
+                reason.stockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+                  ? "Can affect stock"
+                  : "Record only"
+              }
+            </span>
+          </td>
+          <td>
+            <span class="badge ${reason.active !== false ? "" : "muted-badge"}">
+              ${reason.active !== false ? "Active" : "Inactive"}
+            </span>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button class="tiny-button" data-edit-delivery-reason="${reason.id}">Edit</button>
+              <button class="tiny-button" data-toggle-delivery-reason="${reason.id}">
+                ${reason.active !== false ? "Disable" : "Enable"}
+              </button>
+              <button class="tiny-button danger" data-remove-delivery-reason="${reason.id}">Remove</button>
             </div>
           </td>
         </tr>
@@ -320,6 +460,76 @@ function getSystemSetupManagerContent(activeManager) {
     `;
   }
 
+  if (activeManager === "delivery-issue-reasons") {
+    return `
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Manage Delivery Issue Reasons</h3>
+            <p>
+              These reasons will be used when resolving Delivery Issues. Only
+              “Add Back to Commissary Stock” affects stock. All other reasons are record-only.
+            </p>
+          </div>
+
+          <button class="ghost-button" id="reset-delivery-issue-reasons">
+            Reset Defaults
+          </button>
+        </div>
+
+        <div class="instruction-box">
+          <strong>Stock Safety Rule:</strong>
+          <span>
+            Waste, missing items, driver issues, damage, spoilage, and input errors should normally use
+            “No Stock Movement.” Only recovered usable items should use “Add Back to Commissary Stock.”
+          </span>
+        </div>
+
+        <form id="add-delivery-issue-reason-form" class="mini-form stacked">
+          <input
+            id="delivery-reason-name"
+            type="text"
+            placeholder="Example: Damaged by rider"
+            required
+          />
+
+          <input
+            id="delivery-reason-category"
+            type="text"
+            placeholder="Example: Delivery Damage"
+            required
+          />
+
+          <select id="delivery-reason-stock-action" required>
+            ${renderDeliveryReasonStockActionOptions(
+              DMC_SETTINGS_STOCK_ACTIONS.NONE
+            )}
+          </select>
+
+          <button class="primary-button" type="submit">Add Reason</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reason</th>
+                <th>Category</th>
+                <th>Stock Action</th>
+                <th>Behavior</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderDeliveryIssueReasonRows(settings)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
   return "";
 }
 
@@ -327,6 +537,10 @@ function getSettingsContent() {
   const settings = getStoredSettings();
   const activeManager = window.DMC_ACTIVE_SETTINGS_MANAGER || "operating-areas";
   const systemOpen = window.DMC_SYSTEM_SETUP_OPEN !== false;
+
+  const activeDeliveryReasons = settings.deliveryIssueReasons.filter(
+    (reason) => reason.active !== false
+  ).length;
 
   return `
     <section class="grid">
@@ -349,6 +563,11 @@ function getSettingsContent() {
         <p>Units</p>
         <strong>${settings.units.length}</strong>
       </div>
+
+      <div class="card">
+        <p>Delivery Reasons</p>
+        <strong>${activeDeliveryReasons}</strong>
+      </div>
     </section>
 
     <section class="panel">
@@ -356,7 +575,7 @@ function getSettingsContent() {
         <div>
           <h3>Settings Dashboard</h3>
           <p>
-            Manage dropdown choices and setup lists. For now, we are testing System Setup first.
+            Manage dropdown choices and setup lists. System Setup now includes Delivery Issue Reasons.
           </p>
         </div>
         <button class="ghost-button">Prototype Settings</button>
@@ -367,7 +586,7 @@ function getSettingsContent() {
           <div class="settings-category-icon">⚙</div>
           <div>
             <h4>System Setup</h4>
-            <p>Operating Areas, Departments, Sections, Units, and Item Categories.</p>
+            <p>Operating Areas, Departments, Sections, Units, and Delivery Issue Reasons.</p>
           </div>
           <span class="badge">${systemOpen ? "Open" : "Closed"}</span>
         </button>
@@ -409,7 +628,7 @@ function getSettingsContent() {
               <div>
                 <h3>System Setup Dropdown Manager</h3>
                 <p>
-                  Choose what you want to manage. These options will later feed dropdowns in the Master List.
+                  Choose what you want to manage. These options will feed dropdowns and workflow controls.
                 </p>
               </div>
             </div>
@@ -426,6 +645,9 @@ function getSettingsContent() {
               </button>
               <button class="manager-tab ${activeManager === "units" ? "active" : ""}" data-settings-manager="units">
                 Units
+              </button>
+              <button class="manager-tab ${activeManager === "delivery-issue-reasons" ? "active" : ""}" data-settings-manager="delivery-issue-reasons">
+                Delivery Issue Reasons
               </button>
               <button class="manager-tab disabled" type="button">
                 Item Categories Soon
@@ -466,6 +688,7 @@ function setupSettingsEvents() {
   setupDepartmentEvents();
   setupSectionEvents();
   setupUnitEvents();
+  setupDeliveryIssueReasonEvents();
 }
 
 function setupOperatingAreaEvents() {
@@ -736,11 +959,150 @@ function setupUnitEvents() {
   });
 }
 
+function setupDeliveryIssueReasonEvents() {
+  const form = document.getElementById("add-delivery-issue-reason-form");
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const settings = getStoredSettings();
+      const name = document.getElementById("delivery-reason-name").value.trim();
+      const category = document
+        .getElementById("delivery-reason-category")
+        .value.trim();
+      const stockAction = document.getElementById(
+        "delivery-reason-stock-action"
+      ).value;
+
+      if (!name) return;
+
+      const newReasonId = slugifySetting(name);
+
+      const alreadyExists = settings.deliveryIssueReasons.some(
+        (reason) =>
+          reason.id === newReasonId ||
+          String(reason.name || "").toLowerCase() === name.toLowerCase()
+      );
+
+      if (alreadyExists) {
+        alert("That delivery issue reason already exists.");
+        return;
+      }
+
+      settings.deliveryIssueReasons.push({
+        id: newReasonId,
+        name,
+        category: category || "Custom",
+        stockAction: stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE,
+        active: true
+      });
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  const resetButton = document.getElementById("reset-delivery-issue-reasons");
+
+  if (resetButton) {
+    resetButton.addEventListener("click", () => {
+      const confirmed = confirm("Reset Delivery Issue Reasons to defaults?");
+
+      if (!confirmed) return;
+
+      const settings = getStoredSettings();
+      settings.deliveryIssueReasons = getDefaultDeliveryIssueReasons();
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-delivery-reason]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const reason = settings.deliveryIssueReasons.find(
+        (item) => item.id === button.dataset.editDeliveryReason
+      );
+
+      if (!reason) return;
+
+      const newName = prompt("Edit Reason name:", reason.name);
+
+      if (!newName || !newName.trim()) return;
+
+      const newCategory = prompt(
+        "Edit Category:",
+        reason.category || "Custom"
+      );
+
+      if (!newCategory || !newCategory.trim()) return;
+
+      const currentStockAction =
+        reason.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE;
+
+      const stockActionInput = prompt(
+        `Edit Stock Action:\nType 1 for ${DMC_SETTINGS_STOCK_ACTIONS.NONE}\nType 2 for ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}`,
+        currentStockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+          ? "2"
+          : "1"
+      );
+
+      const newStockAction =
+        stockActionInput === "2"
+          ? DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+          : DMC_SETTINGS_STOCK_ACTIONS.NONE;
+
+      reason.name = newName.trim();
+      reason.category = newCategory.trim();
+      reason.stockAction = newStockAction;
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-toggle-delivery-reason]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const reason = settings.deliveryIssueReasons.find(
+        (item) => item.id === button.dataset.toggleDeliveryReason
+      );
+
+      if (!reason) return;
+
+      reason.active = reason.active === false;
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-delivery-reason]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const settings = getStoredSettings();
+      const reasonId = button.dataset.removeDeliveryReason;
+
+      const confirmed = confirm("Remove this Delivery Issue Reason?");
+
+      if (!confirmed) return;
+
+      settings.deliveryIssueReasons = settings.deliveryIssueReasons.filter(
+        (reason) => reason.id !== reasonId
+      );
+
+      saveSettings(settings);
+      refreshSettingsPage();
+    });
+  });
+}
+
 window.DMC_PAGES.settings = {
   eyebrow: "System",
   title: "Settings",
   description:
-    "Manage system setup options like operating areas, departments, sections, and units.",
+    "Manage system setup options like operating areas, departments, sections, units, and delivery issue reasons.",
   getContent: getSettingsContent,
   content: getSettingsContent(),
   afterRender: setupSettingsEvents
