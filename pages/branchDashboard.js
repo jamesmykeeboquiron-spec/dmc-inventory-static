@@ -185,7 +185,17 @@ function renderBranchDashboardStatCard(label, value, helper, variant) {
   `;
 }
 
-function renderBranchDashboardOrderList(limit = 3) {
+function renderBranchDashboardPanelPreview(value, label, helper) {
+  return `
+    <div class="branch-dashboard-panel-preview">
+      <strong>${value}</strong>
+      <p>${label}</p>
+      <span>${helper}</span>
+    </div>
+  `;
+}
+
+function renderBranchDashboardOrderList(limit = 20) {
   const orders = getRecentBranchDashboardOrders(limit);
 
   if (orders.length === 0) {
@@ -227,7 +237,7 @@ function renderBranchDashboardOrderList(limit = 3) {
   `;
 }
 
-function renderBranchDashboardIncomingDeliveries(limit = 3) {
+function renderBranchDashboardIncomingDeliveries(limit = 20) {
   const incomingOrders = getBranchDashboardIncomingDeliveries(limit);
 
   if (incomingOrders.length === 0) {
@@ -264,7 +274,7 @@ function renderBranchDashboardIncomingDeliveries(limit = 3) {
   `;
 }
 
-function renderBranchDashboardIssues(limit = 2) {
+function renderBranchDashboardIssues(limit = 20) {
   const issues = getRecentBranchDashboardIssues(limit);
 
   if (issues.length === 0) {
@@ -304,7 +314,7 @@ function renderBranchDashboardIssues(limit = 2) {
   `;
 }
 
-function renderBranchDashboardLedgerActivity(limit = 3) {
+function renderBranchDashboardLedgerActivity(limit = 20) {
   const entries = getRecentBranchDashboardLedgerEntries(limit);
 
   if (entries.length === 0) {
@@ -446,6 +456,10 @@ function renderBranchDashboardExpandedPanel() {
 
 function getBranchDashboardContent() {
   const summary = getBranchDashboardSummary();
+  const incomingCount = getBranchDashboardIncomingDeliveries(1000).length;
+  const recentOrderCount = getRecentBranchDashboardOrders(1000).length;
+  const recentIssueCount = getRecentBranchDashboardIssues(1000).length;
+  const recentLedgerCount = getRecentBranchDashboardLedgerEntries(1000).length;
 
   return `
     <section class="branch-dashboard-hero">
@@ -500,7 +514,11 @@ function getBranchDashboardContent() {
         "Deliveries currently on the way to the branch.",
         "Live",
         "live-tag",
-        renderBranchDashboardIncomingDeliveries(3)
+        renderBranchDashboardPanelPreview(
+          incomingCount,
+          incomingCount === 1 ? "delivery on the way" : "deliveries on the way",
+          "Open to view driver, sent time, and order details."
+        )
       )}
 
       ${renderBranchDashboardPanel(
@@ -509,7 +527,11 @@ function getBranchDashboardContent() {
         "Latest order activity and fulfillment status.",
         "Orders",
         "",
-        renderBranchDashboardOrderList(3)
+        renderBranchDashboardPanelPreview(
+          recentOrderCount,
+          recentOrderCount === 1 ? "recent order update" : "recent order updates",
+          "Open to review recent submitted, completed, or variance orders."
+        )
       )}
 
       ${renderBranchDashboardPanel(
@@ -518,7 +540,11 @@ function getBranchDashboardContent() {
         "Recent variance, missing, damaged, or resolved issues.",
         "Review",
         "review-tag",
-        renderBranchDashboardIssues(2)
+        renderBranchDashboardPanelPreview(
+          recentIssueCount,
+          recentIssueCount === 1 ? "delivery issue record" : "delivery issue records",
+          "Open to review issue status, reason, and resolution outcome."
+        )
       )}
 
       ${renderBranchDashboardPanel(
@@ -527,7 +553,11 @@ function getBranchDashboardContent() {
         "Latest branch-side Ledger movements.",
         "Ledger",
         "",
-        renderBranchDashboardLedgerActivity(3)
+        renderBranchDashboardPanelPreview(
+          recentLedgerCount,
+          recentLedgerCount === 1 ? "recent stock movement" : "recent stock movements",
+          "Open to view Transfer In, usage, waste, and other branch activity."
+        )
       )}
     </section>
 
