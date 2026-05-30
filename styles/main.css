@@ -4185,3 +4185,283 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     backdrop-filter: none !important;
   }
 }
+/* =========================================================
+   DMC INVENTORY — MOBILE OPTIMIZATION
+   Keeps glass theme but improves phone/tablet usability
+========================================================= */
+
+@media (max-width: 900px) {
+  body {
+    background-size: auto, auto, 34px 34px, 34px 34px;
+  }
+
+  .app {
+    display: block;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    max-height: none;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(240, 192, 79, 0.16);
+  }
+
+  .brand {
+    margin-bottom: 12px;
+    padding: 0 4px 12px;
+  }
+
+  .brand small {
+    font-size: 9px;
+    letter-spacing: 0.26em;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    margin-top: 6px;
+  }
+
+  .sidebar nav {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x proximity;
+  }
+
+  .nav-section {
+    min-width: 220px;
+    margin-bottom: 0;
+    scroll-snap-align: start;
+  }
+
+  .nav-title {
+    font-size: 10px;
+    margin-left: 8px;
+    margin-bottom: 8px;
+    letter-spacing: 0.24em;
+  }
+
+  .nav-link {
+    padding: 10px 11px;
+    font-size: 13px;
+    border-radius: 14px;
+    white-space: nowrap;
+  }
+
+  .nav-icon {
+    width: 18px;
+    font-size: 14px;
+  }
+
+  .nav-badge {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .main {
+    padding: 16px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 22px;
+    margin-bottom: 18px;
+  }
+
+  .topbar h2,
+  #page-title {
+    font-size: 26px;
+  }
+
+  .topbar p,
+  #page-description {
+    font-size: 13px;
+  }
+
+  .status-pill {
+    width: fit-content;
+    font-size: 11px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .card strong {
+    font-size: 26px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 22px;
+    margin-bottom: 16px;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .form-actions {
+    flex-wrap: wrap;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .tiny-button {
+    min-height: 40px;
+  }
+
+  .filter-bar {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .filter-search {
+    min-width: 0;
+  }
+
+  .table-wrap {
+    border-radius: 16px;
+    overflow-x: auto;
+  }
+
+  table {
+    min-width: 760px;
+  }
+
+  th,
+  td {
+    padding: 11px 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 620px) {
+  .main {
+    padding: 12px;
+  }
+
+  .sidebar {
+    padding: 12px;
+  }
+
+  .sidebar nav {
+    gap: 8px;
+  }
+
+  .nav-section {
+    min-width: 190px;
+  }
+
+  .nav-link {
+    font-size: 12px;
+    padding: 9px 10px;
+  }
+
+  .topbar {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .topbar h2,
+  #page-title {
+    font-size: 23px;
+  }
+
+  .eyebrow,
+  #page-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  .card p {
+    font-size: 11px;
+  }
+
+  .card strong {
+    font-size: 25px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .settings-category-grid,
+  .settings-subsection-grid,
+  .settings-grid,
+  .reports-grid,
+  .branch-dashboard-live-grid,
+  .branch-dashboard-stats,
+  .purchase-order-meta-grid,
+  .shopping-list-print-summary,
+  .branch-order-info-grid,
+  .review-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .branch-orders-layout,
+  .delivery-issues-layout,
+  .ledger-workbench-layout,
+  .place-order-layout,
+  .shopping-list-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .branch-order-list-panel,
+  .branch-order-detail,
+  .purchase-order-detail,
+  .shopping-list-detail,
+  .ledger-workbench-control,
+  .ledger-workbench-detail {
+    min-height: auto;
+  }
+
+  .branch-order-list-item,
+  .dashboard-mini-item,
+  .shopping-list-log-card,
+  .selected-order-line,
+  .order-cart-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .branch-order-list-meta {
+    justify-content: flex-start;
+  }
+
+  .primary-button,
+  .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
