@@ -12,6 +12,9 @@ window.DMC_MASTER_LIST_FILTERS = window.DMC_MASTER_LIST_FILTERS || {
 window.DMC_MASTER_LIST_EDITING_ITEM_ID =
   window.DMC_MASTER_LIST_EDITING_ITEM_ID || null;
 
+window.DMC_MASTER_LIST_FORM_OPEN =
+  window.DMC_MASTER_LIST_FORM_OPEN || false;
+
 function getMasterListDefaultItems() {
   return window.DMC_DATA?.masterList?.items || [];
 }
@@ -172,6 +175,45 @@ function updateItemIdPreview() {
   );
 }
 
+function showMasterListModal({ type, title, message, confirmLabel }) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel
+    });
+    return;
+  }
+
+  alert(message);
+}
+
+function showMasterListConfirm({
+  type,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm
+}) {
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      onConfirm
+    });
+    return;
+  }
+
+  if (confirm(message)) {
+    onConfirm();
+  }
+}
+
 function getFilteredMasterListItems() {
   const filters = window.DMC_MASTER_LIST_FILTERS;
   const items = getStoredMasterListItems();
@@ -308,6 +350,11 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
   const selectedUnit =
     editingItem?.unit || getSettingOptionName(settings.units[0]) || "";
 
+  const selectedItemId =
+    editingItem?.itemId || getNextItemId(selectedDepartment, selectedSection);
+
+  const panelIsOpen = isEditing || window.DMC_MASTER_LIST_FORM_OPEN;
+
   return `
     <section class="panel">
       <div class="panel-header">
@@ -324,7 +371,7 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
         </button>
       </div>
 
-      <div class="add-item-panel ${isEditing ? "" : "hidden"}" id="add-item-panel">
+      <div class="add-item-panel ${panelIsOpen ? "" : "hidden"}" id="add-item-panel">
         <h4 id="master-list-form-title">
           ${isEditing ? "Edit Master List Item" : "Item Form"}
         </h4>
@@ -365,7 +412,7 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
               id="itemId"
               type="text"
               placeholder="Auto-generated"
-              value="${editingItem?.itemId || ""}"
+              value="${selectedItemId}"
               required
             />
           </label>
@@ -519,20 +566,27 @@ function refreshMasterListPage() {
 
 function openAddItemPanel() {
   window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+  window.DMC_MASTER_LIST_FORM_OPEN = true;
   refreshMasterListPage();
-
-  const addItemPanel = document.getElementById("add-item-panel");
-
-  if (addItemPanel) {
-    addItemPanel.classList.remove("hidden");
-  }
-
   updateItemIdPreview();
 }
 
 function cancelMasterListForm() {
   window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+  window.DMC_MASTER_LIST_FORM_OPEN = false;
   refreshMasterListPage();
+}
+
+function clearMasterListFormFields() {
+  const officialItemName = document.getElementById("officialItemName");
+  const minimumStock = document.getElementById("minimumStock");
+  const notes = document.getElementById("notes");
+
+  if (officialItemName) officialItemName.value = "";
+  if (minimumStock) minimumStock.value = "";
+  if (notes) notes.value = "";
+
+  updateItemIdPreview();
 }
 
 function isDuplicateItemId(itemId, originalItemId = null) {
@@ -616,6 +670,7 @@ function setupMasterListEvents() {
   document.querySelectorAll("[data-edit-master-item]").forEach((button) => {
     button.addEventListener("click", () => {
       window.DMC_MASTER_LIST_EDITING_ITEM_ID = button.dataset.editMasterItem;
+      window.DMC_MASTER_LIST_FORM_OPEN = true;
       refreshMasterListPage();
     });
   });
@@ -623,18 +678,22 @@ function setupMasterListEvents() {
   document.querySelectorAll("[data-remove-master-item]").forEach((button) => {
     button.addEventListener("click", () => {
       const itemId = button.dataset.removeMasterItem;
-      const confirmed = confirm(`Remove item ${itemId} from Master List?`);
 
-      if (!confirmed) {
-        return;
-      }
+      showMasterListConfirm({
+        type: "danger",
+        title: "Remove Master List Item?",
+        message: `This will remove item ${itemId} from the Master List. This cannot be undone from this screen.`,
+        confirmLabel: "Remove Item",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          const updatedItems = getStoredMasterListItems().filter(
+            (item) => item.itemId !== itemId
+          );
 
-      const updatedItems = getStoredMasterListItems().filter(
-        (item) => item.itemId !== itemId
-      );
-
-      saveMasterListItems(updatedItems);
-      refreshMasterListPage();
+          saveMasterListItems(updatedItems);
+          refreshMasterListPage();
+        }
+      });
     });
   });
 
@@ -660,34 +719,63 @@ function setupMasterListEvents() {
       };
 
       if (!savedItem.operatingArea) {
-        alert("Please add or select an Operating Area before saving this item.");
+        showMasterListModal({
+          type: "warning",
+          title: "Operating Area Required",
+          message:
+            "Please add or select an Operating Area before saving this item.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (!savedItem.department) {
-        alert("Please add or select a Department before saving this item.");
+        showMasterListModal({
+          type: "warning",
+          title: "Department Required",
+          message: "Please add or select a Department before saving this item.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (!savedItem.section) {
-        alert("Please add or select a Section before saving this item.");
+        showMasterListModal({
+          type: "warning",
+          title: "Section Required",
+          message: "Please add or select a Section before saving this item.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (!savedItem.unit) {
-        alert("Please add or select a Unit before saving this item.");
+        showMasterListModal({
+          type: "warning",
+          title: "Unit Required",
+          message: "Please add or select a Unit before saving this item.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (!savedItem.itemId) {
-        alert("Please add or generate an Item ID before saving this item.");
+        showMasterListModal({
+          type: "warning",
+          title: "Item ID Required",
+          message: "Please add or generate an Item ID before saving this item.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (isDuplicateItemId(savedItem.itemId, originalItemId)) {
-        alert(
-          `Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`
-        );
+        showMasterListModal({
+          type: "warning",
+          title: "Duplicate Item ID",
+          message: `Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`,
+          confirmLabel: "Got it"
+        });
         return;
       }
 
@@ -702,8 +790,29 @@ function setupMasterListEvents() {
       saveMasterListItems(updatedItems);
 
       window.DMC_MASTER_LIST_EDITING_ITEM_ID = null;
+      window.DMC_MASTER_LIST_FORM_OPEN = true;
+
       refreshMasterListPage();
+
+      showMasterListModal({
+        type: "success",
+        title: isEditing ? "Item Updated" : "Item Saved",
+        message: isEditing
+          ? "The item was updated successfully. The form will stay open so you can continue adding or editing items."
+          : "The item was saved successfully. The form will stay open so you can add the next item.",
+        confirmLabel: "Continue"
+      });
+
+      if (!isEditing) {
+        setTimeout(clearMasterListFormFields, 0);
+      }
     });
+  }
+
+  const addItemPanel = document.getElementById("add-item-panel");
+
+  if (addItemPanel && !addItemPanel.classList.contains("hidden")) {
+    updateItemIdPreview();
   }
 }
 
