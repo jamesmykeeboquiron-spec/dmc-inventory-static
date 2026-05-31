@@ -196,6 +196,8 @@ window.DMC_MODAL_STATE = window.DMC_MODAL_STATE || {
   onConfirm: null
 };
 
+const DMC_DEFAULT_OPEN_NAV_SECTIONS = ["Overview", "Warehouse"];
+
 function getPages() {
   return {
     ...fallbackPages,
@@ -383,6 +385,62 @@ window.DMC_CONFIRM_MODAL = function ({
   renderGlobalModalOnly();
 };
 
+function getNavSectionTitle(section) {
+  return section.querySelector(".nav-title")?.textContent.trim() || "";
+}
+
+function openActiveSidebarSection(activeLink) {
+  if (!activeLink) {
+    return;
+  }
+
+  const activeSection = activeLink.closest(".nav-section");
+
+  if (activeSection) {
+    activeSection.classList.remove("collapsed");
+  }
+}
+
+function initializeSidebarSections() {
+  document.querySelectorAll(".nav-section").forEach((section) => {
+    const titleElement = section.querySelector(".nav-title");
+    const title = getNavSectionTitle(section);
+
+    if (!titleElement) {
+      return;
+    }
+
+    if (title === "Overview") {
+      section.classList.add("always-open");
+      section.classList.remove("collapsed");
+      return;
+    }
+
+    if (!DMC_DEFAULT_OPEN_NAV_SECTIONS.includes(title)) {
+      section.classList.add("collapsed");
+    }
+
+    if (titleElement.dataset.sidebarToggleReady === "true") {
+      return;
+    }
+
+    titleElement.dataset.sidebarToggleReady = "true";
+    titleElement.setAttribute("role", "button");
+    titleElement.setAttribute("tabindex", "0");
+
+    titleElement.addEventListener("click", () => {
+      section.classList.toggle("collapsed");
+    });
+
+    titleElement.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        section.classList.toggle("collapsed");
+      }
+    });
+  });
+}
+
 function renderPage(pageId) {
   const pages = getPages();
   const page = pages[pageId];
@@ -417,10 +475,13 @@ function renderPage(pageId) {
 
   if (activeLink) {
     activeLink.classList.add("active");
+    openActiveSidebarSection(activeLink);
   }
 
   renderGlobalModalOnly();
 }
+
+initializeSidebarSections();
 
 document.querySelectorAll(".nav-link").forEach((link) => {
   link.addEventListener("click", () => {
