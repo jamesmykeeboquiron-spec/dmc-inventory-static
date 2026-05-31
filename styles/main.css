@@ -5392,3 +5392,42 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     justify-content: center;
   }
 }
+/* =========================================================
+   COLLAPSIBLE SIDEBAR SECTIONS
+========================================================= */
+
+.nav-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-title::after {
+  content: "⌄";
+  color: var(--gold);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.nav-section.collapsed .nav-title::after {
+  content: "›";
+}
+
+.nav-section.always-open .nav-title {
+  cursor: default;
+}
+
+.nav-section.always-open .nav-title::after {
+  content: "";
+}
+
+.nav-section.collapsed .nav-link {
+  display: none;
+}
+
+.nav-section.collapsed {
+  margin-bottom: 14px;
+}
