@@ -133,6 +133,18 @@ const fallbackPages = {
   }
 };
 
+window.DMC_CURRENT_PAGE = window.DMC_CURRENT_PAGE || "dashboard";
+
+window.DMC_MODAL_STATE = window.DMC_MODAL_STATE || {
+  open: false,
+  type: "info",
+  title: "",
+  message: "",
+  confirmLabel: "OK",
+  cancelLabel: "",
+  onConfirm: null
+};
+
 function getPages() {
   return {
     ...fallbackPages,
@@ -154,6 +166,172 @@ function getComingSoonContent(page) {
   `;
 }
 
+function renderDmcModal() {
+  const modal = window.DMC_MODAL_STATE;
+
+  if (!modal.open) {
+    return "";
+  }
+
+  const icon =
+    modal.type === "success"
+      ? "✓"
+      : modal.type === "danger" || modal.type === "warning"
+      ? "!"
+      : "i";
+
+  return `
+    <div class="dmc-modal-overlay" id="dmc-modal-overlay">
+      <section class="dmc-modal-card ${modal.type}" id="dmc-modal-card">
+        <button class="dmc-modal-close" id="dmc-modal-close" type="button">
+          ×
+        </button>
+
+        <div class="dmc-modal-icon">
+          ${icon}
+        </div>
+
+        <div class="dmc-modal-content">
+          <h3>${modal.title || "Notice"}</h3>
+          <p>${modal.message || ""}</p>
+        </div>
+
+        <div class="dmc-modal-actions">
+          ${
+            modal.cancelLabel
+              ? `
+                <button class="ghost-button" id="dmc-modal-cancel" type="button">
+                  ${modal.cancelLabel}
+                </button>
+              `
+              : ""
+          }
+
+          <button
+            class="primary-button ${
+              modal.type === "danger" ? "danger-action" : ""
+            }"
+            id="dmc-modal-confirm"
+            type="button"
+          >
+            ${modal.confirmLabel || "OK"}
+          </button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderGlobalModalOnly() {
+  const existingModal = document.getElementById("dmc-modal-root");
+
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const modalRoot = document.createElement("div");
+  modalRoot.id = "dmc-modal-root";
+  modalRoot.innerHTML = renderDmcModal();
+
+  document.body.appendChild(modalRoot);
+
+  bindDmcModalEvents();
+}
+
+function closeDmcModal() {
+  window.DMC_MODAL_STATE = {
+    open: false,
+    type: "info",
+    title: "",
+    message: "",
+    confirmLabel: "OK",
+    cancelLabel: "",
+    onConfirm: null
+  };
+
+  renderGlobalModalOnly();
+}
+
+function bindDmcModalEvents() {
+  const modal = window.DMC_MODAL_STATE;
+
+  const overlay = document.getElementById("dmc-modal-overlay");
+  const card = document.getElementById("dmc-modal-card");
+  const closeButton = document.getElementById("dmc-modal-close");
+  const cancelButton = document.getElementById("dmc-modal-cancel");
+  const confirmButton = document.getElementById("dmc-modal-confirm");
+
+  if (overlay) {
+    overlay.addEventListener("click", closeDmcModal);
+  }
+
+  if (card) {
+    card.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  if (closeButton) {
+    closeButton.addEventListener("click", closeDmcModal);
+  }
+
+  if (cancelButton) {
+    cancelButton.addEventListener("click", closeDmcModal);
+  }
+
+  if (confirmButton) {
+    confirmButton.addEventListener("click", () => {
+      const onConfirm = modal.onConfirm;
+
+      closeDmcModal();
+
+      if (typeof onConfirm === "function") {
+        onConfirm();
+      }
+    });
+  }
+}
+
+window.DMC_SHOW_MODAL = function ({
+  type = "info",
+  title = "Notice",
+  message = "",
+  confirmLabel = "OK"
+}) {
+  window.DMC_MODAL_STATE = {
+    open: true,
+    type,
+    title,
+    message,
+    confirmLabel,
+    cancelLabel: "",
+    onConfirm: null
+  };
+
+  renderGlobalModalOnly();
+};
+
+window.DMC_CONFIRM_MODAL = function ({
+  type = "danger",
+  title = "Are you sure?",
+  message = "",
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  onConfirm = null
+}) {
+  window.DMC_MODAL_STATE = {
+    open: true,
+    type,
+    title,
+    message,
+    confirmLabel,
+    cancelLabel,
+    onConfirm
+  };
+
+  renderGlobalModalOnly();
+};
+
 function renderPage(pageId) {
   const pages = getPages();
   const page = pages[pageId];
@@ -162,6 +340,8 @@ function renderPage(pageId) {
     console.warn(`Page not found: ${pageId}`);
     return;
   }
+
+  window.DMC_CURRENT_PAGE = pageId;
 
   document.getElementById("page-eyebrow").textContent = page.eyebrow;
   document.getElementById("page-title").textContent = page.title;
@@ -187,6 +367,8 @@ function renderPage(pageId) {
   if (activeLink) {
     activeLink.classList.add("active");
   }
+
+  renderGlobalModalOnly();
 }
 
 document.querySelectorAll(".nav-link").forEach((link) => {
