@@ -98,16 +98,39 @@ function renderOptions(options, selectedValue = "", labelKey = "name") {
     .join("");
 }
 
-function renderSectionOptions(settings, selectedDepartmentName, selectedSection = "") {
+function getSectionsForDepartment(settings, selectedDepartmentNameOrId) {
   const selectedDepartment = settings.departments.find(
-    (department) => department.name === selectedDepartmentName
+    (department) =>
+      department.name === selectedDepartmentNameOrId ||
+      department.id === selectedDepartmentNameOrId
   );
 
-  const sectionOptions = selectedDepartment
-    ? settings.sections.filter(
-        (section) => section.departmentId === selectedDepartment.id
-      )
-    : settings.sections;
+  if (!selectedDepartment) {
+    return settings.sections || [];
+  }
+
+  return (settings.sections || []).filter(
+    (section) => section.departmentId === selectedDepartment.id
+  );
+}
+
+function renderSectionOptions(
+  settings,
+  selectedDepartmentName,
+  selectedSection = ""
+) {
+  const sectionOptions = getSectionsForDepartment(
+    settings,
+    selectedDepartmentName
+  );
+
+  if (sectionOptions.length === 0) {
+    return `
+      <option value="">
+        No sections available for this department
+      </option>
+    `;
+  }
 
   return renderOptions(sectionOptions, selectedSection);
 }
@@ -226,22 +249,19 @@ function renderDepartmentFilterOptions(settings) {
 function renderSectionFilterOptions(settings) {
   const filters = window.DMC_MASTER_LIST_FILTERS;
 
-  const selectedDepartment = settings.departments.find(
-    (department) => department.name === filters.department
+  const visibleSections = getSectionsForDepartment(
+    settings,
+    filters.department
   );
 
-  const visibleSections =
-    filters.department === "all" || !selectedDepartment
-      ? settings.sections
-      : settings.sections.filter(
-          (section) => section.departmentId === selectedDepartment.id
-        );
+  const sectionsToShow =
+    filters.department === "all" ? settings.sections || [] : visibleSections;
 
   return `
     <option value="all" ${filters.section === "all" ? "selected" : ""}>
       All Sections
     </option>
-    ${visibleSections
+    ${sectionsToShow
       .map(
         (section) => `
           <option value="${section.name}" ${
@@ -310,8 +330,13 @@ function getMasterListContent() {
   const selectedDepartment =
     editingItem?.department || settings.departments[0]?.name || "";
 
+  const availableSectionsForSelectedDepartment = getSectionsForDepartment(
+    settings,
+    selectedDepartment
+  );
+
   const selectedSection =
-    editingItem?.section || settings.sections[0]?.name || "";
+    editingItem?.section || availableSectionsForSelectedDepartment[0]?.name || "";
 
   const selectedUnit = editingItem?.unit || settings.units[0]?.name || "";
 
@@ -513,11 +538,27 @@ function updateSectionDropdown() {
     return;
   }
 
+  const currentSection = sectionSelect.value;
+  const availableSections = getSectionsForDepartment(
+    settings,
+    departmentSelect.value
+  );
+
+  const currentSectionStillValid = availableSections.some(
+    (section) => section.name === currentSection
+  );
+
+  const nextSelectedSection = currentSectionStillValid
+    ? currentSection
+    : availableSections[0]?.name || "";
+
   sectionSelect.innerHTML = renderSectionOptions(
     settings,
     departmentSelect.value,
-    sectionSelect.value
+    nextSelectedSection
   );
+
+  sectionSelect.value = nextSelectedSection;
 
   updateItemIdPreview();
 }
@@ -547,8 +588,10 @@ function isDuplicateItemId(itemId, originalItemId = null) {
       return false;
     }
 
-    return String(item.itemId || "").toLowerCase() ===
-      String(itemId || "").toLowerCase();
+    return (
+      String(item.itemId || "").toLowerCase() ===
+      String(itemId || "").toLowerCase()
+    );
   });
 }
 
@@ -664,8 +707,15 @@ function setupMasterListEvents() {
         notes: document.getElementById("notes").value.trim()
       };
 
+      if (!savedItem.section) {
+        alert("Please add or select a Section before saving this item.");
+        return;
+      }
+
       if (isDuplicateItemId(savedItem.itemId, originalItemId)) {
-        alert(`Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`);
+        alert(
+          `Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`
+        );
         return;
       }
 
