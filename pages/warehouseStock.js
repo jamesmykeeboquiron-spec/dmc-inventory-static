@@ -137,14 +137,14 @@ function getWarehouseStockStatus(item) {
   const minimumStock = Number(item.minimumStock || 0);
 
   if (currentStock <= 0) {
-    return "Out";
+    return "Out of Stock";
   }
 
   if (minimumStock > 0 && currentStock < minimumStock) {
-    return "Low";
+    return "Low Stock";
   }
 
-  return "OK";
+  return "In Stock";
 }
 
 function getWarehouseDepartments() {
@@ -182,11 +182,11 @@ function renderWarehouseSummaryCards() {
   const rows = getWarehouseStockRows();
 
   const lowStockCount = rows.filter(
-    (item) => getWarehouseStockStatus(item) === "Low"
+    (item) => getWarehouseStockStatus(item) === "Low Stock"
   ).length;
 
   const outOfStockCount = rows.filter(
-    (item) => getWarehouseStockStatus(item) === "Out"
+    (item) => getWarehouseStockStatus(item) === "Out of Stock"
   ).length;
 
   return `
@@ -229,7 +229,7 @@ function renderWarehouseDepartmentOptions() {
 
 function renderWarehouseStatusOptions() {
   const currentStatus = window.DMC_WAREHOUSE_STOCK_FILTERS.status;
-  const statuses = ["OK", "Low", "Out"];
+  const statuses = ["In Stock", "Low Stock", "Out of Stock"];
 
   return `
     <option value="all" ${currentStatus === "all" ? "selected" : ""}>
@@ -250,11 +250,11 @@ function renderWarehouseStatusOptions() {
 }
 
 function getWarehouseStatusBadgeClass(status) {
-  if (status === "Out") {
+  if (status === "Out of Stock") {
     return "danger";
   }
 
-  if (status === "Low") {
+  if (status === "Low Stock") {
     return "warning";
   }
 
