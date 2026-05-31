@@ -24,11 +24,13 @@
       <nav>
         <div class="nav-section">
           <div class="nav-title">Overview</div>
+
           <button class="nav-link active" data-page="dashboard">
             <span class="nav-icon">▦</span>
             <span>Dashboard</span>
             <span class="nav-badge">3</span>
           </button>
+
           <button class="nav-link" data-page="activity-log">
             <span class="nav-icon">◷</span>
             <span>Activity Log</span>
@@ -36,70 +38,126 @@
         </div>
 
         <div class="nav-section">
-          <div class="nav-title">Commissary</div>
-          <button class="nav-link" data-page="commissary-stock">
-            <span class="nav-icon">▧</span>
-            <span>Commissary Stock</span>
-          </button>
-          <button class="nav-link" data-page="commissary-log-transaction">
-            <span class="nav-icon">↕</span>
-            <span>Log Transaction</span>
+          <div class="nav-title">Warehouse</div>
+
+          <button class="nav-link" data-page="warehouse-dashboard">
+            <span class="nav-icon">▦</span>
+            <span>Warehouse Dashboard</span>
             <span class="nav-badge">New</span>
           </button>
-          <button class="nav-link" data-page="production">
-            <span class="nav-icon">⌁</span>
-            <span>Production</span>
+
+          <button class="nav-link" data-page="warehouse-stock">
+            <span class="nav-icon">▧</span>
+            <span>Warehouse Stock</span>
           </button>
+
+          <button class="nav-link" data-page="supplier-receiving">
+            <span class="nav-icon">▔</span>
+            <span>Supplier Receiving</span>
+          </button>
+
+          <button class="nav-link" data-page="purchase-orders">
+            <span class="nav-icon">▤</span>
+            <span>Purchase Orders</span>
+          </button>
+
+          <button class="nav-link" data-page="shopping-list">
+            <span class="nav-icon">☰</span>
+            <span>Shopping List</span>
+          </button>
+
           <button class="nav-link" data-page="branch-orders">
             <span class="nav-icon">▭</span>
             <span>Branch Orders</span>
+            <span class="nav-badge">Upgrade</span>
           </button>
+
+          <button class="nav-link" data-page="delivery-log">
+            <span class="nav-icon">▔</span>
+            <span>Delivery Log</span>
+          </button>
+
           <button class="nav-link" data-page="delivery-issues">
             <span class="nav-icon">⚠</span>
             <span>Delivery Issues</span>
             <span class="nav-badge">Review</span>
           </button>
-          <button class="nav-link" data-page="purchase-orders">
-            <span class="nav-icon">▤</span>
-            <span>Purchase Orders</span>
+
+          <button class="nav-link" data-page="warehouse-log-transaction">
+            <span class="nav-icon">↕</span>
+            <span>Warehouse Log Transaction</span>
           </button>
-          <button class="nav-link" data-page="shopping-list">
-            <span class="nav-icon">☰</span>
-            <span>Shopping List</span>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">Commissary</div>
+
+          <button class="nav-link" data-page="commissary-dashboard">
+            <span class="nav-icon">▦</span>
+            <span>Commissary Dashboard</span>
+            <span class="nav-badge">New</span>
           </button>
-          <button class="nav-link" data-page="delivery-log">
-            <span class="nav-icon">▔</span>
-            <span>Delivery Log</span>
+
+          <button class="nav-link" data-page="commissary-stock">
+            <span class="nav-icon">▧</span>
+            <span>Commissary Stock</span>
+          </button>
+
+          <button class="nav-link" data-page="commissary-orders">
+            <span class="nav-icon">＋</span>
+            <span>C. Place Orders</span>
+          </button>
+
+          <button class="nav-link" data-page="production">
+            <span class="nav-icon">⌁</span>
+            <span>Production</span>
+          </button>
+
+          <button class="nav-link" data-page="finished-product-transfer">
+            <span class="nav-icon">▭</span>
+            <span>Finished Product Transfer</span>
+          </button>
+
+          <button class="nav-link" data-page="commissary-log-transaction">
+            <span class="nav-icon">↕</span>
+            <span>Commissary Log Transaction</span>
           </button>
         </div>
 
         <div class="nav-section">
           <div class="nav-title">DMC-Iriga Branch</div>
+
           <button class="nav-link" data-page="branch-dashboard">
             <span class="nav-icon">▦</span>
             <span>Branch Dashboard</span>
           </button>
+
           <button class="nav-link" data-page="branch-stock">
             <span class="nav-icon">▧</span>
             <span>Branch Stock</span>
           </button>
+
           <button class="nav-link" data-page="place-order">
             <span class="nav-icon">＋</span>
             <span>Place Order</span>
           </button>
+
           <button class="nav-link" data-page="incoming-deliveries">
             <span class="nav-icon">▔</span>
             <span>Incoming Deliveries</span>
           </button>
+
           <button class="nav-link" data-page="branch-log-transaction">
             <span class="nav-icon">↕</span>
-            <span>Log Transaction</span>
+            <span>Branch Log Transaction</span>
             <span class="nav-badge">New</span>
           </button>
+
           <button class="nav-link" data-page="order-history">
             <span class="nav-icon">◷</span>
             <span>Order History</span>
           </button>
+
           <button class="nav-link" data-page="reports">
             <span class="nav-icon">≡</span>
             <span>Branch Reports</span>
@@ -108,18 +166,22 @@
 
         <div class="nav-section">
           <div class="nav-title">System</div>
+
           <button class="nav-link" data-page="master-list">
             <span class="nav-icon">▥</span>
             <span>Master List</span>
           </button>
+
           <button class="nav-link" data-page="staff-access">
             <span class="nav-icon">♟</span>
             <span>Staff & Access</span>
           </button>
+
           <button class="nav-link" data-page="settings">
             <span class="nav-icon">●</span>
             <span>Settings</span>
           </button>
+
           <button class="nav-link" data-page="ledger">
             <span class="nav-icon">▤</span>
             <span>Ledger</span>
