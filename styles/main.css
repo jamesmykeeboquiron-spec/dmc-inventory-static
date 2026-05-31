@@ -5481,3 +5481,58 @@ td .badge {
   background: rgba(255, 92, 92, 0.12);
   color: #ffa6a6;
 }
+
+/* =========================================================
+   WAREHOUSE STOCK FILTER LAYOUT
+========================================================= */
+
+.warehouse-stock-filter-shell {
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+}
+
+.warehouse-stock-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.2fr) 220px 180px auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.warehouse-stock-filter-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-stock-filter-grid input,
+.warehouse-stock-filter-grid select {
+  height: 44px;
+}
+
+.warehouse-stock-filter-grid button {
+  height: 44px;
+  align-self: end;
+}
+
+.badge.success {
+  border-color: rgba(86, 243, 154, 0.28);
+  background: rgba(86, 243, 154, 0.12);
+  color: #9af0c4;
+}
+
+td .badge {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .warehouse-stock-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
