@@ -19,58 +19,109 @@ const fallbackPages = {
       "The main item catalog for ingredients, packaging, cleaning supplies, and other inventory items."
   },
 
+  "warehouse-dashboard": {
+    eyebrow: "Warehouse",
+    title: "Warehouse Dashboard",
+    description:
+      "Overview of warehouse stock alerts, low stock items, pending orders, and warehouse movement activity."
+  },
+
+  "warehouse-stock": {
+    eyebrow: "Warehouse",
+    title: "Warehouse Stock",
+    description:
+      "Shows actual warehouse stock based on supplier receiving, transfers, waste, and adjustments."
+  },
+
+  "supplier-receiving": {
+    eyebrow: "Warehouse",
+    title: "Supplier Receiving",
+    description:
+      "Records items received from suppliers into the warehouse."
+  },
+
+  "warehouse-log-transaction": {
+    eyebrow: "Warehouse",
+    title: "Warehouse Log Transaction",
+    description:
+      "Records warehouse receiving, transfer out, waste, adjustment, and stock movement activity."
+  },
+
   "commissary-stock": {
     eyebrow: "Commissary",
     title: "Commissary Stock",
-    description: "Tracks available stock inside the commissary storage area."
+    description:
+      "Tracks stock available inside the commissary production center."
+  },
+
+  "commissary-dashboard": {
+    eyebrow: "Commissary",
+    title: "Commissary Dashboard",
+    description:
+      "Overview of commissary stock, production needs, orders, and finished product activity."
+  },
+
+  "commissary-orders": {
+    eyebrow: "Commissary",
+    title: "C. Place Orders",
+    description:
+      "Allows the commissary to order raw materials or needed stock from the warehouse."
   },
 
   "commissary-log-transaction": {
     eyebrow: "Commissary",
-    title: "Log Transaction",
+    title: "Commissary Log Transaction",
     description:
-      "Records commissary receiving, usage, waste, transfers, and adjustments."
+      "Records commissary receiving, usage, waste, production movement, and adjustments."
+  },
+
+  "finished-product-transfer": {
+    eyebrow: "Commissary",
+    title: "Finished Product Transfer",
+    description:
+      "Records finished products made by commissary and transferred back to warehouse."
   },
 
   production: {
     eyebrow: "Commissary",
     title: "Production",
     description:
-      "Future area for commissary production batches, prep output, and internal usage."
+      "Area for commissary production batches, prep output, and internal usage."
   },
 
   "branch-orders": {
-    eyebrow: "Commissary",
+    eyebrow: "Warehouse",
     title: "Branch Orders",
     description:
-      "Shows branch requests waiting for commissary review, preparation, and fulfillment."
+      "Shows branch and commissary requests waiting for warehouse review, preparation, and fulfillment."
   },
 
   "delivery-issues": {
-    eyebrow: "Commissary",
+    eyebrow: "Warehouse",
     title: "Delivery Issues",
     description:
       "Review delivery variances before deciding whether items are waste, returned stock, missing, or input error."
   },
 
   "purchase-orders": {
-    eyebrow: "Commissary",
+    eyebrow: "Warehouse",
     title: "Purchase Orders",
-    description: "Tracks supplier purchase orders and external purchasing needs."
+    description:
+      "Tracks supplier purchase orders and external purchasing needs for warehouse stock."
   },
 
   "shopping-list": {
-    eyebrow: "Commissary",
+    eyebrow: "Warehouse",
     title: "Shopping List",
     description:
-      "A practical list of items to buy based on low stock, branch needs, and manual requests."
+      "A practical list of items to buy based on low stock, branch needs, commissary needs, and manual requests."
   },
 
   "delivery-log": {
-    eyebrow: "Commissary",
+    eyebrow: "Warehouse",
     title: "Delivery Log",
     description:
-      "Tracks deliveries sent from commissary to branches or received from suppliers."
+      "Tracks deliveries sent from warehouse to commissary, branches, or received from suppliers."
   },
 
   "branch-dashboard": {
@@ -89,7 +140,7 @@ const fallbackPages = {
   "place-order": {
     eyebrow: "DMC-Iriga Branch",
     title: "Place Order",
-    description: "Allows a branch to request stock from commissary."
+    description: "Allows a branch to request stock from warehouse."
   },
 
   "incoming-deliveries": {
@@ -100,7 +151,7 @@ const fallbackPages = {
 
   "branch-log-transaction": {
     eyebrow: "DMC-Iriga Branch",
-    title: "Log Transaction",
+    title: "Branch Log Transaction",
     description:
       "Records branch usage, waste, adjustments, receiving, and transfers."
   },
@@ -122,14 +173,14 @@ const fallbackPages = {
     eyebrow: "System",
     title: "Settings",
     description:
-      "Future area for company settings, locations, categories, units, and system preferences."
+      "Manage setup categories, reusable dropdown options, units, people, and system preferences."
   },
 
   ledger: {
     eyebrow: "System",
     title: "Ledger",
     description:
-      "Complete inventory movement history across commissary and branches."
+      "Complete inventory movement history across warehouse, commissary, and branches."
   }
 };
 
