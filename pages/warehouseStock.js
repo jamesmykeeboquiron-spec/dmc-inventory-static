@@ -345,34 +345,36 @@ function renderWarehouseStockPanel() {
         <span class="badge">Actual Stock</span>
       </div>
 
-      <div class="filter-bar">
-        <label class="filter-search">
-          Search
-          <input
-            id="warehouse-stock-search"
-            type="text"
-            placeholder="Search item name or Item ID..."
-            value="${window.DMC_WAREHOUSE_STOCK_FILTERS.search}"
-          />
-        </label>
+      <div class="warehouse-stock-filter-shell">
+        <div class="warehouse-stock-filter-grid">
+          <label>
+            Search
+            <input
+              id="warehouse-stock-search"
+              type="text"
+              placeholder="Search item name or Item ID..."
+              value="${window.DMC_WAREHOUSE_STOCK_FILTERS.search}"
+            />
+          </label>
 
-        <label>
-          Department
-          <select id="warehouse-stock-department-filter">
-            ${renderWarehouseDepartmentOptions()}
-          </select>
-        </label>
+          <label>
+            Department
+            <select id="warehouse-stock-department-filter">
+              ${renderWarehouseDepartmentOptions()}
+            </select>
+          </label>
 
-        <label>
-          Status
-          <select id="warehouse-stock-status-filter">
-            ${renderWarehouseStatusOptions()}
-          </select>
-        </label>
+          <label>
+            Status
+            <select id="warehouse-stock-status-filter">
+              ${renderWarehouseStatusOptions()}
+            </select>
+          </label>
 
-        <button class="ghost-button" id="clear-warehouse-stock-filters">
-          Clear
-        </button>
+          <button class="ghost-button" id="clear-warehouse-stock-filters">
+            Clear
+          </button>
+        </div>
       </div>
 
       <div class="table-wrap">
