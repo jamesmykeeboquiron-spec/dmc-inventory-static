@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DMC Inventory System</title>
   <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://vxfeqriscnqavyafwagb.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_fTwItIQEQZDd514bOBvzfQ_Pmwz-Cuw';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
 </head>
 
 <body>
@@ -27,12 +33,10 @@
             <span class="nav-icon">◷</span>
             <span>Activity Log</span>
           </button>
-          
         </div>
 
         <div class="nav-section">
           <div class="nav-title">Commissary</div>
-          
           <button class="nav-link" data-page="commissary-stock">
             <span class="nav-icon">▧</span>
             <span>Commissary Stock</span>
@@ -50,12 +54,11 @@
             <span class="nav-icon">▭</span>
             <span>Branch Orders</span>
           </button>
-
           <button class="nav-link" data-page="delivery-issues">
-  <span class="nav-icon">⚠</span>
-  <span>Delivery Issues</span>
-  <span class="nav-badge">Review</span>
-</button>
+            <span class="nav-icon">⚠</span>
+            <span>Delivery Issues</span>
+            <span class="nav-badge">Review</span>
+          </button>
           <button class="nav-link" data-page="purchase-orders">
             <span class="nav-icon">▤</span>
             <span>Purchase Orders</span>
@@ -97,18 +100,17 @@
             <span class="nav-icon">◷</span>
             <span>Order History</span>
           </button>
-
-        <button class="nav-link" data-page="reports">
-        <span class="nav-icon">≡</span>
-        <span>Branch Reports</span>
-        </button>
+          <button class="nav-link" data-page="reports">
+            <span class="nav-icon">≡</span>
+            <span>Branch Reports</span>
+          </button>
         </div>
 
         <div class="nav-section">
           <div class="nav-title">System</div>
           <button class="nav-link" data-page="master-list">
-          <span class="nav-icon">▥</span>
-          <span>Master List</span>
+            <span class="nav-icon">▥</span>
+            <span>Master List</span>
           </button>
           <button class="nav-link" data-page="staff-access">
             <span class="nav-icon">♟</span>
@@ -132,41 +134,38 @@
           <p class="eyebrow" id="page-eyebrow">Overview</p>
           <h2 id="page-title">Dashboard</h2>
           <p id="page-description">
-            Static prototype for the DMC Inventory System.
+            DMC Inventory System — Connected to Supabase.
           </p>
         </div>
-
-        <span class="status-pill">GitHub + Render Static Site</span>
+        <span class="status-pill">Connected to Supabase</span>
       </header>
 
       <div id="page-content"></div>
     </main>
   </div>
 
-<script src="data/settingsData.js"></script>
-<script src="data/masterListData.js"></script>
-<script src="data/commissaryStockData.js"></script>
-<script src="data/ledgerData.js"></script>
+  <!-- Settings still local for now -->
+  <script src="data/settingsData.js"></script>
 
-<script src="pages/dashboard.js"></script>
+  <!-- Pages -->
+  <script src="pages/dashboard.js"></script>
   <script src="pages/branchDashboard.js"></script>
-<script src="pages/masterList.js"></script>
-<script src="pages/settings.js"></script>
-<script src="pages/commissaryStock.js"></script>
-<script src="pages/branchLogTransaction.js"></script>
-<script src="pages/ledger.js"></script>
-<script src="pages/reports.js"></script>
-<script src="pages/branchStock.js"></script>
-<script src="pages/placeOrder.js"></script>
+  <script src="pages/masterList.js"></script>
+  <script src="pages/settings.js"></script>
+  <script src="pages/commissaryStock.js"></script>
+  <script src="pages/branchLogTransaction.js"></script>
+  <script src="pages/ledger.js"></script>
+  <script src="pages/reports.js"></script>
+  <script src="pages/branchStock.js"></script>
+  <script src="pages/placeOrder.js"></script>
   <script src="pages/branchOrders.js"></script>
-   <script src="pages/deliveryIssues.js"></script>
+  <script src="pages/deliveryIssues.js"></script>
   <script src="pages/deliveryLog.js"></script>
   <script src="pages/orderHistory.js"></script>
   <script src="pages/incomingDeliveries.js"></script>
   <script src="pages/commissaryLogTransaction.js"></script>
- 
   <script src="pages/purchaseOrders.js"></script>
   <script src="pages/shoppingList.js"></script>
-<script src="scripts/app.js"></script>
+  <script src="scripts/app.js"></script>
 </body>
 </html>
