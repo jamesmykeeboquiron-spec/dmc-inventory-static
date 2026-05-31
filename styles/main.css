@@ -5439,6 +5439,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   min-width: 150px;
 }
 
+.badge.success {
+  border-color: rgba(86, 243, 154, 0.28);
+  background: rgba(86, 243, 154, 0.12);
+  color: #9af0c4;
+}
+
+td .badge {
+  white-space: nowrap;
+}
 .stock-level-meta {
   display: flex;
   justify-content: space-between;
