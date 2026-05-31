@@ -34,44 +34,70 @@ function saveMasterListItems(items) {
   localStorage.setItem(DMC_MASTER_LIST_STORAGE_KEY, JSON.stringify(items));
 }
 
-function getMasterListSettings() {
-  const defaultSettings = window.DMC_DATA?.settings || {
-    operatingAreas: [],
-    departments: [],
-    sections: [],
-    units: []
+function normalizeMasterListSettings(settings) {
+  return {
+    operatingAreas: settings.operatingAreas || [],
+    departments: settings.departments || [],
+    sections: settings.sections || [],
+    units: settings.units || []
   };
+}
+
+function getMasterListSettings() {
+  const defaultSettings = normalizeMasterListSettings(
+    window.DMC_DATA?.settings || {
+      operatingAreas: [],
+      departments: [],
+      sections: [],
+      units: []
+    }
+  );
 
   const storedSettings = localStorage.getItem(
     DMC_SETTINGS_STORAGE_KEY_FOR_MASTER_LIST
   );
 
   if (!storedSettings) {
-    return {
-      operatingAreas: defaultSettings.operatingAreas || [],
-      departments: defaultSettings.departments || [],
-      sections: defaultSettings.sections || [],
-      units: defaultSettings.units || []
-    };
+    return defaultSettings;
   }
 
   try {
-    const parsedSettings = JSON.parse(storedSettings);
-
-    return {
-      operatingAreas: parsedSettings.operatingAreas || [],
-      departments: parsedSettings.departments || [],
-      sections: parsedSettings.sections || [],
-      units: parsedSettings.units || []
-    };
+    return normalizeMasterListSettings(JSON.parse(storedSettings));
   } catch {
-    return {
-      operatingAreas: defaultSettings.operatingAreas || [],
-      departments: defaultSettings.departments || [],
-      sections: defaultSettings.sections || [],
-      units: defaultSettings.units || []
-    };
+    return defaultSettings;
   }
+}
+
+function getSettingOptionName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || "";
+}
+
+function renderOptions(options, selectedValue = "") {
+  if (!options || options.length === 0) {
+    return `
+      <option value="">
+        No options available
+      </option>
+    `;
+  }
+
+  return options
+    .map((option) => {
+      const optionName = getSettingOptionName(option);
+
+      return `
+        <option value="${optionName}" ${
+        selectedValue === optionName ? "selected" : ""
+      }>
+          ${optionName}
+        </option>
+      `;
+    })
+    .join("");
 }
 
 function getEditingMasterListItem() {
@@ -82,57 +108,6 @@ function getEditingMasterListItem() {
   return getStoredMasterListItems().find(
     (item) => item.itemId === window.DMC_MASTER_LIST_EDITING_ITEM_ID
   );
-}
-
-function renderOptions(options, selectedValue = "", labelKey = "name") {
-  return options
-    .map(
-      (option) => `
-        <option value="${option[labelKey]}" ${
-        selectedValue === option[labelKey] ? "selected" : ""
-      }>
-          ${option[labelKey]}
-        </option>
-      `
-    )
-    .join("");
-}
-
-function getSectionsForDepartment(settings, selectedDepartmentNameOrId) {
-  const selectedDepartment = settings.departments.find(
-    (department) =>
-      department.name === selectedDepartmentNameOrId ||
-      department.id === selectedDepartmentNameOrId
-  );
-
-  if (!selectedDepartment) {
-    return settings.sections || [];
-  }
-
-  return (settings.sections || []).filter(
-    (section) => section.departmentId === selectedDepartment.id
-  );
-}
-
-function renderSectionOptions(
-  settings,
-  selectedDepartmentName,
-  selectedSection = ""
-) {
-  const sectionOptions = getSectionsForDepartment(
-    settings,
-    selectedDepartmentName
-  );
-
-  if (sectionOptions.length === 0) {
-    return `
-      <option value="">
-        No sections available for this department
-      </option>
-    `;
-  }
-
-  return renderOptions(sectionOptions, selectedSection);
 }
 
 function getCodePrefix(value) {
@@ -149,6 +124,11 @@ function getCodePrefix(value) {
 function getNextItemId(departmentName, sectionName) {
   const departmentCode = getCodePrefix(departmentName);
   const sectionCode = getCodePrefix(sectionName);
+
+  if (!departmentCode || !sectionCode) {
+    return "";
+  }
+
   const prefix = `${departmentCode}-${sectionCode}`;
 
   const matchingItems = getStoredMasterListItems().filter((item) =>
@@ -232,45 +212,41 @@ function renderDepartmentFilterOptions(settings) {
     <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
       All Departments
     </option>
-    ${settings.departments
-      .map(
-        (department) => `
-          <option value="${department.name}" ${
-          currentDepartment === department.name ? "selected" : ""
+    ${(settings.departments || [])
+      .map((department) => {
+        const departmentName = getSettingOptionName(department);
+
+        return `
+          <option value="${departmentName}" ${
+          currentDepartment === departmentName ? "selected" : ""
         }>
-            ${department.name}
+            ${departmentName}
           </option>
-        `
-      )
+        `;
+      })
       .join("")}
   `;
 }
 
 function renderSectionFilterOptions(settings) {
-  const filters = window.DMC_MASTER_LIST_FILTERS;
-
-  const visibleSections = getSectionsForDepartment(
-    settings,
-    filters.department
-  );
-
-  const sectionsToShow =
-    filters.department === "all" ? settings.sections || [] : visibleSections;
+  const currentSection = window.DMC_MASTER_LIST_FILTERS.section;
 
   return `
-    <option value="all" ${filters.section === "all" ? "selected" : ""}>
+    <option value="all" ${currentSection === "all" ? "selected" : ""}>
       All Sections
     </option>
-    ${sectionsToShow
-      .map(
-        (section) => `
-          <option value="${section.name}" ${
-          filters.section === section.name ? "selected" : ""
+    ${(settings.sections || [])
+      .map((section) => {
+        const sectionName = getSettingOptionName(section);
+
+        return `
+          <option value="${sectionName}" ${
+          currentSection === sectionName ? "selected" : ""
         }>
-            ${section.name}
+            ${sectionName}
           </option>
-        `
-      )
+        `;
+      })
       .join("")}
   `;
 }
@@ -317,59 +293,29 @@ function renderMasterListRows() {
     .join("");
 }
 
-function getMasterListContent() {
-  const allItems = getStoredMasterListItems();
-  const filteredItems = getFilteredMasterListItems();
-  const settings = getMasterListSettings();
-  const editingItem = getEditingMasterListItem();
-  const isEditing = Boolean(editingItem);
-
+function renderAddEditItemPanel(settings, editingItem, isEditing) {
   const selectedOperatingArea =
-    editingItem?.operatingArea || settings.operatingAreas[0]?.name || "";
+    editingItem?.operatingArea ||
+    getSettingOptionName(settings.operatingAreas[0]) ||
+    "";
 
   const selectedDepartment =
-    editingItem?.department || settings.departments[0]?.name || "";
-
-  const availableSectionsForSelectedDepartment = getSectionsForDepartment(
-    settings,
-    selectedDepartment
-  );
+    editingItem?.department || getSettingOptionName(settings.departments[0]) || "";
 
   const selectedSection =
-    editingItem?.section || availableSectionsForSelectedDepartment[0]?.name || "";
+    editingItem?.section || getSettingOptionName(settings.sections[0]) || "";
 
-  const selectedUnit = editingItem?.unit || settings.units[0]?.name || "";
+  const selectedUnit =
+    editingItem?.unit || getSettingOptionName(settings.units[0]) || "";
 
   return `
-    <section class="grid">
-      <div class="card">
-        <p>Showing Items</p>
-        <strong>${filteredItems.length}</strong>
-      </div>
-
-      <div class="card">
-        <p>Total Items</p>
-        <strong>${allItems.length}</strong>
-      </div>
-
-      <div class="card">
-        <p>Sections</p>
-        <strong>${settings.sections.length}</strong>
-      </div>
-
-      <div class="card">
-        <p>Units</p>
-        <strong>${settings.units.length}</strong>
-      </div>
-    </section>
-
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h3>Master List Item Catalog</h3>
+          <h3>Add / Edit Master List Item</h3>
           <p>
-            This catalog uses dropdown options from Settings for Operating Area,
-            Department, Section, and Unit.
+            Use this panel to create or update an item. Dropdowns come from the
+            Settings Setup Library.
           </p>
         </div>
 
@@ -380,8 +326,16 @@ function getMasterListContent() {
 
       <div class="add-item-panel ${isEditing ? "" : "hidden"}" id="add-item-panel">
         <h4 id="master-list-form-title">
-          ${isEditing ? "Edit Master List Item" : "Add Master List Item"}
+          ${isEditing ? "Edit Master List Item" : "Item Form"}
         </h4>
+
+        <div class="instruction-box">
+          <strong>Setup Library Connection:</strong>
+          <span>
+            Operating Area, Department, Section, and Unit are reusable dropdown
+            options from Settings. The item path is created here when the item is saved.
+          </span>
+        </div>
 
         <form id="add-item-form" class="form-grid">
           <label>
@@ -401,7 +355,7 @@ function getMasterListContent() {
           <label>
             Section
             <select id="section" required>
-              ${renderSectionOptions(settings, selectedDepartment, selectedSection)}
+              ${renderOptions(settings.sections, selectedSection)}
             </select>
           </label>
 
@@ -447,14 +401,20 @@ function getMasterListContent() {
           <label>
             Active
             <select id="active" required>
-              <option value="true" ${editingItem?.active !== false ? "selected" : ""}>TRUE</option>
-              <option value="false" ${editingItem?.active === false ? "selected" : ""}>FALSE</option>
+              <option value="true" ${
+                editingItem?.active !== false ? "selected" : ""
+              }>TRUE</option>
+              <option value="false" ${
+                editingItem?.active === false ? "selected" : ""
+              }>FALSE</option>
             </select>
           </label>
 
           <label class="form-full">
             Notes
-            <textarea id="notes" rows="3" placeholder="Optional notes">${editingItem?.notes || ""}</textarea>
+            <textarea id="notes" rows="3" placeholder="Optional notes">${
+              editingItem?.notes || ""
+            }</textarea>
           </label>
 
           <div class="form-actions form-full">
@@ -466,6 +426,23 @@ function getMasterListContent() {
             </button>
           </div>
         </form>
+      </div>
+    </section>
+  `;
+}
+
+function renderFullMasterListPanel(settings) {
+  return `
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Full Master List</h3>
+          <p>
+            Review, filter, edit, or remove saved item records.
+          </p>
+        </div>
+
+        <span class="badge">Item Records</span>
       </div>
 
       <div class="filter-bar">
@@ -524,43 +501,20 @@ function getMasterListContent() {
   `;
 }
 
+function getMasterListContent() {
+  const settings = getMasterListSettings();
+  const editingItem = getEditingMasterListItem();
+  const isEditing = Boolean(editingItem);
+
+  return `
+    ${renderAddEditItemPanel(settings, editingItem, isEditing)}
+    ${renderFullMasterListPanel(settings)}
+  `;
+}
+
 function refreshMasterListPage() {
   window.DMC_PAGES["master-list"].content = getMasterListContent();
   renderPage("master-list");
-}
-
-function updateSectionDropdown() {
-  const settings = getMasterListSettings();
-  const departmentSelect = document.getElementById("department");
-  const sectionSelect = document.getElementById("section");
-
-  if (!departmentSelect || !sectionSelect) {
-    return;
-  }
-
-  const currentSection = sectionSelect.value;
-  const availableSections = getSectionsForDepartment(
-    settings,
-    departmentSelect.value
-  );
-
-  const currentSectionStillValid = availableSections.some(
-    (section) => section.name === currentSection
-  );
-
-  const nextSelectedSection = currentSectionStillValid
-    ? currentSection
-    : availableSections[0]?.name || "";
-
-  sectionSelect.innerHTML = renderSectionOptions(
-    settings,
-    departmentSelect.value,
-    nextSelectedSection
-  );
-
-  sectionSelect.value = nextSelectedSection;
-
-  updateItemIdPreview();
 }
 
 function openAddItemPanel() {
@@ -573,7 +527,6 @@ function openAddItemPanel() {
     addItemPanel.classList.remove("hidden");
   }
 
-  updateSectionDropdown();
   updateItemIdPreview();
 }
 
@@ -620,7 +573,7 @@ function setupMasterListEvents() {
   }
 
   if (departmentSelect) {
-    departmentSelect.addEventListener("change", updateSectionDropdown);
+    departmentSelect.addEventListener("change", updateItemIdPreview);
   }
 
   if (sectionSelect) {
@@ -630,7 +583,6 @@ function setupMasterListEvents() {
   if (departmentFilter) {
     departmentFilter.addEventListener("change", () => {
       window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
-      window.DMC_MASTER_LIST_FILTERS.section = "all";
       refreshMasterListPage();
     });
   }
@@ -707,8 +659,28 @@ function setupMasterListEvents() {
         notes: document.getElementById("notes").value.trim()
       };
 
+      if (!savedItem.operatingArea) {
+        alert("Please add or select an Operating Area before saving this item.");
+        return;
+      }
+
+      if (!savedItem.department) {
+        alert("Please add or select a Department before saving this item.");
+        return;
+      }
+
       if (!savedItem.section) {
         alert("Please add or select a Section before saving this item.");
+        return;
+      }
+
+      if (!savedItem.unit) {
+        alert("Please add or select a Unit before saving this item.");
+        return;
+      }
+
+      if (!savedItem.itemId) {
+        alert("Please add or generate an Item ID before saving this item.");
         return;
       }
 
