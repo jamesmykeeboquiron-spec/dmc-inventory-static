@@ -1,13 +1,12 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_WAREHOUSE_STOCK_MASTER_LIST_KEY = "dmc_master_list_items";
-const DMC_WAREHOUSE_STOCK_FILTERS = window.DMC_WAREHOUSE_STOCK_FILTERS || {
+
+window.DMC_WAREHOUSE_STOCK_FILTERS = window.DMC_WAREHOUSE_STOCK_FILTERS || {
   department: "all",
   status: "all",
   search: ""
 };
-
-window.DMC_WAREHOUSE_STOCK_FILTERS = DMC_WAREHOUSE_STOCK_FILTERS;
 
 const warehouseStockSampleRows = [
   {
@@ -121,6 +120,7 @@ function normalizeWarehouseMasterItem(item) {
 
 function getWarehouseStockRows() {
   const masterListItems = getStoredWarehouseMasterListItems();
+
   const warehouseItems = masterListItems
     .filter(itemBelongsToWarehouse)
     .map(normalizeWarehouseMasterItem);
@@ -137,14 +137,14 @@ function getWarehouseStockStatus(item) {
   const minimumStock = Number(item.minimumStock || 0);
 
   if (currentStock <= 0) {
-    return "Out of Stock";
+    return "Out";
   }
 
   if (minimumStock > 0 && currentStock < minimumStock) {
-    return "Low Stock";
+    return "Low";
   }
 
-  return "In Stock";
+  return "OK";
 }
 
 function getWarehouseDepartments() {
@@ -182,11 +182,11 @@ function renderWarehouseSummaryCards() {
   const rows = getWarehouseStockRows();
 
   const lowStockCount = rows.filter(
-    (item) => getWarehouseStockStatus(item) === "Low Stock"
+    (item) => getWarehouseStockStatus(item) === "Low"
   ).length;
 
   const outOfStockCount = rows.filter(
-    (item) => getWarehouseStockStatus(item) === "Out of Stock"
+    (item) => getWarehouseStockStatus(item) === "Out"
   ).length;
 
   return `
@@ -229,8 +229,7 @@ function renderWarehouseDepartmentOptions() {
 
 function renderWarehouseStatusOptions() {
   const currentStatus = window.DMC_WAREHOUSE_STOCK_FILTERS.status;
-
-  const statuses = ["In Stock", "Low Stock", "Out of Stock"];
+  const statuses = ["OK", "Low", "Out"];
 
   return `
     <option value="all" ${currentStatus === "all" ? "selected" : ""}>
@@ -251,20 +250,21 @@ function renderWarehouseStatusOptions() {
 }
 
 function getWarehouseStatusBadgeClass(status) {
-  if (status === "Out of Stock") {
+  if (status === "Out") {
     return "danger";
   }
 
-  if (status === "Low Stock") {
+  if (status === "Low") {
     return "warning";
   }
 
-  return "";
+  return "success";
 }
 
 function renderWarehouseStockLevel(item) {
   const currentStock = Number(item.currentStock || 0);
   const minimumStock = Number(item.minimumStock || 0);
+
   const percent = Math.min(
     100,
     Math.round((currentStock / Math.max(minimumStock, 1)) * 100)
