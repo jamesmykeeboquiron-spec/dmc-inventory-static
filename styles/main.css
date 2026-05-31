@@ -5536,3 +5536,48 @@ td .badge {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   MASTER LIST FILTER LAYOUT
+========================================================= */
+
+.master-list-filter-shell {
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+}
+
+.master-list-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.2fr) 220px 220px auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.master-list-filter-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.master-list-filter-grid input,
+.master-list-filter-grid select {
+  height: 44px;
+}
+
+.master-list-filter-grid button {
+  height: 44px;
+  align-self: end;
+}
+
+@media (max-width: 900px) {
+  .master-list-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
