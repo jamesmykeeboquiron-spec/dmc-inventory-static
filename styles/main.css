@@ -5431,3 +5431,44 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .nav-section.collapsed {
   margin-bottom: 14px;
 }
+/* =========================================================
+   WAREHOUSE STOCK PAGE
+========================================================= */
+
+.stock-level {
+  min-width: 150px;
+}
+
+.stock-level-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.stock-level-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.stock-level-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(240, 192, 79, 0.72);
+}
+
+.badge.warning {
+  border-color: rgba(240, 192, 79, 0.26);
+  background: rgba(240, 192, 79, 0.1);
+  color: var(--gold);
+}
+
+.badge.danger {
+  border-color: rgba(255, 92, 92, 0.28);
+  background: rgba(255, 92, 92, 0.12);
+  color: #ffa6a6;
+}
