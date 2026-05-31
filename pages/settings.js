@@ -8,6 +8,26 @@ const DMC_SETTINGS_STOCK_ACTIONS = {
   ADD_BACK_TO_COMMISSARY: "Add Back to Commissary Stock"
 };
 
+window.DMC_SELECTED_SETTINGS_CATEGORY =
+  window.DMC_SELECTED_SETTINGS_CATEGORY || "settings";
+
+window.DMC_SELECTED_SETUP_TYPE =
+  window.DMC_SELECTED_SETUP_TYPE || "operating-area";
+
+window.DMC_SETUP_LIBRARY_VIEW =
+  window.DMC_SETUP_LIBRARY_VIEW || "operatingAreas";
+
+window.DMC_SETUP_LIBRARY_SEARCH =
+  window.DMC_SETUP_LIBRARY_SEARCH || "";
+
+window.DMC_OPEN_SETUP_GROUPS =
+  window.DMC_OPEN_SETUP_GROUPS || {
+    systemMasterlist: true,
+    itemSetup: false,
+    operationalSetup: false,
+    warehouseReturn: false
+  };
+
 function getDefaultDeliveryIssueReasons() {
   return [
     {
@@ -75,6 +95,8 @@ function getDefaultSettings() {
     departments: [],
     sections: [],
     units: [],
+    staffNames: [],
+    managerNames: [],
     deliveryIssueReasons: getDefaultDeliveryIssueReasons()
   };
 }
@@ -85,6 +107,8 @@ function normalizeSettings(settings) {
     departments: settings.departments || [],
     sections: settings.sections || [],
     units: settings.units || [],
+    staffNames: settings.staffNames || [],
+    managerNames: settings.managerNames || [],
     deliveryIssueReasons:
       settings.deliveryIssueReasons || getDefaultDeliveryIssueReasons()
   };
@@ -119,546 +143,827 @@ function saveSettings(settings) {
 }
 
 function slugifySetting(value) {
-  return value
+  return String(value || "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 }
 
-function getAreaName(settings, areaId) {
-  return settings.operatingAreas.find((area) => area.id === areaId)?.name || "-";
+function getSettingCollectionKey(setupType) {
+  if (setupType === "operating-area") return "operatingAreas";
+  if (setupType === "department") return "departments";
+  if (setupType === "section") return "sections";
+  if (setupType === "unit") return "units";
+  if (setupType === "staff") return "staffNames";
+  if (setupType === "manager") return "managerNames";
+  if (setupType === "workflow") return "deliveryIssueReasons";
+
+  return "";
 }
 
-function getDepartmentName(settings, departmentId) {
-  return (
-    settings.departments.find((department) => department.id === departmentId)
-      ?.name || "-"
-  );
+function getSetupLabel(setupType) {
+  if (setupType === "operating-area") return "Operating Area";
+  if (setupType === "department") return "Department";
+  if (setupType === "section") return "Section";
+  if (setupType === "unit") return "Unit";
+  if (setupType === "staff") return "Staff";
+  if (setupType === "manager") return "Manager";
+  if (setupType === "workflow") return "Workflow Rule";
+
+  return "Setup Option";
 }
 
-function renderOperatingAreaOptions(settings) {
-  return settings.operatingAreas
-    .map((area) => `<option value="${area.id}">${area.name}</option>`)
-    .join("");
-}
-
-function renderDepartmentOptions(settings) {
-  return settings.departments
-    .map(
-      (department) =>
-        `<option value="${department.id}">${department.name}</option>`
-    )
-    .join("");
-}
-
-function renderDeliveryReasonStockActionOptions(currentAction) {
-  return `
-    <option value="${DMC_SETTINGS_STOCK_ACTIONS.NONE}" ${
-    currentAction === DMC_SETTINGS_STOCK_ACTIONS.NONE ? "selected" : ""
-  }>
-      ${DMC_SETTINGS_STOCK_ACTIONS.NONE}
-    </option>
-
-    <option value="${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}" ${
-    currentAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-      ? "selected"
-      : ""
-  }>
-      ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}
-    </option>
-  `;
-}
-
-function renderOperatingAreaRows(settings) {
-  if (settings.operatingAreas.length === 0) {
-    return `<tr><td colspan="4">No operating areas yet.</td></tr>`;
+function getSetupDescription(setupType) {
+  if (setupType === "operating-area") {
+    return "Operating Areas are reusable top-level options. Master List combines them with Department and Section when an item is created.";
   }
 
-  return settings.operatingAreas
-    .map(
-      (area) => `
-        <tr>
-          <td>${area.name}</td>
-          <td>${area.id}</td>
-          <td><span class="badge">Active</span></td>
-          <td>
-            <div class="row-actions">
-              <button class="tiny-button" data-edit-area="${area.id}">Edit</button>
-              <button class="tiny-button danger" data-remove-area="${area.id}">Remove</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-function renderDepartmentRows(settings) {
-  if (settings.departments.length === 0) {
-    return `<tr><td colspan="5">No departments yet.</td></tr>`;
+  if (setupType === "department") {
+    return "Departments are reusable dropdown options. They are not locked to an Operating Area here.";
   }
 
-  return settings.departments
-    .map(
-      (department) => `
-        <tr>
-          <td>${department.name}</td>
-          <td>${getAreaName(settings, department.operatingAreaId)}</td>
-          <td>${department.id}</td>
-          <td><span class="badge">Active</span></td>
-          <td>
-            <div class="row-actions">
-              <button class="tiny-button" data-edit-department="${department.id}">Edit</button>
-              <button class="tiny-button danger" data-remove-department="${department.id}">Remove</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-function renderSectionRows(settings) {
-  if (settings.sections.length === 0) {
-    return `<tr><td colspan="5">No sections yet.</td></tr>`;
+  if (setupType === "section") {
+    return "Sections are reusable dropdown options. They are not locked under a Department until an item is created in Master List.";
   }
 
-  return settings.sections
-    .map(
-      (section) => `
-        <tr>
-          <td>${section.name}</td>
-          <td>${getDepartmentName(settings, section.departmentId)}</td>
-          <td>${section.id}</td>
-          <td><span class="badge">Active</span></td>
-          <td>
-            <div class="row-actions">
-              <button class="tiny-button" data-edit-section="${section.id}">Edit</button>
-              <button class="tiny-button danger" data-remove-section="${section.id}">Remove</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-function renderUnitRows(settings) {
-  if (settings.units.length === 0) {
-    return `<tr><td colspan="4">No units yet.</td></tr>`;
+  if (setupType === "unit") {
+    return "Units are reusable item measurements. Master List applies the Unit when creating an item.";
   }
 
-  return settings.units
-    .map(
-      (unit) => `
-        <tr>
-          <td>${unit.name}</td>
-          <td>${unit.id}</td>
-          <td><span class="badge">Active</span></td>
-          <td>
-            <div class="row-actions">
-              <button class="tiny-button" data-edit-unit="${unit.id}">Edit</button>
-              <button class="tiny-button danger" data-remove-unit="${unit.id}">Remove</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-function renderDeliveryIssueReasonRows(settings) {
-  if (settings.deliveryIssueReasons.length === 0) {
-    return `<tr><td colspan="6">No delivery issue reasons yet.</td></tr>`;
+  if (setupType === "staff") {
+    return "Staff names become reusable accountability dropdown options for Prepared By, Received By, Counted By, and Handled By fields.";
   }
 
-  return settings.deliveryIssueReasons
-    .map(
-      (reason) => `
-        <tr>
-          <td>${reason.name}</td>
-          <td>${reason.category || "-"}</td>
-          <td>${reason.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE}</td>
-          <td>
-            <span class="badge ${
-              reason.stockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-                ? "info-badge"
-                : "muted-badge"
-            }">
-              ${
-                reason.stockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-                  ? "Can affect stock"
-                  : "Record only"
-              }
-            </span>
-          </td>
-          <td>
-            <span class="badge ${reason.active !== false ? "" : "muted-badge"}">
-              ${reason.active !== false ? "Active" : "Inactive"}
-            </span>
-          </td>
-          <td>
-            <div class="row-actions">
-              <button class="tiny-button" data-edit-delivery-reason="${reason.id}">Edit</button>
-              <button class="tiny-button" data-toggle-delivery-reason="${reason.id}">
-                ${reason.active !== false ? "Disable" : "Enable"}
-              </button>
-              <button class="tiny-button danger" data-remove-delivery-reason="${reason.id}">Remove</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-}
-
-function getSystemSetupManagerContent(activeManager) {
-  const settings = getStoredSettings();
-
-  if (activeManager === "operating-areas") {
-    return `
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h3>Manage Operating Areas</h3>
-            <p>Operating Areas are the top-level dropdown options, such as Branch/Station or Commissary.</p>
-          </div>
-        </div>
-
-        <form id="add-operating-area-form" class="mini-form">
-          <input id="operating-area-name" type="text" placeholder="Example: Branch/Station" required />
-          <button class="primary-button" type="submit">Add Area</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderOperatingAreaRows(settings)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    `;
+  if (setupType === "manager") {
+    return "Manager names become reusable accountability dropdown options for Ordered By, Approved By, Reviewed By, and Resolved By fields.";
   }
 
-  if (activeManager === "departments") {
-    return `
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h3>Manage Departments</h3>
-            <p>Departments belong under an Operating Area. Example: Bar under Branch/Station.</p>
-          </div>
-        </div>
-
-        <form id="add-department-form" class="mini-form stacked">
-          <select id="department-operating-area" required>
-            ${renderOperatingAreaOptions(settings)}
-          </select>
-          <input id="department-name" type="text" placeholder="Example: Bar" required />
-          <button class="primary-button" type="submit">Add Department</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Operating Area</th>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderDepartmentRows(settings)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    `;
-  }
-
-  if (activeManager === "sections") {
-    return `
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h3>Manage Sections</h3>
-            <p>Sections belong under a Department. Example: Coffee under Bar.</p>
-          </div>
-        </div>
-
-        <form id="add-section-form" class="mini-form stacked">
-          <select id="section-department" required>
-            ${renderDepartmentOptions(settings)}
-          </select>
-          <input id="section-name" type="text" placeholder="Example: Coffee" required />
-          <button class="primary-button" type="submit">Add Section</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Department</th>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderSectionRows(settings)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    `;
-  }
-
-  if (activeManager === "units") {
-    return `
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h3>Manage Units</h3>
-            <p>Units will be used in the Master List item form. Examples: kg, liters, pcs, pack, box, case, bag, bottle.</p>
-          </div>
-        </div>
-
-        <form id="add-unit-form" class="mini-form">
-          <input id="unit-name" type="text" placeholder="Example: gallon" required />
-          <button class="primary-button" type="submit">Add Unit</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderUnitRows(settings)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    `;
-  }
-
-  if (activeManager === "delivery-issue-reasons") {
-    return `
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h3>Manage Delivery Issue Reasons</h3>
-            <p>
-              These reasons will be used when resolving Delivery Issues. Only
-              “Add Back to Commissary Stock” affects stock. All other reasons are record-only.
-            </p>
-          </div>
-
-          <button class="ghost-button" id="reset-delivery-issue-reasons">
-            Reset Defaults
-          </button>
-        </div>
-
-        <div class="instruction-box">
-          <strong>Stock Safety Rule:</strong>
-          <span>
-            Waste, missing items, driver issues, damage, spoilage, and input errors should normally use
-            “No Stock Movement.” Only recovered usable items should use “Add Back to Commissary Stock.”
-          </span>
-        </div>
-
-        <form id="add-delivery-issue-reason-form" class="mini-form stacked">
-          <input
-            id="delivery-reason-name"
-            type="text"
-            placeholder="Example: Damaged by rider"
-            required
-          />
-
-          <input
-            id="delivery-reason-category"
-            type="text"
-            placeholder="Example: Delivery Damage"
-            required
-          />
-
-          <select id="delivery-reason-stock-action" required>
-            ${renderDeliveryReasonStockActionOptions(
-              DMC_SETTINGS_STOCK_ACTIONS.NONE
-            )}
-          </select>
-
-          <button class="primary-button" type="submit">Add Reason</button>
-        </form>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Reason</th>
-                <th>Category</th>
-                <th>Stock Action</th>
-                <th>Behavior</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderDeliveryIssueReasonRows(settings)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    `;
+  if (setupType === "workflow") {
+    return "Workflow Rules are used by inventory workflows, like Delivery Issues and stock action behavior.";
   }
 
   return "";
 }
 
-function getSettingsContent() {
-  const settings = getStoredSettings();
-  const activeManager = window.DMC_ACTIVE_SETTINGS_MANAGER || "operating-areas";
-  const systemOpen = window.DMC_SYSTEM_SETUP_OPEN !== false;
+function getSetupPlaceholder(setupType) {
+  if (setupType === "operating-area") return "Example: Branch/Station";
+  if (setupType === "department") return "Example: Bar";
+  if (setupType === "section") return "Example: Coffee";
+  if (setupType === "unit") return "Example: kg";
+  if (setupType === "staff") return "Example: Maria Santos";
+  if (setupType === "manager") return "Example: Manager Ana";
+  if (setupType === "workflow") return "Example: Damaged by rider";
 
-  const activeDeliveryReasons = settings.deliveryIssueReasons.filter(
-    (reason) => reason.active !== false
-  ).length;
+  return "Type option name";
+}
+
+function getSetupPreviewText(setupType) {
+  if (setupType === "operating-area") {
+    return "This will become available in the Master List Operating Area dropdown.";
+  }
+
+  if (setupType === "department") {
+    return "This will become available in the Master List Department dropdown.";
+  }
+
+  if (setupType === "section") {
+    return "This will become available in the Master List Section dropdown.";
+  }
+
+  if (setupType === "unit") {
+    return "This will become available in the Master List Unit dropdown.";
+  }
+
+  if (setupType === "staff") {
+    return "This will become available in operational dropdowns like Prepared By, Received By, and Counted By.";
+  }
+
+  if (setupType === "manager") {
+    return "This will become available in operational dropdowns like Ordered By, Approved By, Reviewed By, and Resolved By.";
+  }
+
+  if (setupType === "workflow") {
+    return "This will become available in Delivery Issue resolution workflows.";
+  }
+
+  return "This option will be saved in the Setup Library.";
+}
+
+function getSetupIcon(setupType) {
+  if (setupType === "operating-area") return "▧";
+  if (setupType === "department") return "▦";
+  if (setupType === "section") return "▩";
+  if (setupType === "unit") return "◌";
+  if (setupType === "staff") return "♙";
+  if (setupType === "manager") return "♔";
+  if (setupType === "workflow") return "⚠";
+
+  return "⚙";
+}
+
+function getCollectionDisplayName(collectionKey) {
+  if (collectionKey === "operatingAreas") return "Operating Areas";
+  if (collectionKey === "departments") return "Departments";
+  if (collectionKey === "sections") return "Sections";
+  if (collectionKey === "units") return "Units";
+  if (collectionKey === "staffNames") return "Staff Names";
+  if (collectionKey === "managerNames") return "Manager Names";
+  if (collectionKey === "deliveryIssueReasons") return "Workflow Rules";
+
+  return "Setup Options";
+}
+
+function getCollectionRowLabel(collectionKey) {
+  if (collectionKey === "operatingAreas") return "Operating Area Name";
+  if (collectionKey === "departments") return "Department Name";
+  if (collectionKey === "sections") return "Section Name";
+  if (collectionKey === "units") return "Unit Name";
+  if (collectionKey === "staffNames") return "Staff Name";
+  if (collectionKey === "managerNames") return "Manager Name";
+  if (collectionKey === "deliveryIssueReasons") return "Workflow Rule Name";
+
+  return "Option Name";
+}
+
+function getCollectionUsedFor(collectionKey, item) {
+  if (collectionKey === "operatingAreas") {
+    return "Used for Master List item path";
+  }
+
+  if (collectionKey === "departments") {
+    return "Available as a Master List dropdown option";
+  }
+
+  if (collectionKey === "sections") {
+    return "Available as a Master List dropdown option";
+  }
+
+  if (collectionKey === "units") {
+    return "Item measurement";
+  }
+
+  if (collectionKey === "staffNames") {
+    return "Prepared By / Received By / Counted By";
+  }
+
+  if (collectionKey === "managerNames") {
+    return "Ordered By / Approved By / Reviewed By";
+  }
+
+  if (collectionKey === "deliveryIssueReasons") {
+    return item.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE;
+  }
+
+  return "Reusable setup option";
+}
+
+function setupOptionExists(collection, name) {
+  return collection.some(
+    (item) => String(item.name || "").toLowerCase() === name.toLowerCase()
+  );
+}
+
+function createBasicSettingOption(name) {
+  return {
+    id: slugifySetting(name),
+    name,
+    active: true
+  };
+}
+
+function createWorkflowSettingOption(name, category, stockAction) {
+  return {
+    id: slugifySetting(name),
+    name,
+    category: category || "Custom",
+    stockAction: stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE,
+    active: true
+  };
+}
+
+function addSetupOption(setupType) {
+  const settings = getStoredSettings();
+  const collectionKey = getSettingCollectionKey(setupType);
+
+  if (!collectionKey) {
+    return;
+  }
+
+  const nameInput = document.getElementById("setup-option-name");
+  const categoryInput = document.getElementById("workflow-category");
+  const stockActionInput = document.getElementById("workflow-stock-action");
+
+  const name = nameInput?.value.trim();
+
+  if (!name) {
+    alert("Please enter a name first.");
+    return;
+  }
+
+  if (setupOptionExists(settings[collectionKey], name)) {
+    alert(`${getSetupLabel(setupType)} "${name}" already exists.`);
+    return;
+  }
+
+  if (setupType === "workflow") {
+    settings[collectionKey].push(
+      createWorkflowSettingOption(
+        name,
+        categoryInput?.value.trim(),
+        stockActionInput?.value
+      )
+    );
+  } else {
+    settings[collectionKey].push(createBasicSettingOption(name));
+  }
+
+  saveSettings(settings);
+  refreshSettingsPage();
+}
+
+function editSetupOption(collectionKey, optionId) {
+  const settings = getStoredSettings();
+  const collection = settings[collectionKey] || [];
+  const option = collection.find((item) => item.id === optionId);
+
+  if (!option) {
+    return;
+  }
+
+  const newName = prompt("Edit name:", option.name);
+
+  if (!newName || !newName.trim()) {
+    return;
+  }
+
+  option.name = newName.trim();
+
+  if (collectionKey === "deliveryIssueReasons") {
+    const newCategory = prompt("Edit category:", option.category || "Custom");
+
+    if (newCategory && newCategory.trim()) {
+      option.category = newCategory.trim();
+    }
+
+    const currentStockAction =
+      option.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE;
+
+    const stockActionInput = prompt(
+      `Edit Stock Action:\nType 1 for ${DMC_SETTINGS_STOCK_ACTIONS.NONE}\nType 2 for ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}`,
+      currentStockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+        ? "2"
+        : "1"
+    );
+
+    option.stockAction =
+      stockActionInput === "2"
+        ? DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+        : DMC_SETTINGS_STOCK_ACTIONS.NONE;
+  }
+
+  saveSettings(settings);
+  refreshSettingsPage();
+}
+
+function removeSetupOption(collectionKey, optionId) {
+  const settings = getStoredSettings();
+  const collection = settings[collectionKey] || [];
+  const option = collection.find((item) => item.id === optionId);
+
+  if (!option) {
+    return;
+  }
+
+  const confirmed = confirm(`Remove "${option.name}"?`);
+
+  if (!confirmed) {
+    return;
+  }
+
+  settings[collectionKey] = collection.filter((item) => item.id !== optionId);
+
+  saveSettings(settings);
+  refreshSettingsPage();
+}
+
+function toggleSetupGroup(groupKey) {
+  window.DMC_OPEN_SETUP_GROUPS[groupKey] = !window.DMC_OPEN_SETUP_GROUPS[
+    groupKey
+  ];
+
+  refreshSettingsPage();
+}
+
+function renderSetupGroup(groupKey, title, description, options) {
+  const isOpen = window.DMC_OPEN_SETUP_GROUPS[groupKey];
+  const activeInside = options.some(
+    (option) => option.type === window.DMC_SELECTED_SETUP_TYPE
+  );
 
   return `
-    <section class="grid">
-      <div class="card">
-        <p>Operating Areas</p>
-        <strong>${settings.operatingAreas.length}</strong>
-      </div>
+    <div class="settings-setup-group ${activeInside ? "active" : ""}">
+      <button class="settings-setup-group-header" data-toggle-setup-group="${groupKey}">
+        <span>
+          <strong>${title}</strong>
+          <small>${description}</small>
+        </span>
 
-      <div class="card">
-        <p>Departments</p>
-        <strong>${settings.departments.length}</strong>
-      </div>
+        <span class="settings-setup-group-meta">
+          ${activeInside ? `<i>Active</i>` : ""}
+          <b>${isOpen ? "⌄" : "›"}</b>
+        </span>
+      </button>
 
-      <div class="card">
-        <p>Sections</p>
-        <strong>${settings.sections.length}</strong>
-      </div>
+      ${
+        isOpen
+          ? `
+            <div class="settings-setup-option-list">
+              ${options.map(renderSetupOptionButton).join("")}
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
 
-      <div class="card">
-        <p>Units</p>
-        <strong>${settings.units.length}</strong>
-      </div>
+function renderSetupOptionButton(option) {
+  const active = window.DMC_SELECTED_SETUP_TYPE === option.type;
+  const disabled = option.disabled;
 
-      <div class="card">
-        <p>Delivery Reasons</p>
-        <strong>${activeDeliveryReasons}</strong>
-      </div>
-    </section>
+  return `
+    <button
+      class="settings-setup-option ${active ? "active" : ""} ${
+    disabled ? "disabled" : ""
+  }"
+      data-select-setup-type="${option.type}"
+      ${disabled ? "disabled" : ""}
+    >
+      <span class="settings-setup-option-icon">${option.icon}</span>
 
-    <section class="panel">
+      <span>
+        <strong>${option.label}</strong>
+        <small>${option.description}</small>
+      </span>
+
+      ${active && !disabled ? `<b>›</b>` : ""}
+    </button>
+  `;
+}
+
+function renderSettingsCategories() {
+  return `
+    <section class="panel settings-category-shell">
       <div class="panel-header">
         <div>
-          <h3>Settings Dashboard</h3>
+          <h3>Settings Categories</h3>
           <p>
-            Manage dropdown choices and setup lists. System Setup now includes Delivery Issue Reasons.
+            Choose the setup category to manage. More categories can be added later.
           </p>
         </div>
-        <button class="ghost-button">Prototype Settings</button>
+
+        <span class="badge">Categories</span>
       </div>
 
       <div class="settings-category-grid">
-        <button class="settings-category-card active clickable-card" id="toggle-system-setup">
+        <button
+          class="settings-category-card clickable-card ${
+            window.DMC_SELECTED_SETTINGS_CATEGORY === "settings" ? "active" : ""
+          }"
+          data-settings-category="settings"
+        >
           <div class="settings-category-icon">⚙</div>
           <div>
-            <h4>System Setup</h4>
-            <p>Operating Areas, Departments, Sections, Units, and Delivery Issue Reasons.</p>
+            <h4>Settings Category</h4>
+            <p>
+              Manage dropdown options used across Master List, Stock, Orders, and Reports.
+            </p>
           </div>
-          <span class="badge">${systemOpen ? "Open" : "Closed"}</span>
+          <span class="badge">Open</span>
         </button>
 
-        <article class="settings-category-card">
-          <div class="settings-category-icon">▧</div>
-          <div>
-            <h4>Inventory Setup</h4>
-            <p>Locations, Movement Types, Stock Statuses, and Order Statuses.</p>
-          </div>
-          <span class="badge muted-badge">Soon</span>
-        </article>
-
-        <article class="settings-category-card">
-          <div class="settings-category-icon">♟</div>
-          <div>
-            <h4>Admin Setup</h4>
-            <p>Staff Roles, Access Levels, and Permissions.</p>
-          </div>
-          <span class="badge muted-badge">Soon</span>
-        </article>
-
-        <article class="settings-category-card">
+        <button
+          class="settings-category-card disabled"
+          type="button"
+        >
           <div class="settings-category-icon">⌁</div>
           <div>
-            <h4>Future Setup</h4>
-            <p>Suppliers, Audit Rules, Report Settings, and future controls.</p>
+            <h4>Coming Soon Category</h4>
+            <p>
+              Future settings group for reports, audits, staff, or notifications.
+            </p>
           </div>
           <span class="badge muted-badge">Soon</span>
-        </article>
+        </button>
       </div>
     </section>
+  `;
+}
 
-    ${
-      systemOpen
-        ? `
-          <section class="panel">
-            <div class="panel-header">
-              <div>
-                <h3>System Setup Dropdown Manager</h3>
-                <p>
-                  Choose what you want to manage. These options will feed dropdowns and workflow controls.
-                </p>
-              </div>
+function renderSetupOptionsPanel() {
+  return `
+    <section class="panel settings-setup-options-panel">
+      <div class="panel-header">
+        <div>
+          <h3>Setup Options</h3>
+          <p>
+            Choose a setup group first, then pick what kind of reusable option to add.
+          </p>
+        </div>
+
+        <span class="badge">Step 1</span>
+      </div>
+
+      <div class="settings-setup-group-list">
+        ${renderSetupGroup("systemMasterlist", "System Masterlist Setup", "Options used to build an item path in Master List.", [
+          {
+            type: "operating-area",
+            icon: "▧",
+            label: "Operating Area",
+            description: "Reusable option such as Branch/Station or Commissary."
+          },
+          {
+            type: "department",
+            icon: "▦",
+            label: "Department",
+            description: "Reusable option such as Bar, Kitchen, or Dry Storage."
+          },
+          {
+            type: "section",
+            icon: "▩",
+            label: "Section",
+            description: "Reusable option such as Coffee, Dairy, Syrups, or Packaging."
+          }
+        ])}
+
+        ${renderSetupGroup("itemSetup", "Item Setup", "Options attached directly to item records.", [
+          {
+            type: "unit",
+            icon: "◌",
+            label: "Unit",
+            description: "Reusable item measurement such as kg, liter, bottle, or pcs."
+          }
+        ])}
+
+        ${renderSetupGroup("operationalSetup", "Operational Setup", "People options used for accountability in inventory actions.", [
+          {
+            type: "staff",
+            icon: "♙",
+            label: "Staff",
+            description: "Names of staff who prepare, receive, count, or handle items."
+          },
+          {
+            type: "manager",
+            icon: "♔",
+            label: "Manager",
+            description: "Names of managers who approve, order, resolve, or review items."
+          }
+        ])}
+
+        ${renderSetupGroup("warehouseReturn", "Warehouse Return Setup", "Rules for returns, issues, suppliers, and future warehouse controls.", [
+          {
+            type: "workflow",
+            icon: "⚠",
+            label: "Workflow Rule",
+            description: "Delivery issue reasons and stock-action rules."
+          },
+          {
+            type: "purchasing",
+            icon: "▤",
+            label: "Purchasing Setup",
+            description: "Suppliers, supplier items, and price history later.",
+            disabled: true
+          }
+        ])}
+      </div>
+    </section>
+  `;
+}
+
+function renderInputPanel() {
+  const setupType = window.DMC_SELECTED_SETUP_TYPE;
+  const label = getSetupLabel(setupType);
+  const icon = getSetupIcon(setupType);
+
+  if (setupType === "purchasing") {
+    return `
+      <section class="panel settings-input-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Purchasing Setup</h3>
+            <p>
+              Suppliers, supplier items, and price history will be added later
+              after the inventory foundation is stable.
+            </p>
+          </div>
+
+          <span class="badge muted-badge">Coming Soon</span>
+        </div>
+
+        <div class="settings-coming-soon-grid">
+          <div class="settings-subsection-card">
+            <h4>Suppliers</h4>
+            <p>Future purchasing setup.</p>
+          </div>
+
+          <div class="settings-subsection-card">
+            <h4>Supplier Items</h4>
+            <p>Future purchasing setup.</p>
+          </div>
+
+          <div class="settings-subsection-card">
+            <h4>Price History</h4>
+            <p>Future purchasing setup.</p>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel settings-input-panel">
+      <div class="panel-header">
+        <div>
+          <h3>${icon} Add ${label} Option</h3>
+          <p>${getSetupDescription(setupType)}</p>
+        </div>
+
+        <span class="badge">Step 2</span>
+      </div>
+
+      ${
+        setupType !== "unit" && setupType !== "workflow"
+          ? `
+            <div class="instruction-box">
+              <strong>Dropdown Pool Rule:</strong>
+              <span>
+                Settings stores reusable dropdown options only. The actual item path is
+                created later in Master List when an item is saved.
+              </span>
             </div>
+          `
+          : ""
+      }
 
-            <div class="settings-manager-tabs">
-              <button class="manager-tab ${activeManager === "operating-areas" ? "active" : ""}" data-settings-manager="operating-areas">
-                Operating Areas
+      ${
+        setupType === "staff" || setupType === "manager"
+          ? `
+            <div class="instruction-box">
+              <strong>Access Later:</strong>
+              <span>
+                This is only for accountability dropdowns for now. Login access and permissions
+                can be added later.
+              </span>
+            </div>
+          `
+          : ""
+      }
+
+      <form id="setup-option-form" class="form-grid settings-single-input-form">
+        <label class="form-full">
+          ${label} Name
+          <input
+            id="setup-option-name"
+            type="text"
+            placeholder="${getSetupPlaceholder(setupType)}"
+            required
+          />
+        </label>
+
+        ${
+          setupType === "workflow"
+            ? `
+              <label>
+                Category
+                <input
+                  id="workflow-category"
+                  type="text"
+                  placeholder="Example: Delivery Damage"
+                />
+              </label>
+
+              <label>
+                Stock Action
+                <select id="workflow-stock-action">
+                  <option value="${DMC_SETTINGS_STOCK_ACTIONS.NONE}">
+                    ${DMC_SETTINGS_STOCK_ACTIONS.NONE}
+                  </option>
+                  <option value="${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}">
+                    ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}
+                  </option>
+                </select>
+              </label>
+            `
+            : ""
+        }
+
+        <div class="settings-preview-box form-full">
+          <strong>Preview Result:</strong>
+          <span>${getSetupPreviewText(setupType)}</span>
+        </div>
+
+        <button class="primary-button form-full" type="submit">
+          Add ${label} Option
+        </button>
+      </form>
+    </section>
+  `;
+}
+
+function getLibraryRows(collectionKey) {
+  const settings = getStoredSettings();
+  const searchValue = String(window.DMC_SETUP_LIBRARY_SEARCH || "")
+    .toLowerCase()
+    .trim();
+
+  const rows = settings[collectionKey] || [];
+
+  if (!searchValue) {
+    return rows;
+  }
+
+  return rows.filter((item) => {
+    return (
+      String(item.name || "").toLowerCase().includes(searchValue) ||
+      String(item.category || "").toLowerCase().includes(searchValue) ||
+      String(item.stockAction || "").toLowerCase().includes(searchValue)
+    );
+  });
+}
+
+function renderSetupLibraryRows() {
+  const collectionKey = window.DMC_SETUP_LIBRARY_VIEW;
+  const rows = getLibraryRows(collectionKey);
+
+  if (rows.length === 0) {
+    return `
+      <tr>
+        <td colspan="4">No saved options found for this view.</td>
+      </tr>
+    `;
+  }
+
+  return rows
+    .map(
+      (item) => `
+        <tr>
+          <td>
+            <strong>${item.name || "-"}</strong>
+            ${
+              item.category
+                ? `<small class="table-subtext">${item.category}</small>`
+                : ""
+            }
+          </td>
+          <td>${getCollectionUsedFor(collectionKey, item)}</td>
+          <td>
+            <span class="badge ${item.active === false ? "muted-badge" : ""}">
+              ${item.active === false ? "Inactive" : "Active"}
+            </span>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button
+                class="tiny-button"
+                data-edit-setup-option="${item.id}"
+                data-setup-collection="${collectionKey}"
+              >
+                Edit
               </button>
-              <button class="manager-tab ${activeManager === "departments" ? "active" : ""}" data-settings-manager="departments">
-                Departments
-              </button>
-              <button class="manager-tab ${activeManager === "sections" ? "active" : ""}" data-settings-manager="sections">
-                Sections
-              </button>
-              <button class="manager-tab ${activeManager === "units" ? "active" : ""}" data-settings-manager="units">
-                Units
-              </button>
-              <button class="manager-tab ${activeManager === "delivery-issue-reasons" ? "active" : ""}" data-settings-manager="delivery-issue-reasons">
-                Delivery Issue Reasons
-              </button>
-              <button class="manager-tab disabled" type="button">
-                Item Categories Soon
+              <button
+                class="tiny-button danger"
+                data-remove-setup-option="${item.id}"
+                data-setup-collection="${collectionKey}"
+              >
+                Remove
               </button>
             </div>
-          </section>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
 
-          ${getSystemSetupManagerContent(activeManager)}
-        `
-        : ""
-    }
+function renderSetupLibrary() {
+  const collectionKey = window.DMC_SETUP_LIBRARY_VIEW;
+
+  return `
+    <section class="panel settings-library-panel">
+      <div class="panel-header">
+        <div>
+          <h3>Setup Library</h3>
+          <p>
+            Choose a setup list from the dropdown, then view or manage saved options
+            in a focused table.
+          </p>
+        </div>
+
+        <span class="badge">Saved Options</span>
+      </div>
+
+      <div class="filter-bar settings-library-toolbar">
+        <label>
+          View Saved Options
+          <select id="setup-library-view">
+            <option value="operatingAreas" ${
+              collectionKey === "operatingAreas" ? "selected" : ""
+            }>Operating Areas</option>
+            <option value="departments" ${
+              collectionKey === "departments" ? "selected" : ""
+            }>Departments</option>
+            <option value="sections" ${
+              collectionKey === "sections" ? "selected" : ""
+            }>Sections</option>
+            <option value="units" ${
+              collectionKey === "units" ? "selected" : ""
+            }>Units</option>
+            <option value="staffNames" ${
+              collectionKey === "staffNames" ? "selected" : ""
+            }>Staff Names</option>
+            <option value="managerNames" ${
+              collectionKey === "managerNames" ? "selected" : ""
+            }>Manager Names</option>
+            <option value="deliveryIssueReasons" ${
+              collectionKey === "deliveryIssueReasons" ? "selected" : ""
+            }>Workflow Rules</option>
+          </select>
+        </label>
+
+        <label class="filter-search">
+          Search Selected List
+          <input
+            id="setup-library-search"
+            type="text"
+            placeholder="Search setup option..."
+            value="${window.DMC_SETUP_LIBRARY_SEARCH}"
+          />
+        </label>
+
+        <button class="ghost-button" id="clear-setup-library-search">
+          Clear Search
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>${getCollectionRowLabel(collectionKey)}</th>
+              <th>Used For</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderSetupLibraryRows()}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function getSettingsContent() {
+  if (window.DMC_SELECTED_SETTINGS_CATEGORY !== "settings") {
+    return `
+      ${renderSettingsCategories()}
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Coming Soon</h3>
+            <p>
+              This future category can be used later for Reports Setup,
+              Audit Setup, Staff Setup, or Notifications.
+            </p>
+          </div>
+
+          <span class="badge muted-badge">Future</span>
+        </div>
+
+        <div class="coming-soon">
+          <div>
+            <h3>No tools here yet</h3>
+            <p>
+              We can add another category here when the inventory foundation needs it.
+            </p>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    ${renderSettingsCategories()}
+
+    <section class="settings-foundation-layout">
+      ${renderSetupOptionsPanel()}
+      ${renderInputPanel()}
+    </section>
+
+    ${renderSetupLibrary()}
   `;
 }
 
@@ -668,432 +973,84 @@ function refreshSettingsPage() {
 }
 
 function setupSettingsEvents() {
-  const toggleSystemSetup = document.getElementById("toggle-system-setup");
-
-  if (toggleSystemSetup) {
-    toggleSystemSetup.addEventListener("click", () => {
-      window.DMC_SYSTEM_SETUP_OPEN = window.DMC_SYSTEM_SETUP_OPEN === false;
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-settings-manager]").forEach((button) => {
+  document.querySelectorAll("[data-settings-category]").forEach((button) => {
     button.addEventListener("click", () => {
-      window.DMC_ACTIVE_SETTINGS_MANAGER = button.dataset.settingsManager;
+      window.DMC_SELECTED_SETTINGS_CATEGORY = button.dataset.settingsCategory;
       refreshSettingsPage();
     });
   });
 
-  setupOperatingAreaEvents();
-  setupDepartmentEvents();
-  setupSectionEvents();
-  setupUnitEvents();
-  setupDeliveryIssueReasonEvents();
-}
-
-function setupOperatingAreaEvents() {
-  const form = document.getElementById("add-operating-area-form");
-
-  if (form) {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const settings = getStoredSettings();
-      const name = document.getElementById("operating-area-name").value.trim();
-
-      if (!name) return;
-
-      settings.operatingAreas.push({
-        id: slugifySetting(name),
-        name
-      });
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-edit-area]").forEach((button) => {
+  document.querySelectorAll("[data-toggle-setup-group]").forEach((button) => {
     button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const area = settings.operatingAreas.find(
-        (item) => item.id === button.dataset.editArea
-      );
-
-      if (!area) return;
-
-      const newName = prompt("Edit Operating Area name:", area.name);
-
-      if (!newName || !newName.trim()) return;
-
-      area.name = newName.trim();
-
-      saveSettings(settings);
-      refreshSettingsPage();
+      toggleSetupGroup(button.dataset.toggleSetupGroup);
     });
   });
 
-  document.querySelectorAll("[data-remove-area]").forEach((button) => {
+  document.querySelectorAll("[data-select-setup-type]").forEach((button) => {
     button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const areaId = button.dataset.removeArea;
-
-      const confirmed = confirm(
-        "Remove this Operating Area? Departments and Sections under it will also be removed in this prototype."
-      );
-
-      if (!confirmed) return;
-
-      const departmentIdsToRemove = settings.departments
-        .filter((department) => department.operatingAreaId === areaId)
-        .map((department) => department.id);
-
-      settings.operatingAreas = settings.operatingAreas.filter(
-        (area) => area.id !== areaId
-      );
-
-      settings.departments = settings.departments.filter(
-        (department) => department.operatingAreaId !== areaId
-      );
-
-      settings.sections = settings.sections.filter(
-        (section) => !departmentIdsToRemove.includes(section.departmentId)
-      );
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-}
-
-function setupDepartmentEvents() {
-  const form = document.getElementById("add-department-form");
-
-  if (form) {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const settings = getStoredSettings();
-      const name = document.getElementById("department-name").value.trim();
-      const operatingAreaId = document.getElementById(
-        "department-operating-area"
-      ).value;
-
-      if (!name) return;
-
-      settings.departments.push({
-        id: slugifySetting(name),
-        name,
-        operatingAreaId
-      });
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-edit-department]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const department = settings.departments.find(
-        (item) => item.id === button.dataset.editDepartment
-      );
-
-      if (!department) return;
-
-      const newName = prompt("Edit Department name:", department.name);
-
-      if (!newName || !newName.trim()) return;
-
-      department.name = newName.trim();
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-
-  document.querySelectorAll("[data-remove-department]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const departmentId = button.dataset.removeDepartment;
-
-      const confirmed = confirm(
-        "Remove this Department? Sections under it will also be removed in this prototype."
-      );
-
-      if (!confirmed) return;
-
-      settings.departments = settings.departments.filter(
-        (department) => department.id !== departmentId
-      );
-
-      settings.sections = settings.sections.filter(
-        (section) => section.departmentId !== departmentId
-      );
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-}
-
-function setupSectionEvents() {
-  const form = document.getElementById("add-section-form");
-
-  if (form) {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const settings = getStoredSettings();
-      const name = document.getElementById("section-name").value.trim();
-      const departmentId = document.getElementById("section-department").value;
-
-      if (!name) return;
-
-      settings.sections.push({
-        id: `${departmentId}-${slugifySetting(name)}`,
-        name,
-        departmentId
-      });
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-edit-section]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const section = settings.sections.find(
-        (item) => item.id === button.dataset.editSection
-      );
-
-      if (!section) return;
-
-      const newName = prompt("Edit Section name:", section.name);
-
-      if (!newName || !newName.trim()) return;
-
-      section.name = newName.trim();
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-
-  document.querySelectorAll("[data-remove-section]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const sectionId = button.dataset.removeSection;
-
-      const confirmed = confirm("Remove this Section?");
-
-      if (!confirmed) return;
-
-      settings.sections = settings.sections.filter(
-        (section) => section.id !== sectionId
-      );
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-}
-
-function setupUnitEvents() {
-  const form = document.getElementById("add-unit-form");
-
-  if (form) {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const settings = getStoredSettings();
-      const name = document.getElementById("unit-name").value.trim();
-
-      if (!name) return;
-
-      settings.units.push({
-        id: slugifySetting(name),
-        name
-      });
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-edit-unit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const unit = settings.units.find(
-        (item) => item.id === button.dataset.editUnit
-      );
-
-      if (!unit) return;
-
-      const newName = prompt("Edit Unit name:", unit.name);
-
-      if (!newName || !newName.trim()) return;
-
-      unit.name = newName.trim();
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-
-  document.querySelectorAll("[data-remove-unit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const unitId = button.dataset.removeUnit;
-
-      const confirmed = confirm("Remove this Unit?");
-
-      if (!confirmed) return;
-
-      settings.units = settings.units.filter((unit) => unit.id !== unitId);
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  });
-}
-
-function setupDeliveryIssueReasonEvents() {
-  const form = document.getElementById("add-delivery-issue-reason-form");
-
-  if (form) {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const settings = getStoredSettings();
-      const name = document.getElementById("delivery-reason-name").value.trim();
-      const category = document
-        .getElementById("delivery-reason-category")
-        .value.trim();
-      const stockAction = document.getElementById(
-        "delivery-reason-stock-action"
-      ).value;
-
-      if (!name) return;
-
-      const newReasonId = slugifySetting(name);
-
-      const alreadyExists = settings.deliveryIssueReasons.some(
-        (reason) =>
-          reason.id === newReasonId ||
-          String(reason.name || "").toLowerCase() === name.toLowerCase()
-      );
-
-      if (alreadyExists) {
-        alert("That delivery issue reason already exists.");
+      if (button.disabled) {
         return;
       }
 
-      settings.deliveryIssueReasons.push({
-        id: newReasonId,
-        name,
-        category: category || "Custom",
-        stockAction: stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE,
-        active: true
-      });
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  const resetButton = document.getElementById("reset-delivery-issue-reasons");
-
-  if (resetButton) {
-    resetButton.addEventListener("click", () => {
-      const confirmed = confirm("Reset Delivery Issue Reasons to defaults?");
-
-      if (!confirmed) return;
-
-      const settings = getStoredSettings();
-      settings.deliveryIssueReasons = getDefaultDeliveryIssueReasons();
-
-      saveSettings(settings);
-      refreshSettingsPage();
-    });
-  }
-
-  document.querySelectorAll("[data-edit-delivery-reason]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const reason = settings.deliveryIssueReasons.find(
-        (item) => item.id === button.dataset.editDeliveryReason
-      );
-
-      if (!reason) return;
-
-      const newName = prompt("Edit Reason name:", reason.name);
-
-      if (!newName || !newName.trim()) return;
-
-      const newCategory = prompt(
-        "Edit Category:",
-        reason.category || "Custom"
-      );
-
-      if (!newCategory || !newCategory.trim()) return;
-
-      const currentStockAction =
-        reason.stockAction || DMC_SETTINGS_STOCK_ACTIONS.NONE;
-
-      const stockActionInput = prompt(
-        `Edit Stock Action:\nType 1 for ${DMC_SETTINGS_STOCK_ACTIONS.NONE}\nType 2 for ${DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY}`,
-        currentStockAction === DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-          ? "2"
-          : "1"
-      );
-
-      const newStockAction =
-        stockActionInput === "2"
-          ? DMC_SETTINGS_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-          : DMC_SETTINGS_STOCK_ACTIONS.NONE;
-
-      reason.name = newName.trim();
-      reason.category = newCategory.trim();
-      reason.stockAction = newStockAction;
-
-      saveSettings(settings);
+      window.DMC_SELECTED_SETUP_TYPE = button.dataset.selectSetupType;
       refreshSettingsPage();
     });
   });
 
-  document.querySelectorAll("[data-toggle-delivery-reason]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const reason = settings.deliveryIssueReasons.find(
-        (item) => item.id === button.dataset.toggleDeliveryReason
-      );
+  const setupForm = document.getElementById("setup-option-form");
 
-      if (!reason) return;
+  if (setupForm) {
+    setupForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      addSetupOption(window.DMC_SELECTED_SETUP_TYPE);
+    });
+  }
 
-      reason.active = reason.active === false;
+  const libraryView = document.getElementById("setup-library-view");
 
-      saveSettings(settings);
+  if (libraryView) {
+    libraryView.addEventListener("change", () => {
+      window.DMC_SETUP_LIBRARY_VIEW = libraryView.value;
+      window.DMC_SETUP_LIBRARY_SEARCH = "";
       refreshSettingsPage();
+    });
+  }
+
+  const librarySearch = document.getElementById("setup-library-search");
+
+  if (librarySearch) {
+    librarySearch.addEventListener("input", () => {
+      window.DMC_SETUP_LIBRARY_SEARCH = librarySearch.value;
+      refreshSettingsPage();
+    });
+  }
+
+  const clearSearchButton = document.getElementById(
+    "clear-setup-library-search"
+  );
+
+  if (clearSearchButton) {
+    clearSearchButton.addEventListener("click", () => {
+      window.DMC_SETUP_LIBRARY_SEARCH = "";
+      refreshSettingsPage();
+    });
+  }
+
+  document.querySelectorAll("[data-edit-setup-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      editSetupOption(
+        button.dataset.setupCollection,
+        button.dataset.editSetupOption
+      );
     });
   });
 
-  document.querySelectorAll("[data-remove-delivery-reason]").forEach((button) => {
+  document.querySelectorAll("[data-remove-setup-option]").forEach((button) => {
     button.addEventListener("click", () => {
-      const settings = getStoredSettings();
-      const reasonId = button.dataset.removeDeliveryReason;
-
-      const confirmed = confirm("Remove this Delivery Issue Reason?");
-
-      if (!confirmed) return;
-
-      settings.deliveryIssueReasons = settings.deliveryIssueReasons.filter(
-        (reason) => reason.id !== reasonId
+      removeSetupOption(
+        button.dataset.setupCollection,
+        button.dataset.removeSetupOption
       );
-
-      saveSettings(settings);
-      refreshSettingsPage();
     });
   });
 }
@@ -1102,7 +1059,7 @@ window.DMC_PAGES.settings = {
   eyebrow: "System",
   title: "Settings",
   description:
-    "Manage system setup options like operating areas, departments, sections, units, and delivery issue reasons.",
+    "Manage setup categories and reusable dropdown options used across the inventory system.",
   getContent: getSettingsContent,
   content: getSettingsContent(),
   afterRender: setupSettingsEvents
