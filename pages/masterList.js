@@ -3,10 +3,10 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_MASTER_LIST_STORAGE_KEY = "dmc_master_list_items";
 const DMC_SETTINGS_STORAGE_KEY_FOR_MASTER_LIST = "dmc_inventory_settings";
 
-window.DMC_MASTER_LIST_FILTERS = window.DMC_MASTER_LIST_FILTERS || {
-  department: "all",
-  section: "all",
-  search: ""
+window.DMC_MASTER_LIST_FILTERS = {
+  operatingArea: window.DMC_MASTER_LIST_FILTERS?.operatingArea || "all",
+  department: window.DMC_MASTER_LIST_FILTERS?.department || "all",
+  search: window.DMC_MASTER_LIST_FILTERS?.search || ""
 };
 
 window.DMC_MASTER_LIST_EDITING_ITEM_ID =
@@ -219,17 +219,21 @@ function getFilteredMasterListItems() {
   const items = getStoredMasterListItems();
 
   return items.filter((item) => {
+    const itemOperatingArea = String(item.operatingArea || "").toLowerCase();
     const itemDepartment = String(item.department || "").toLowerCase();
-    const itemSection = String(item.section || "").toLowerCase();
+
+    const selectedOperatingArea = String(
+      filters.operatingArea || "all"
+    ).toLowerCase();
 
     const selectedDepartment = String(filters.department || "all").toLowerCase();
-    const selectedSection = String(filters.section || "all").toLowerCase();
+
+    const matchesOperatingArea =
+      selectedOperatingArea === "all" ||
+      itemOperatingArea === selectedOperatingArea;
 
     const matchesDepartment =
       selectedDepartment === "all" || itemDepartment === selectedDepartment;
-
-    const matchesSection =
-      selectedSection === "all" || itemSection === selectedSection;
 
     const searchValue = String(filters.search || "").toLowerCase().trim();
 
@@ -243,8 +247,31 @@ function getFilteredMasterListItems() {
       String(item.unit || "").toLowerCase().includes(searchValue) ||
       String(item.notes || "").toLowerCase().includes(searchValue);
 
-    return matchesDepartment && matchesSection && matchesSearch;
+    return matchesOperatingArea && matchesDepartment && matchesSearch;
   });
+}
+
+function renderOperatingAreaFilterOptions(settings) {
+  const currentOperatingArea = window.DMC_MASTER_LIST_FILTERS.operatingArea;
+
+  return `
+    <option value="all" ${currentOperatingArea === "all" ? "selected" : ""}>
+      All Operating Areas
+    </option>
+    ${(settings.operatingAreas || [])
+      .map((operatingArea) => {
+        const operatingAreaName = getSettingOptionName(operatingArea);
+
+        return `
+          <option value="${operatingAreaName}" ${
+          currentOperatingArea === operatingAreaName ? "selected" : ""
+        }>
+            ${operatingAreaName}
+          </option>
+        `;
+      })
+      .join("")}
+  `;
 }
 
 function renderDepartmentFilterOptions(settings) {
@@ -270,36 +297,13 @@ function renderDepartmentFilterOptions(settings) {
   `;
 }
 
-function renderSectionFilterOptions(settings) {
-  const currentSection = window.DMC_MASTER_LIST_FILTERS.section;
-
-  return `
-    <option value="all" ${currentSection === "all" ? "selected" : ""}>
-      All Sections
-    </option>
-    ${(settings.sections || [])
-      .map((section) => {
-        const sectionName = getSettingOptionName(section);
-
-        return `
-          <option value="${sectionName}" ${
-          currentSection === sectionName ? "selected" : ""
-        }>
-            ${sectionName}
-          </option>
-        `;
-      })
-      .join("")}
-  `;
-}
-
 function renderMasterListRows() {
   const items = getFilteredMasterListItems();
 
   if (items.length === 0) {
     return `
       <tr>
-        <td colspan="10">No items match the current filters.</td>
+        <td colspan="9">No items match the current filters.</td>
       </tr>
     `;
   }
@@ -310,7 +314,6 @@ function renderMasterListRows() {
         <tr>
           <td>${item.operatingArea || "-"}</td>
           <td>${item.department || "-"}</td>
-          <td>${item.section || "-"}</td>
           <td>${item.itemId || "-"}</td>
           <td>${item.officialItemName || "-"}</td>
           <td>${item.unit || "-"}</td>
@@ -492,34 +495,36 @@ function renderFullMasterListPanel(settings) {
         <span class="badge">Item Records</span>
       </div>
 
-      <div class="filter-bar">
-        <label>
-          Department
-          <select id="master-list-department-filter">
-            ${renderDepartmentFilterOptions(settings)}
-          </select>
-        </label>
+      <div class="master-list-filter-shell">
+        <div class="master-list-filter-grid">
+          <label class="filter-search">
+            Search
+            <input
+              id="master-list-search"
+              type="text"
+              placeholder="Search item name, ID, unit, notes..."
+              value="${window.DMC_MASTER_LIST_FILTERS.search}"
+            />
+          </label>
 
-        <label>
-          Section
-          <select id="master-list-section-filter">
-            ${renderSectionFilterOptions(settings)}
-          </select>
-        </label>
+          <label>
+            Operating Area
+            <select id="master-list-operating-area-filter">
+              ${renderOperatingAreaFilterOptions(settings)}
+            </select>
+          </label>
 
-        <label class="filter-search">
-          Search
-          <input
-            id="master-list-search"
-            type="text"
-            placeholder="Search item name, ID, section, unit..."
-            value="${window.DMC_MASTER_LIST_FILTERS.search}"
-          />
-        </label>
+          <label>
+            Department
+            <select id="master-list-department-filter">
+              ${renderDepartmentFilterOptions(settings)}
+            </select>
+          </label>
 
-        <button class="ghost-button" id="clear-master-list-filters">
-          Clear Filters
-        </button>
+          <button class="ghost-button" id="clear-master-list-filters">
+            Clear Filters
+          </button>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -528,7 +533,6 @@ function renderFullMasterListPanel(settings) {
             <tr>
               <th>Operating Area</th>
               <th>Department</th>
-              <th>Section</th>
               <th>Item ID</th>
               <th>Official Item Name</th>
               <th>Unit</th>
@@ -609,10 +613,12 @@ function setupMasterListEvents() {
   const departmentSelect = document.getElementById("department");
   const sectionSelect = document.getElementById("section");
 
+  const operatingAreaFilter = document.getElementById(
+    "master-list-operating-area-filter"
+  );
   const departmentFilter = document.getElementById(
     "master-list-department-filter"
   );
-  const sectionFilter = document.getElementById("master-list-section-filter");
   const searchInput = document.getElementById("master-list-search");
   const clearFiltersButton = document.getElementById(
     "clear-master-list-filters"
@@ -634,16 +640,16 @@ function setupMasterListEvents() {
     sectionSelect.addEventListener("change", updateItemIdPreview);
   }
 
-  if (departmentFilter) {
-    departmentFilter.addEventListener("change", () => {
-      window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
+  if (operatingAreaFilter) {
+    operatingAreaFilter.addEventListener("change", () => {
+      window.DMC_MASTER_LIST_FILTERS.operatingArea = operatingAreaFilter.value;
       refreshMasterListPage();
     });
   }
 
-  if (sectionFilter) {
-    sectionFilter.addEventListener("change", () => {
-      window.DMC_MASTER_LIST_FILTERS.section = sectionFilter.value;
+  if (departmentFilter) {
+    departmentFilter.addEventListener("change", () => {
+      window.DMC_MASTER_LIST_FILTERS.department = departmentFilter.value;
       refreshMasterListPage();
     });
   }
@@ -658,8 +664,8 @@ function setupMasterListEvents() {
   if (clearFiltersButton) {
     clearFiltersButton.addEventListener("click", () => {
       window.DMC_MASTER_LIST_FILTERS = {
+        operatingArea: "all",
         department: "all",
-        section: "all",
         search: ""
       };
 
