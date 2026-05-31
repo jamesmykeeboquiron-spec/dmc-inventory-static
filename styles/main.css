@@ -5254,3 +5254,141 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   GLOBAL MODERN POPUP / MODAL
+========================================================= */
+
+.dmc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at center, rgba(240, 192, 79, 0.08), transparent 42%),
+    rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.dmc-modal-card {
+  position: relative;
+  width: min(460px, 94vw);
+  border: 1px solid rgba(240, 192, 79, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(240, 192, 79, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
+    rgba(8, 8, 7, 0.96);
+  border-radius: 26px;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(240, 192, 79, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 22px;
+  animation: dmcModalIn 160ms ease-out;
+}
+
+.dmc-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  border-radius: 12px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dmc-modal-close:hover {
+  color: var(--gold);
+  border-color: var(--gold-border);
+}
+
+.dmc-modal-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 192, 79, 0.28);
+  background: rgba(240, 192, 79, 0.12);
+  color: var(--gold);
+  border-radius: 18px;
+  font-size: 22px;
+  font-weight: 900;
+  margin-bottom: 16px;
+}
+
+.dmc-modal-card.success .dmc-modal-icon {
+  border-color: rgba(86, 243, 154, 0.28);
+  background: rgba(86, 243, 154, 0.12);
+  color: #9af0c4;
+}
+
+.dmc-modal-card.danger .dmc-modal-icon,
+.dmc-modal-card.warning .dmc-modal-icon {
+  border-color: rgba(255, 92, 92, 0.28);
+  background: rgba(255, 92, 92, 0.12);
+  color: #ffa6a6;
+}
+
+.dmc-modal-card.info .dmc-modal-icon {
+  border-color: rgba(79, 195, 255, 0.28);
+  background: rgba(79, 195, 255, 0.12);
+  color: #9ee2ff;
+}
+
+.dmc-modal-content h3 {
+  color: var(--text);
+  margin: 0 40px 8px 0;
+  font-size: 22px;
+}
+
+.dmc-modal-content p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.dmc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.dmc-modal-actions .danger-action {
+  background: linear-gradient(180deg, #ff8d8d, #c94a4a);
+  border-color: rgba(255, 141, 141, 0.46);
+  color: #150505;
+}
+
+@keyframes dmcModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 620px) {
+  .dmc-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .dmc-modal-actions .primary-button,
+  .dmc-modal-actions .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
