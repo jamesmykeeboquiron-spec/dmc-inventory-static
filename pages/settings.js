@@ -28,6 +28,45 @@ window.DMC_OPEN_SETUP_GROUPS =
     warehouseReturn: false
   };
 
+function showSettingsModal({ type, title, message, confirmLabel }) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel
+    });
+    return;
+  }
+
+  alert(message);
+}
+
+function showSettingsConfirm({
+  type,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm
+}) {
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      onConfirm
+    });
+    return;
+  }
+
+  if (confirm(message)) {
+    onConfirm();
+  }
+}
+
 function getDefaultDeliveryIssueReasons() {
   return [
     {
@@ -357,12 +396,22 @@ function addSetupOption(setupType) {
   const name = nameInput?.value.trim();
 
   if (!name) {
-    alert("Please enter a name first.");
+    showSettingsModal({
+      type: "warning",
+      title: `${getSetupLabel(setupType)} Name Required`,
+      message: `Please enter a ${getSetupLabel(setupType)} name first.`,
+      confirmLabel: "Got it"
+    });
     return;
   }
 
   if (setupOptionExists(settings[collectionKey], name)) {
-    alert(`${getSetupLabel(setupType)} "${name}" already exists.`);
+    showSettingsModal({
+      type: "warning",
+      title: `Duplicate ${getSetupLabel(setupType)}`,
+      message: `${getSetupLabel(setupType)} "${name}" already exists in the Setup Library.`,
+      confirmLabel: "Got it"
+    });
     return;
   }
 
@@ -380,6 +429,13 @@ function addSetupOption(setupType) {
 
   saveSettings(settings);
   refreshSettingsPage();
+
+  showSettingsModal({
+    type: "success",
+    title: `${getSetupLabel(setupType)} Added`,
+    message: `"${name}" was added to the Setup Library.`,
+    confirmLabel: "Continue"
+  });
 }
 
 function editSetupOption(collectionKey, optionId) {
@@ -424,6 +480,13 @@ function editSetupOption(collectionKey, optionId) {
 
   saveSettings(settings);
   refreshSettingsPage();
+
+  showSettingsModal({
+    type: "success",
+    title: "Setup Option Updated",
+    message: `"${option.name}" was updated successfully.`,
+    confirmLabel: "Continue"
+  });
 }
 
 function removeSetupOption(collectionKey, optionId) {
@@ -435,16 +498,30 @@ function removeSetupOption(collectionKey, optionId) {
     return;
   }
 
-  const confirmed = confirm(`Remove "${option.name}"?`);
+  showSettingsConfirm({
+    type: "danger",
+    title: "Remove Setup Option?",
+    message: `This will remove "${option.name}" from ${getCollectionDisplayName(
+      collectionKey
+    )}. Dropdowns that read this setup list will no longer show it.`,
+    confirmLabel: "Remove Option",
+    cancelLabel: "Cancel",
+    onConfirm: () => {
+      settings[collectionKey] = collection.filter(
+        (item) => item.id !== optionId
+      );
 
-  if (!confirmed) {
-    return;
-  }
+      saveSettings(settings);
+      refreshSettingsPage();
 
-  settings[collectionKey] = collection.filter((item) => item.id !== optionId);
-
-  saveSettings(settings);
-  refreshSettingsPage();
+      showSettingsModal({
+        type: "success",
+        title: "Setup Option Removed",
+        message: `"${option.name}" was removed from the Setup Library.`,
+        confirmLabel: "Continue"
+      });
+    }
+  });
 }
 
 function toggleSetupGroup(groupKey) {
