@@ -5810,3 +5810,93 @@ td .badge {
 .daily-input-table input.notes-input {
   max-width: 240px;
 }
+
+/* =========================================================
+   WAREHOUSE DAILY INPUT — FINAL TOOLBAR + WIDTHS
+========================================================= */
+
+.warehouse-daily-input-toolbar {
+  display: grid;
+  grid-template-columns: 240px minmax(320px, 1fr) 240px;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+}
+
+.warehouse-daily-input-toolbar label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-daily-input-toolbar input,
+.warehouse-daily-input-toolbar select {
+  height: 44px;
+  width: 100%;
+}
+
+.warehouse-daily-input-table {
+  table-layout: fixed;
+  min-width: 960px;
+}
+
+.warehouse-daily-input-table th:nth-child(1),
+.warehouse-daily-input-table td:nth-child(1) {
+  width: 140px;
+}
+
+.warehouse-daily-input-table th:nth-child(2),
+.warehouse-daily-input-table td:nth-child(2) {
+  width: 220px;
+}
+
+.warehouse-daily-input-table th:nth-child(3),
+.warehouse-daily-input-table td:nth-child(3) {
+  width: 90px;
+}
+
+.warehouse-daily-input-table th:nth-child(4),
+.warehouse-daily-input-table td:nth-child(4),
+.warehouse-daily-input-table th:nth-child(5),
+.warehouse-daily-input-table td:nth-child(5),
+.warehouse-daily-input-table th:nth-child(6),
+.warehouse-daily-input-table td:nth-child(6) {
+  width: 130px;
+}
+
+.warehouse-daily-input-table th:nth-child(7),
+.warehouse-daily-input-table td:nth-child(7) {
+  width: 260px;
+}
+
+.warehouse-daily-input-table th:nth-child(8),
+.warehouse-daily-input-table td:nth-child(8) {
+  width: 120px;
+}
+
+.warehouse-daily-input-table input[type="number"] {
+  max-width: 115px;
+}
+
+.warehouse-daily-input-table input.notes-input {
+  max-width: 240px;
+}
+
+@media (max-width: 1100px) {
+  .warehouse-daily-input-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .warehouse-daily-input-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
