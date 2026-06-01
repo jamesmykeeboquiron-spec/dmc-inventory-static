@@ -5900,3 +5900,309 @@ td .badge {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   WAREHOUSE LOG TRANSACTION PAGE
+========================================================= */
+
+.warehouse-log-layout {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.warehouse-log-left-panel,
+.warehouse-log-right-panel {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.warehouse-log-filters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.warehouse-log-date-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.warehouse-log-filters label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-log-filters input,
+.warehouse-log-filters select {
+  height: 44px;
+}
+
+.warehouse-log-filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.warehouse-log-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  margin-bottom: 12px;
+}
+
+.warehouse-log-list-header p {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-log-list-header span {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.warehouse-log-batch-list {
+  display: grid;
+  gap: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.warehouse-log-batch-card {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  border-radius: 18px;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.warehouse-log-batch-card:hover,
+.warehouse-log-batch-card.active {
+  border-color: rgba(240, 192, 79, 0.28);
+  background: rgba(240, 192, 79, 0.08);
+  box-shadow: 0 0 24px rgba(240, 192, 79, 0.08);
+}
+
+.warehouse-log-batch-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.warehouse-log-batch-card-top strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.warehouse-log-batch-card-top span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.warehouse-log-batch-card-top em {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 4px 10px;
+}
+
+.warehouse-log-batch-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.warehouse-log-batch-card-meta strong {
+  color: var(--text);
+}
+
+.positive-text {
+  color: #9af0c4;
+}
+
+.negative-text {
+  color: #ffa6a6;
+}
+
+.warehouse-log-right-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.warehouse-log-right-header p {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-log-right-header h4 {
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.warehouse-log-right-header span {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.warehouse-log-empty-detail,
+.warehouse-log-empty-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+  color: var(--text-muted);
+  padding: 30px;
+  text-align: center;
+}
+
+.empty-detail-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 192, 79, 0.24);
+  background: rgba(240, 192, 79, 0.1);
+  color: var(--gold);
+  border-radius: 18px;
+  font-size: 24px;
+}
+
+.warehouse-log-empty-detail h4 {
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.warehouse-log-empty-detail p {
+  max-width: 360px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.warehouse-log-detail-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.warehouse-log-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.warehouse-log-detail-summary div {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.warehouse-log-detail-summary p,
+.warehouse-log-detail-header p {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-log-detail-summary strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.warehouse-log-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.warehouse-log-detail-header h4 {
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.warehouse-log-detail-table-wrap {
+  border-radius: 18px;
+}
+
+.warehouse-log-detail-table th,
+.warehouse-log-detail-table td {
+  white-space: nowrap;
+}
+
+.warehouse-log-note {
+  margin-top: 16px;
+  border: 1px solid rgba(240, 192, 79, 0.14);
+  background: rgba(240, 192, 79, 0.045);
+  color: var(--text-muted);
+  border-radius: 18px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1200px) {
+  .warehouse-log-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .warehouse-log-detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
