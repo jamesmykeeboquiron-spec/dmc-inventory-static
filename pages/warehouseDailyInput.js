@@ -85,9 +85,7 @@ function getWarehouseDailyInputItems() {
     window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT || "all"
   ).toLowerCase();
 
-  const searchValue = String(
-    window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH || ""
-  )
+  const searchValue = String(window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH || "")
     .toLowerCase()
     .trim();
 
@@ -181,17 +179,15 @@ function getWarehouseDailyInputValue(inputData, itemId, fieldName) {
 }
 
 function getWarehouseDailyReviewStatus(rowData) {
-  const inputFields = ["transferIn", "transferOut", "waste", "notes"];
+  const numericFields = ["transferIn", "transferOut", "waste"];
 
-  const hasAnyInput = inputFields.some((field) => {
+  const hasAnyMovement = numericFields.some((field) => {
     return String(rowData?.[field] || "").trim() !== "";
   });
 
-  if (!hasAnyInput) {
+  if (!hasAnyMovement) {
     return "";
   }
-
-  const numericFields = ["transferIn", "transferOut", "waste"];
 
   const hasInvalidNumber = numericFields.some((field) => {
     const value = String(rowData?.[field] || "").trim();
@@ -204,13 +200,6 @@ function getWarehouseDailyReviewStatus(rowData) {
   });
 
   if (hasInvalidNumber) {
-    return "CHECK";
-  }
-
-  const hasWaste = String(rowData?.waste || "").trim() !== "";
-  const hasNotes = String(rowData?.notes || "").trim() !== "";
-
-  if (hasWaste && !hasNotes) {
     return "CHECK";
   }
 
