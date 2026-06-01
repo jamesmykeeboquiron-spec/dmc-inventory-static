@@ -1,6 +1,7 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_WAREHOUSE_STOCK_MASTER_LIST_KEY = "dmc_master_list_items";
+const DMC_WAREHOUSE_STOCK_LOG_KEY = "dmc_warehouse_log_entries";
 
 window.DMC_WAREHOUSE_STOCK_FILTERS = window.DMC_WAREHOUSE_STOCK_FILTERS || {
   department: "all",
@@ -16,8 +17,8 @@ const warehouseStockSampleRows = [
     unit: "kg",
     currentStock: 18,
     minimumStock: 25,
-    lastMovement: "Supplier Receiving · Today",
-    note: "Needs reorder"
+    lastMovement: "Sample · Transfer In",
+    note: "Sample data only"
   },
   {
     itemId: "RAW-SUG-001",
@@ -26,8 +27,8 @@ const warehouseStockSampleRows = [
     unit: "kg",
     currentStock: 9,
     minimumStock: 20,
-    lastMovement: "Transfer Out to Commissary · Today",
-    note: "Critical"
+    lastMovement: "Sample · Transfer Out",
+    note: "Sample data only"
   },
   {
     itemId: "RAW-COF-001",
@@ -36,8 +37,8 @@ const warehouseStockSampleRows = [
     unit: "kg",
     currentStock: 32,
     minimumStock: 15,
-    lastMovement: "Supplier Receiving · Yesterday",
-    note: "Healthy"
+    lastMovement: "Sample · Transfer In",
+    note: "Sample data only"
   },
   {
     itemId: "PKG-CUP-016",
@@ -46,28 +47,8 @@ const warehouseStockSampleRows = [
     unit: "pcs",
     currentStock: 120,
     minimumStock: 200,
-    lastMovement: "Branch Fulfillment · Yesterday",
-    note: "Needs reorder"
-  },
-  {
-    itemId: "FIN-ENS-001",
-    officialItemName: "Ensaymada",
-    department: "Pastries",
-    unit: "pcs",
-    currentStock: 65,
-    minimumStock: 40,
-    lastMovement: "Finished Product Transfer · Today",
-    note: "Ready"
-  },
-  {
-    itemId: "FIN-UBE-001",
-    officialItemName: "Ube Cheese Pandesal",
-    department: "Pastries",
-    unit: "pcs",
-    currentStock: 22,
-    minimumStock: 40,
-    lastMovement: "Branch Fulfillment · Today",
-    note: "Low"
+    lastMovement: "Sample · Transfer Out",
+    note: "Sample data only"
   },
   {
     itemId: "RAW-MIL-001",
@@ -76,8 +57,8 @@ const warehouseStockSampleRows = [
     unit: "liter",
     currentStock: 0,
     minimumStock: 12,
-    lastMovement: "Waste · Today",
-    note: "Out"
+    lastMovement: "Sample · Waste",
+    note: "Sample data only"
   }
 ];
 
@@ -95,17 +76,140 @@ function getStoredWarehouseMasterListItems() {
   }
 }
 
+function getStoredWarehouseLogEntriesForStock() {
+  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_STOCK_LOG_KEY);
+
+  if (!storedEntries) {
+    return [];
+  }
+
+  try {
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return [];
+    }
+
+    return parsedEntries;
+  } catch {
+    return [];
+  }
+}
+
 function itemBelongsToWarehouse(item) {
   const operatingArea = String(item.operatingArea || "").toLowerCase();
 
   return (
     operatingArea.includes("warehouse") ||
-    operatingArea.includes("stockroom") ||
-    operatingArea.includes("commissary")
+    operatingArea.includes("stockroom")
   );
 }
 
-function normalizeWarehouseMasterItem(item) {
+function getWarehouseBaseItems() {
+  const masterListItems = getStoredWarehouseMasterListItems();
+
+  const warehouseItems = masterListItems.filter(itemBelongsToWarehouse);
+
+  if (warehouseItems.length === 0) {
+    return warehouseStockSampleRows;
+  }
+
+  return warehouseItems;
+}
+
+function getWarehouseLogEntriesForItem(itemId) {
+  return getStoredWarehouseLogEntriesForStock().filter(
+    (entry) => String(entry.itemId || "") === String(itemId || "")
+  );
+}
+
+function getWarehouseLatestMovementForItem(itemId) {
+  const entries = getWarehouseLogEntriesForItem(itemId);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return [...entries].sort((a, b) => {
+    const aTime = a.submittedAt || a.date || "";
+    const bTime = b.submittedAt || b.date || "";
+
+    return String(bTime).localeCompare(String(aTime));
+  })[0];
+}
+
+function calculateWarehouseCurrentStock(item) {
+  const itemId = item.itemId || "";
+  const logEntries = getWarehouseLogEntriesForItem(itemId);
+
+  const startingStock = Number(item.openingStock || 0);
+
+  return logEntries.reduce((total, entry) => {
+    const quantity = Number(entry.quantity || 0);
+
+    if (entry.stockEffect === "add") {
+      return total + quantity;
+    }
+
+    if (entry.stockEffect === "deduct") {
+      return total - quantity;
+    }
+
+    return total;
+  }, startingStock);
+}
+
+function calculateWarehouseMovementTotals(item) {
+  const itemId = item.itemId || "";
+  const logEntries = getWarehouseLogEntriesForItem(itemId);
+
+  return logEntries.reduce(
+    (totals, entry) => {
+      const quantity = Number(entry.quantity || 0);
+
+      if (entry.movementType === "Transfer In") {
+        totals.transferIn += quantity;
+      }
+
+      if (entry.movementType === "Transfer Out") {
+        totals.transferOut += quantity;
+      }
+
+      if (entry.movementType === "Waste") {
+        totals.waste += quantity;
+      }
+
+      return totals;
+    },
+    {
+      transferIn: 0,
+      transferOut: 0,
+      waste: 0
+    }
+  );
+}
+
+function normalizeWarehouseStockItem(item) {
+  const currentStock = calculateWarehouseCurrentStock(item);
+  const latestMovement = getWarehouseLatestMovementForItem(item.itemId);
+  const movementTotals = calculateWarehouseMovementTotals(item);
+
+  return {
+    itemId: item.itemId || "-",
+    officialItemName: item.officialItemName || item.name || "-",
+    department: item.department || "Unassigned",
+    unit: item.unit || "-",
+    currentStock,
+    minimumStock: Number(item.minimumStock || 0),
+    lastMovement: latestMovement
+      ? `${latestMovement.movementType} · ${latestMovement.date || "No date"}`
+      : item.lastMovement || "No posted warehouse movement yet",
+    note: latestMovement?.notes || item.notes || item.note || "",
+    movementTotals
+  };
+}
+
+function normalizeWarehouseSampleItem(item) {
   return {
     itemId: item.itemId || "-",
     officialItemName: item.officialItemName || item.name || "-",
@@ -113,23 +217,25 @@ function normalizeWarehouseMasterItem(item) {
     unit: item.unit || "-",
     currentStock: Number(item.currentStock || 0),
     minimumStock: Number(item.minimumStock || 0),
-    lastMovement: item.lastMovement || "Not yet received",
-    note: item.notes || ""
+    lastMovement: item.lastMovement || "Sample movement",
+    note: item.note || "",
+    movementTotals: {
+      transferIn: 0,
+      transferOut: 0,
+      waste: 0
+    }
   };
 }
 
 function getWarehouseStockRows() {
   const masterListItems = getStoredWarehouseMasterListItems();
+  const warehouseItems = masterListItems.filter(itemBelongsToWarehouse);
 
-  const warehouseItems = masterListItems
-    .filter(itemBelongsToWarehouse)
-    .map(normalizeWarehouseMasterItem);
-
-  if (warehouseItems.length > 0) {
-    return warehouseItems;
+  if (warehouseItems.length === 0) {
+    return warehouseStockSampleRows.map(normalizeWarehouseSampleItem);
   }
 
-  return warehouseStockSampleRows;
+  return warehouseItems.map(normalizeWarehouseStockItem);
 }
 
 function getWarehouseStockStatus(item) {
@@ -172,7 +278,8 @@ function getFilteredWarehouseStockRows() {
     const matchesSearch =
       !searchValue ||
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
-      String(item.officialItemName || "").toLowerCase().includes(searchValue);
+      String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
+      String(item.department || "").toLowerCase().includes(searchValue);
 
     return matchesDepartment && matchesStatus && matchesSearch;
   });
@@ -267,7 +374,7 @@ function renderWarehouseStockLevel(item) {
 
   const percent = Math.min(
     100,
-    Math.round((currentStock / Math.max(minimumStock, 1)) * 100)
+    Math.max(0, Math.round((currentStock / Math.max(minimumStock, 1)) * 100))
   );
 
   return `
@@ -280,6 +387,20 @@ function renderWarehouseStockLevel(item) {
         <div class="stock-level-fill" style="width: ${percent}%"></div>
       </div>
     </div>
+  `;
+}
+
+function renderWarehouseMovementSummary(item) {
+  const totals = item.movementTotals || {
+    transferIn: 0,
+    transferOut: 0,
+    waste: 0
+  };
+
+  return `
+    <small class="table-subtext">
+      In: ${totals.transferIn} · Out: ${totals.transferOut} · Waste: ${totals.waste}
+    </small>
   `;
 }
 
@@ -303,6 +424,7 @@ function renderWarehouseStockRows() {
           <td>${item.itemId || "-"}</td>
           <td>
             <strong>${item.officialItemName || "-"}</strong>
+            ${renderWarehouseMovementSummary(item)}
             ${
               item.note
                 ? `<small class="table-subtext">${item.note}</small>`
@@ -316,7 +438,7 @@ function renderWarehouseStockRows() {
               ${status}
             </span>
           </td>
-          <td>${item.lastMovement || "Not yet received"}</td>
+          <td>${item.lastMovement || "No posted warehouse movement yet"}</td>
           <td>
             <div class="row-actions">
               <button class="tiny-button" data-view-warehouse-stock="${item.itemId}">
@@ -337,12 +459,11 @@ function renderWarehouseStockPanel() {
         <div>
           <h3>Warehouse Stock List</h3>
           <p>
-            Actual warehouse stock pulled from the item source of truth and
-            updated by warehouse movements.
+            Current Warehouse stock is calculated from posted Warehouse Log Transaction entries.
           </p>
         </div>
 
-        <span class="badge">Actual Stock</span>
+        <span class="badge">Calculated Stock</span>
       </div>
 
       <div class="warehouse-stock-filter-shell">
@@ -352,7 +473,7 @@ function renderWarehouseStockPanel() {
             <input
               id="warehouse-stock-search"
               type="text"
-              placeholder="Search item name or Item ID..."
+              placeholder="Search item name, Item ID, or department..."
               value="${window.DMC_WAREHOUSE_STOCK_FILTERS.search}"
             />
           </label>
@@ -456,12 +577,26 @@ function setupWarehouseStockEvents() {
   document.querySelectorAll("[data-view-warehouse-stock]").forEach((button) => {
     button.addEventListener("click", () => {
       const itemId = button.dataset.viewWarehouseStock;
+      const item = getWarehouseStockRows().find(
+        (row) => String(row.itemId) === String(itemId)
+      );
+
+      if (!item) {
+        return;
+      }
+
+      const status = getWarehouseStockStatus(item);
+      const totals = item.movementTotals || {
+        transferIn: 0,
+        transferOut: 0,
+        waste: 0
+      };
 
       if (typeof window.DMC_SHOW_MODAL === "function") {
         window.DMC_SHOW_MODAL({
           type: "info",
-          title: "Warehouse Stock Detail",
-          message: `Movement history for ${itemId} will be connected when Warehouse Log Transaction is built.`,
+          title: `${item.officialItemName}`,
+          message: `Current stock: ${item.currentStock} ${item.unit}. Status: ${status}. Transfer In: ${totals.transferIn}, Transfer Out: ${totals.transferOut}, Waste: ${totals.waste}. Last movement: ${item.lastMovement}.`,
           confirmLabel: "Got it"
         });
       }
@@ -473,7 +608,7 @@ window.DMC_PAGES["warehouse-stock"] = {
   eyebrow: "Warehouse",
   title: "Warehouse Stock",
   description:
-    "Actual stock list for raw materials, packaging, and finished products stored in Warehouse.",
+    "Calculated stock list from posted Warehouse Log Transaction entries.",
   getContent: getWarehouseStockContent,
   content: getWarehouseStockContent(),
   afterRender: setupWarehouseStockEvents
