@@ -6373,3 +6373,96 @@ input[type="date"]:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   INCOMING DELIVERIES RESPONSIVE / PANEL FIX
+========================================================= */
+
+.branch-orders-layout {
+  align-items: start;
+}
+
+.branch-order-detail,
+.branch-order-list-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.branch-order-info-grid {
+  min-width: 0;
+}
+
+.branch-order-info-grid > div,
+.branch-order-info-grid > label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.incoming-delivery-lines {
+  min-width: 0;
+}
+
+.incoming-delivery-line {
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(80px, 100px)
+    minmax(120px, 150px)
+    minmax(130px, 160px)
+    minmax(150px, 1fr)
+    minmax(80px, 100px);
+  min-width: 0;
+}
+
+.incoming-delivery-line > div,
+.incoming-delivery-line > label {
+  min-width: 0;
+}
+
+.incoming-received-input,
+.incoming-condition-input,
+.incoming-notes-input,
+.incoming-receiving-meta input,
+.incoming-receiving-meta select,
+.incoming-receiving-meta textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.incoming-receiving-meta {
+  grid-template-columns: minmax(180px, 260px) minmax(240px, 1fr);
+  min-width: 0;
+}
+
+@media (max-width: 1350px) {
+  .incoming-delivery-line {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .branch-orders-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .incoming-delivery-line {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incoming-receiving-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .incoming-delivery-line {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions.incoming-delivery-actions {
+    display: grid;
+  }
+
+  .form-actions.incoming-delivery-actions button {
+    width: 100%;
+  }
+}
