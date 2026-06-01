@@ -6206,3 +6206,33 @@ td .badge {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   GLOBAL DATE INPUT / CALENDAR ICON FIX
+   Applies to date fields across the whole portal
+========================================================= */
+
+input[type="date"] {
+  color-scheme: dark;
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* Chrome / Edge / Safari calendar icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  filter: invert(86%) sepia(27%) saturate(780%) hue-rotate(356deg)
+    brightness(98%) contrast(92%);
+}
+
+/* Slight hover effect so users know it is clickable */
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.85;
+}
+
+/* Make disabled date inputs still readable */
+input[type="date"]:disabled {
+  color: var(--text-muted);
+  opacity: 0.75;
+}
