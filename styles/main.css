@@ -5730,3 +5730,83 @@ td .badge {
   background: rgba(255, 255, 255, 0.055);
 }
 
+/* =========================================================
+   GLOBAL DAILY INPUT TABLE WIDTH FIX
+   Keeps input columns from stretching too wide
+========================================================= */
+
+.daily-input-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Item ID */
+.daily-input-table th:nth-child(1),
+.daily-input-table td:nth-child(1) {
+  width: 140px;
+}
+
+/* Item Name */
+.daily-input-table th:nth-child(2),
+.daily-input-table td:nth-child(2) {
+  width: 220px;
+}
+
+/* Unit */
+.daily-input-table th:nth-child(3),
+.daily-input-table td:nth-child(3) {
+  width: 90px;
+}
+
+/* Movement columns */
+.daily-input-table th:nth-child(4),
+.daily-input-table td:nth-child(4),
+.daily-input-table th:nth-child(5),
+.daily-input-table td:nth-child(5),
+.daily-input-table th:nth-child(6),
+.daily-input-table td:nth-child(6) {
+  width: 140px;
+}
+
+/* Notes */
+.daily-input-table th:nth-child(7),
+.daily-input-table td:nth-child(7) {
+  width: 260px;
+}
+
+/* Review */
+.daily-input-table th:nth-child(8),
+.daily-input-table td:nth-child(8) {
+  width: 120px;
+}
+
+/* Keep cells readable */
+.daily-input-table td,
+.daily-input-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make number inputs compact */
+.daily-input-table input[type="number"] {
+  width: 100%;
+  max-width: 110px;
+}
+
+/* Make notes wider, but not huge */
+.daily-input-table .notes-input {
+  width: 100%;
+  max-width: 240px;
+}
+
+/* Make all daily input cells less stretched */
+.daily-input-table .daily-input-cell {
+  width: 100%;
+  max-width: 120px;
+}
+
+/* Notes cell exception */
+.daily-input-table .notes-input.daily-input-cell,
+.daily-input-table input.notes-input {
+  max-width: 240px;
+}
