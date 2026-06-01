@@ -6466,3 +6466,12 @@ input[type="date"]:disabled {
     width: 100%;
   }
 }
+
+/* =========================================================
+   MODAL MESSAGE LINE BREAKS
+========================================================= */
+
+.dmc-modal-content p {
+  white-space: pre-line;
+  line-height: 1.65;
+}
