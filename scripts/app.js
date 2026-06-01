@@ -33,6 +33,13 @@ const fallbackPages = {
       "Shows actual warehouse stock based on supplier receiving, transfers, waste, and adjustments."
   },
 
+  "warehouse-daily-input": {
+    eyebrow: "Warehouse",
+    title: "Warehouse Daily Input",
+    description:
+      "Daily input sheet for Warehouse transfer in, transfer out, waste, and notes."
+  },
+
   "supplier-receiving": {
     eyebrow: "Warehouse",
     title: "Supplier Receiving",
@@ -383,6 +390,28 @@ window.DMC_CONFIRM_MODAL = function ({
   };
 
   renderGlobalModalOnly();
+};
+
+/* =========================================================
+   GLOBAL ALERT FALLBACK TO MODERN DMC MODAL
+   Converts old alert(...) calls into the modern popup style.
+========================================================= */
+
+window.DMC_NATIVE_ALERT = window.DMC_NATIVE_ALERT || window.alert.bind(window);
+
+window.alert = function (message) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type: "warning",
+      title: "Notice",
+      message: String(message || ""),
+      confirmLabel: "OK"
+    });
+
+    return;
+  }
+
+  window.DMC_NATIVE_ALERT(message);
 };
 
 function getNavSectionTitle(section) {
