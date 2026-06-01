@@ -6236,3 +6236,48 @@ input[type="date"]:disabled {
   color: var(--text-muted);
   opacity: 0.75;
 }
+
+/* =========================================================
+   WAREHOUSE DAILY INPUT — REVIEW TABLE UPDATE
+========================================================= */
+
+.keyboard-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-muted);
+  border-radius: 18px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.review-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(240, 192, 79, 0.14);
+  background: rgba(240, 192, 79, 0.045);
+  border-radius: 22px;
+  padding: 16px;
+}
+
+.review-mode-header h4 {
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.review-mode-header p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .review-mode-header {
+    display: grid;
+  }
+}
