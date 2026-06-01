@@ -19,6 +19,9 @@ window.DMC_PLACE_ORDER_NOTES = window.DMC_PLACE_ORDER_NOTES || "";
 
 window.DMC_PLACE_ORDER_URGENT = window.DMC_PLACE_ORDER_URGENT || false;
 
+window.DMC_PLACE_ORDER_REQUESTED_BY =
+  window.DMC_PLACE_ORDER_REQUESTED_BY || "";
+
 function getPlaceOrderMasterListItems() {
   const storedItems = localStorage.getItem(DMC_PLACE_ORDER_MASTER_LIST_KEY);
 
@@ -31,6 +34,81 @@ function getPlaceOrderMasterListItems() {
   }
 
   return window.DMC_DATA?.masterList?.items || [];
+}
+
+function getPlaceOrderSettings() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (!storedSettings) {
+    return {
+      managerNames: [],
+      managers: []
+    };
+  }
+
+  try {
+    return JSON.parse(storedSettings);
+  } catch {
+    return {
+      managerNames: [],
+      managers: []
+    };
+  }
+}
+
+function getSettingName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || "";
+}
+
+function getPlaceOrderManagers() {
+  const settings = getPlaceOrderSettings();
+  const managers = settings.managerNames || settings.managers || [];
+
+  return managers.map(getSettingName).filter(Boolean);
+}
+
+function renderRequestedByOptions() {
+  const currentManager = window.DMC_PLACE_ORDER_REQUESTED_BY;
+  const managers = getPlaceOrderManagers();
+
+  if (managers.length === 0) {
+    return `
+      <option value="" ${currentManager === "" ? "selected" : ""}>
+        Select requesting manager
+      </option>
+      <option value="Branch Manager" ${
+        currentManager === "Branch Manager" ? "selected" : ""
+      }>
+        Branch Manager
+      </option>
+      <option value="Manager Ana" ${
+        currentManager === "Manager Ana" ? "selected" : ""
+      }>
+        Manager Ana
+      </option>
+    `;
+  }
+
+  return `
+    <option value="" ${currentManager === "" ? "selected" : ""}>
+      Select requesting manager
+    </option>
+    ${managers
+      .map(
+        (manager) => `
+          <option value="${manager}" ${
+          currentManager === manager ? "selected" : ""
+        }>
+            ${manager}
+          </option>
+        `
+      )
+      .join("")}
+  `;
 }
 
 function getStoredBranchOrders() {
@@ -184,7 +262,7 @@ function renderOrderCart() {
     return `
       <div class="order-cart-empty">
         <p>Cart is empty</p>
-        <span>Pick items and add them to this order.</span>
+        <span>Pick items and add them to this Warehouse order.</span>
       </div>
     `;
   }
@@ -247,7 +325,7 @@ function getPlaceOrderContent() {
       <div class="panel place-order-builder">
         <div class="panel-header">
           <div>
-            <h3>Add Item to Order</h3>
+            <h3>Add Item to Warehouse Order</h3>
             <p>Select an item, enter quantity, then add it to the order cart.</p>
           </div>
         </div>
@@ -307,7 +385,9 @@ function getPlaceOrderContent() {
 
           <label>
             Requested By
-            <input type="text" value="Branch Manager" disabled />
+            <select id="place-order-requested-by">
+              ${renderRequestedByOptions()}
+            </select>
           </label>
 
           <button class="primary-button form-full" id="add-item-to-order">
@@ -319,8 +399,8 @@ function getPlaceOrderContent() {
       <div class="panel place-order-cart">
         <div class="panel-header">
           <div>
-            <h3>Order Cart</h3>
-            <p>${getCartItemCount()} items ready for commissary request.</p>
+            <h3>Warehouse Order Cart</h3>
+            <p>${getCartItemCount()} items ready to submit to Warehouse.</p>
           </div>
 
           <span class="badge">${getCartItemCount()} Items</span>
@@ -345,7 +425,7 @@ function getPlaceOrderContent() {
             <textarea
               id="place-order-notes"
               rows="3"
-              placeholder="Special instructions for commissary..."
+              placeholder="Special instructions for Warehouse..."
             >${window.DMC_PLACE_ORDER_NOTES}</textarea>
           </label>
 
@@ -355,7 +435,7 @@ function getPlaceOrderContent() {
             </button>
 
             <button class="primary-button" id="submit-branch-order">
-              Submit Order
+              Submit Order to Warehouse
             </button>
           </div>
         </div>
@@ -376,6 +456,7 @@ function setupPlaceOrderEvents() {
   const searchInput = document.getElementById("place-order-search");
   const itemSelect = document.getElementById("place-order-item-select");
   const qtyInput = document.getElementById("place-order-qty");
+  const requestedBySelect = document.getElementById("place-order-requested-by");
   const addButton = document.getElementById("add-item-to-order");
   const clearButton = document.getElementById("clear-place-order-cart");
   const submitButton = document.getElementById("submit-branch-order");
@@ -393,7 +474,7 @@ function setupPlaceOrderEvents() {
   }
 
   if (searchInput) {
-    searchInput.addEventListener("change", () => {
+    searchInput.addEventListener("input", () => {
       window.DMC_PLACE_ORDER_SEARCH = searchInput.value;
       window.DMC_PLACE_ORDER_SELECTED_ITEM_ID = "";
       refreshPlaceOrderPage();
@@ -408,8 +489,14 @@ function setupPlaceOrderEvents() {
   }
 
   if (qtyInput) {
-    qtyInput.addEventListener("change", () => {
+    qtyInput.addEventListener("input", () => {
       window.DMC_PLACE_ORDER_QTY = qtyInput.value;
+    });
+  }
+
+  if (requestedBySelect) {
+    requestedBySelect.addEventListener("change", () => {
+      window.DMC_PLACE_ORDER_REQUESTED_BY = requestedBySelect.value;
     });
   }
 
@@ -420,7 +507,7 @@ function setupPlaceOrderEvents() {
   }
 
   if (notesInput) {
-    notesInput.addEventListener("change", () => {
+    notesInput.addEventListener("input", () => {
       window.DMC_PLACE_ORDER_NOTES = notesInput.value;
     });
   }
@@ -448,6 +535,7 @@ function setupPlaceOrderEvents() {
         itemId: selectedItem.itemId,
         itemName: selectedItem.officialItemName,
         section: selectedItem.section,
+        department: selectedItem.department,
         requestedQty,
         unit: selectedItem.unit,
         notes: ""
@@ -502,10 +590,15 @@ function setupPlaceOrderEvents() {
         return;
       }
 
+      if (!window.DMC_PLACE_ORDER_REQUESTED_BY) {
+        alert("Please select the requesting manager.");
+        return;
+      }
+
       const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
 
       const confirmed = confirm(
-        `Submit ${cart.length} item request(s) for ${selectedDepartment}?`
+        `Submit ${cart.length} item request(s) for ${selectedDepartment} to Warehouse?`
       );
 
       if (!confirmed) {
@@ -516,8 +609,12 @@ function setupPlaceOrderEvents() {
 
       const newOrder = {
         orderId: createOrderId(),
+        source: "DMC-Iriga Branch",
+        requestSource: "DMC-Iriga Branch",
         branch: "DMC-Iriga Branch",
+        destination: "Warehouse",
         department: selectedDepartment,
+        requestedBy: window.DMC_PLACE_ORDER_REQUESTED_BY,
         orderDate: getTodayOrderDate(),
         urgent: window.DMC_PLACE_ORDER_URGENT,
         notes: window.DMC_PLACE_ORDER_NOTES,
@@ -526,7 +623,7 @@ function setupPlaceOrderEvents() {
           {
             status: "Submitted",
             timestamp: new Date().toISOString(),
-            note: "Branch submitted order request."
+            note: "DMC-Iriga Branch submitted order request to Warehouse."
           }
         ],
         lines: cart
@@ -539,7 +636,7 @@ function setupPlaceOrderEvents() {
       window.DMC_PLACE_ORDER_NOTES = "";
       window.DMC_PLACE_ORDER_URGENT = false;
 
-      alert("Order submitted to Commissary Branch Orders.");
+      alert("Order submitted to Warehouse Branch Orders.");
       refreshPlaceOrderPage();
     });
   }
@@ -549,7 +646,7 @@ window.DMC_PAGES["place-order"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Place Order",
   description:
-    "Create branch stock requests for commissary review and fulfillment.",
+    "Create branch stock requests for Warehouse review and fulfillment.",
   getContent: getPlaceOrderContent,
   content: getPlaceOrderContent(),
   afterRender: setupPlaceOrderEvents
