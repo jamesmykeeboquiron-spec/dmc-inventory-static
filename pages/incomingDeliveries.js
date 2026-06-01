@@ -81,6 +81,45 @@ function saveIncomingDeliveryIssues(issues) {
   );
 }
 
+function showIncomingDeliveryModal({ type, title, message, confirmLabel }) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel
+    });
+    return;
+  }
+
+  alert(message);
+}
+
+function showIncomingDeliveryConfirm({
+  type,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm
+}) {
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      onConfirm
+    });
+    return;
+  }
+
+  if (confirm(message)) {
+    onConfirm();
+  }
+}
+
 function getIncomingDeliveryTodayDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -152,13 +191,13 @@ function getIncomingDeliveryOrders() {
       return (
         String(order.orderId || "").toLowerCase().includes(searchValue) ||
         String(order.branch || "").toLowerCase().includes(searchValue) ||
+        String(order.source || "").toLowerCase().includes(searchValue) ||
+        String(order.requestSource || "").toLowerCase().includes(searchValue) ||
         String(order.department || "").toLowerCase().includes(searchValue) ||
-        String(order.fulfillment?.driver || "")
-          .toLowerCase()
-          .includes(searchValue) ||
         String(order.fulfillment?.preparedBy || "")
           .toLowerCase()
           .includes(searchValue) ||
+        String(order.requestedBy || "").toLowerCase().includes(searchValue) ||
         (order.lines || []).some(
           (line) =>
             String(line.itemId || "").toLowerCase().includes(searchValue) ||
@@ -297,15 +336,19 @@ function buildBranchTransferInLedgerEntries(order, receivingDraft) {
         submittedAt,
         submittedAtDisplay,
         batchId: order.orderId,
+        location: order.branch || "DMC-Iriga Branch",
         department: order.department || "Branch",
         section: line.section || "",
         itemId: line.itemId || "",
         itemName: line.itemName || "",
         movementType: "Transfer In",
+        movementField: "transferIn",
+        stockEffect: "add",
         quantity: usableQty,
         unit: line.unit || "",
         source: "Incoming Delivery Receipt",
-        notes: `Received from Commissary by ${
+        destination: order.branch || "DMC-Iriga Branch",
+        notes: `Received from Warehouse by ${
           receivingDraft.receivedBy || "branch receiver"
         }. Order ${order.orderId}. Condition: ${condition}.`
       };
@@ -398,7 +441,6 @@ function buildDeliveryIssueRecords(order, receivingDraft) {
         varianceQty,
         condition,
         issueReason: getDeliveryIssueReason(sentQty, receivedQty, condition),
-        driver: order.fulfillment?.driver || "",
         preparedBy: order.fulfillment?.preparedBy || "",
         receivedBy: receivingDraft.receivedBy || "",
         deliveryNotes: order.fulfillment?.deliveryNotes || "",
@@ -443,7 +485,7 @@ function renderIncomingDeliveryList() {
     return `
       <div class="order-list-empty">
         <p>No incoming deliveries.</p>
-        <span>Orders marked On the Way by commissary will appear here.</span>
+        <span>Orders marked On the Way by Warehouse will appear here.</span>
       </div>
     `;
   }
@@ -463,7 +505,7 @@ function renderIncomingDeliveryList() {
                 <strong>${order.orderId}</strong>
                 <p>${order.department || "-"} • ${(order.lines || []).length} item(s)</p>
                 <span>
-                  Driver: ${order.fulfillment?.driver || "-"} •
+                  Prepared By: ${order.fulfillment?.preparedBy || "-"} •
                   Sent: ${formatIncomingDeliveryDateTime(order.fulfillment?.sentAt)}
                 </span>
               </div>
@@ -600,7 +642,7 @@ function renderIncomingDeliveryDetail() {
           <h3>${order.orderId}</h3>
           <p>
             ${order.branch || "DMC-Iriga Branch"} • ${order.department || "-"} •
-            Driver: ${order.fulfillment?.driver || "-"}
+            Sent from Warehouse
           </p>
         </div>
 
@@ -616,13 +658,13 @@ function renderIncomingDeliveryDetail() {
 
       <div class="branch-order-info-grid">
         <div>
-          <p class="eyebrow">Prepared By</p>
-          <strong>${order.fulfillment?.preparedBy || "-"}</strong>
+          <p class="eyebrow">Requested By</p>
+          <strong>${order.requestedBy || "-"}</strong>
         </div>
 
         <div>
-          <p class="eyebrow">Driver / Rider</p>
-          <strong>${order.fulfillment?.driver || "-"}</strong>
+          <p class="eyebrow">Prepared By</p>
+          <strong>${order.fulfillment?.preparedBy || "-"}</strong>
         </div>
 
         <div>
@@ -715,7 +757,7 @@ function getIncomingDeliveriesContent() {
         <div class="panel-header">
           <div>
             <h3>Incoming Deliveries</h3>
-            <p>Confirm deliveries sent by commissary.</p>
+            <p>Confirm deliveries sent by Warehouse.</p>
           </div>
 
           <span class="badge info-badge">On the Way</span>
@@ -727,7 +769,7 @@ function getIncomingDeliveriesContent() {
             <input
               id="incoming-delivery-search"
               type="text"
-              placeholder="Search order, driver, item..."
+              placeholder="Search order, prepared by, item..."
               value="${window.DMC_INCOMING_DELIVERIES_SEARCH}"
             />
           </label>
@@ -816,7 +858,12 @@ function confirmIncomingDelivery(order) {
   const draft = getIncomingDraft(order);
 
   if (!String(draft.receivedBy || "").trim()) {
-    alert("Please enter Received By.");
+    showIncomingDeliveryModal({
+      type: "warning",
+      title: "Received By Required",
+      message: "Please enter who received this delivery.",
+      confirmLabel: "Got it"
+    });
     return;
   }
 
@@ -826,7 +873,12 @@ function confirmIncomingDelivery(order) {
   });
 
   if (hasInvalidReceivedQty) {
-    alert("Please enter valid received quantities.");
+    showIncomingDeliveryModal({
+      type: "warning",
+      title: "Invalid Quantity",
+      message: "Please enter valid received quantities.",
+      confirmLabel: "Got it"
+    });
     return;
   }
 
@@ -836,66 +888,72 @@ function confirmIncomingDelivery(order) {
     ? "Branch confirmed delivery with variance or condition issue. Branch Transfer In was logged for usable received quantities only. Delivery Issue record was created."
     : "Branch confirmed delivery received complete. Branch Transfer In was logged.";
 
-  const confirmed = confirm(
-    hasVariance
+  showIncomingDeliveryConfirm({
+    type: hasVariance ? "warning" : "success",
+    title: hasVariance
+      ? "Confirm Receipt with Variance?"
+      : "Confirm Receipt Complete?",
+    message: hasVariance
       ? `Confirm receipt for ${order.orderId} with variance and create Delivery Issue record?`
-      : `Confirm receipt for ${order.orderId} as complete?`
-  );
+      : `Confirm receipt for ${order.orderId} as complete?`,
+    confirmLabel: hasVariance ? "Confirm Variance" : "Confirm Receipt",
+    cancelLabel: "Cancel",
+    onConfirm: () => {
+      writeBranchTransferInToLedger(order, draft);
 
-  if (!confirmed) {
-    return;
-  }
+      if (hasVariance) {
+        writeDeliveryIssuesForVariance(order, draft);
+      }
 
-  writeBranchTransferInToLedger(order, draft);
+      const orders = getStoredIncomingDeliveryOrders();
 
-  if (hasVariance) {
-    writeDeliveryIssuesForVariance(order, draft);
-  }
-
-  const orders = getStoredIncomingDeliveryOrders();
-
-  const updatedOrders = orders.map((storedOrder) => {
-    if (storedOrder.orderId !== order.orderId) {
-      return storedOrder;
-    }
-
-    return {
-      ...storedOrder,
-      status: nextStatus,
-      receiving: {
-        ...draft,
-        receivedAt: new Date().toISOString()
-      },
-      statusHistory: [
-        ...(storedOrder.statusHistory || []),
-        {
-          status: nextStatus,
-          timestamp: new Date().toISOString(),
-          note: statusNote
+      const updatedOrders = orders.map((storedOrder) => {
+        if (storedOrder.orderId !== order.orderId) {
+          return storedOrder;
         }
-      ]
-    };
+
+        return {
+          ...storedOrder,
+          status: nextStatus,
+          receiving: {
+            ...draft,
+            receivedAt: new Date().toISOString()
+          },
+          statusHistory: [
+            ...(storedOrder.statusHistory || []),
+            {
+              status: nextStatus,
+              timestamp: new Date().toISOString(),
+              note: statusNote
+            }
+          ]
+        };
+      });
+
+      saveIncomingDeliveryOrders(updatedOrders);
+
+      window.DMC_INCOMING_DELIVERIES_SELECTED_ID = "";
+      delete window.DMC_INCOMING_DELIVERIES_DRAFT[order.orderId];
+
+      showIncomingDeliveryModal({
+        type: hasVariance ? "warning" : "success",
+        title: hasVariance ? "Delivery Variance Recorded" : "Delivery Received",
+        message: hasVariance
+          ? "Delivery confirmed with variance. Delivery Issue record was created."
+          : "Delivery confirmed complete. Branch Transfer In was logged.",
+        confirmLabel: "Continue"
+      });
+
+      refreshIncomingDeliveriesPage();
+    }
   });
-
-  saveIncomingDeliveryOrders(updatedOrders);
-
-  window.DMC_INCOMING_DELIVERIES_SELECTED_ID = "";
-  delete window.DMC_INCOMING_DELIVERIES_DRAFT[order.orderId];
-
-  alert(
-    hasVariance
-      ? "Delivery confirmed with variance. Delivery Issue record was created."
-      : "Delivery confirmed complete. Branch Transfer In was logged."
-  );
-
-  refreshIncomingDeliveriesPage();
 }
 
 function setupIncomingDeliveriesEvents() {
   const searchInput = document.getElementById("incoming-delivery-search");
 
   if (searchInput) {
-    searchInput.addEventListener("change", () => {
+    searchInput.addEventListener("input", () => {
       window.DMC_INCOMING_DELIVERIES_SEARCH = searchInput.value;
       window.DMC_INCOMING_DELIVERIES_SELECTED_ID = "";
       refreshIncomingDeliveriesPage();
@@ -930,7 +988,7 @@ function setupIncomingDeliveriesEvents() {
   });
 
   document.querySelectorAll("[data-received-notes]").forEach((input) => {
-    input.addEventListener("change", () => {
+    input.addEventListener("input", () => {
       saveIncomingDeliveryDraftFromInputs(selectedOrder);
     });
   });
@@ -940,7 +998,7 @@ function setupIncomingDeliveriesEvents() {
 
   [receivedByInput, receivingNotesInput].forEach((input) => {
     if (input) {
-      input.addEventListener("change", () => {
+      input.addEventListener("input", () => {
         saveIncomingDeliveryDraftFromInputs(selectedOrder);
       });
     }
@@ -966,7 +1024,7 @@ window.DMC_PAGES["incoming-deliveries"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Incoming Deliveries",
   description:
-    "Confirm deliveries sent by commissary and flag missing, damaged, or spoiled items.",
+    "Confirm deliveries sent by Warehouse and flag missing, damaged, or spoiled items.",
   getContent: getIncomingDeliveriesContent,
   content: getIncomingDeliveriesContent(),
   afterRender: setupIncomingDeliveriesEvents
