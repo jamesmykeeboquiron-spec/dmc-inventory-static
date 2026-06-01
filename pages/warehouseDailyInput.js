@@ -1,35 +1,882 @@
-.warehouse-daily-input-toolbar {
-  display: grid;
-  grid-template-columns: 180px 220px minmax(240px, 1fr) 240px;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.025);
-  border-radius: 22px;
+window.DMC_PAGES = window.DMC_PAGES || {};
+
+const DMC_MASTER_LIST_STORAGE_KEY_FOR_WAREHOUSE_INPUT =
+  "dmc_master_list_items";
+const DMC_WAREHOUSE_DAILY_INPUT_KEY = "dmc_warehouse_daily_input_today";
+const DMC_WAREHOUSE_LOG_STORAGE_KEY = "dmc_warehouse_log_entries";
+
+window.DMC_WAREHOUSE_DAILY_INPUT_MODE =
+  window.DMC_WAREHOUSE_DAILY_INPUT_MODE || "edit";
+
+window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY =
+  window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY || "";
+
+window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT =
+  window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT || "all";
+
+function getWarehouseInputMasterListItems() {
+  const storedItems = localStorage.getItem(
+    DMC_MASTER_LIST_STORAGE_KEY_FOR_WAREHOUSE_INPUT
+  );
+
+  if (storedItems) {
+    try {
+      return JSON.parse(storedItems);
+    } catch {
+      return window.DMC_DATA?.masterList?.items || [];
+    }
+  }
+
+  return window.DMC_DATA?.masterList?.items || [];
 }
 
-.warehouse-daily-input-toolbar label {
-  display: grid;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+function getWarehouseInputSettings() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (storedSettings) {
+    try {
+      return JSON.parse(storedSettings);
+    } catch {
+      return { managerNames: [] };
+    }
+  }
+
+  return { managerNames: [] };
 }
 
-.warehouse-daily-input-toolbar input,
-.warehouse-daily-input-toolbar select {
-  height: 44px;
+function getSettingName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || "";
 }
 
-.warehouse-daily-input-cell {
-  min-width: 84px;
+function itemBelongsToWarehouseDailyInput(item) {
+  const operatingArea = String(item.operatingArea || "").toLowerCase();
+
+  return (
+    operatingArea.includes("warehouse") ||
+    operatingArea.includes("stockroom")
+  );
 }
 
-@media (max-width: 900px) {
-  .warehouse-daily-input-toolbar {
-    grid-template-columns: 1fr;
+function getAllWarehouseDailyInputItems() {
+  return getWarehouseInputMasterListItems().filter(
+    itemBelongsToWarehouseDailyInput
+  );
+}
+
+function getWarehouseDailyInputDepartments() {
+  return [
+    ...new Set(
+      getAllWarehouseDailyInputItems()
+        .map((item) => item.department || "Unassigned")
+        .filter(Boolean)
+    )
+  ].sort();
+}
+
+function getWarehouseDailyInputItems() {
+  const selectedDepartment = String(
+    window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT || "all"
+  ).toLowerCase();
+
+  return getAllWarehouseDailyInputItems().filter((item) => {
+    if (selectedDepartment === "all") {
+      return true;
+    }
+
+    return (
+      String(item.department || "Unassigned").toLowerCase() ===
+      selectedDepartment
+    );
+  });
+}
+
+function getStoredWarehouseDailyInput() {
+  const storedInput = localStorage.getItem(DMC_WAREHOUSE_DAILY_INPUT_KEY);
+
+  if (!storedInput) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(storedInput);
+  } catch {
+    return {};
   }
 }
+
+function saveWarehouseDailyInput(inputData) {
+  localStorage.setItem(
+    DMC_WAREHOUSE_DAILY_INPUT_KEY,
+    JSON.stringify(inputData)
+  );
+}
+
+function getStoredWarehouseLogEntries() {
+  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_LOG_STORAGE_KEY);
+
+  if (!storedEntries) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(storedEntries);
+  } catch {
+    return [];
+  }
+}
+
+function saveWarehouseLogEntries(entries) {
+  localStorage.setItem(DMC_WAREHOUSE_LOG_STORAGE_KEY, JSON.stringify(entries));
+}
+
+function getTodayDateStringForWarehouseInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getCurrentWarehouseInputTimestamp() {
+  return new Date().toISOString();
+}
+
+function getReadableWarehouseInputTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function createWarehouseDailyInputBatchId() {
+  const now = new Date();
+  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
+  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
+
+  return `WH-${datePart}-${timePart}`;
+}
+
+function getWarehouseDailyInputValue(inputData, itemId, fieldName) {
+  return inputData?.[itemId]?.[fieldName] || "";
+}
+
+function getWarehouseDailyReviewStatus(rowData) {
+  const inputFields = ["transferIn", "transferOut", "waste", "notes"];
+
+  const hasAnyInput = inputFields.some((field) => {
+    return String(rowData?.[field] || "").trim() !== "";
+  });
+
+  if (!hasAnyInput) {
+    return "";
+  }
+
+  const numericFields = ["transferIn", "transferOut", "waste"];
+
+  const hasInvalidNumber = numericFields.some((field) => {
+    const value = String(rowData?.[field] || "").trim();
+
+    if (value === "") {
+      return false;
+    }
+
+    return Number.isNaN(Number(value)) || Number(value) < 0;
+  });
+
+  if (hasInvalidNumber) {
+    return "CHECK";
+  }
+
+  const hasWaste = String(rowData?.waste || "").trim() !== "";
+  const hasNotes = String(rowData?.notes || "").trim() !== "";
+
+  if (hasWaste && !hasNotes) {
+    return "CHECK";
+  }
+
+  return "READY";
+}
+
+function buildWarehouseLogEntriesFromDailyInput() {
+  const warehouseItems = getWarehouseDailyInputItems();
+  const inputData = getStoredWarehouseDailyInput();
+  const batchId = createWarehouseDailyInputBatchId();
+  const submittedAt = getCurrentWarehouseInputTimestamp();
+  const submittedAtDisplay = getReadableWarehouseInputTimestamp();
+  const managerReviewedBy = window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY;
+
+  const movementFields = [
+    {
+      field: "transferIn",
+      movementType: "Transfer In",
+      stockEffect: "add"
+    },
+    {
+      field: "transferOut",
+      movementType: "Transfer Out",
+      stockEffect: "deduct"
+    },
+    {
+      field: "waste",
+      movementType: "Waste",
+      stockEffect: "deduct"
+    }
+  ];
+
+  const warehouseLogEntries = [];
+
+  warehouseItems.forEach((item) => {
+    const rowData = inputData[item.itemId] || {};
+    const notes = String(rowData.notes || "").trim();
+
+    movementFields.forEach((movement) => {
+      const rawValue = String(rowData[movement.field] || "").trim();
+
+      if (rawValue === "") {
+        return;
+      }
+
+      const quantity = Number(rawValue);
+
+      if (Number.isNaN(quantity) || quantity <= 0) {
+        return;
+      }
+
+      warehouseLogEntries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: movement.movementType,
+        movementField: movement.field,
+        stockEffect: movement.stockEffect,
+        quantity,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source:
+          movement.movementType === "Transfer In"
+            ? "Warehouse Daily Input"
+            : "Warehouse",
+        destination:
+          movement.movementType === "Transfer In"
+            ? "Warehouse"
+            : movement.movementType === "Waste"
+            ? "Waste"
+            : "Outgoing Transfer",
+        notes
+      });
+    });
+  });
+
+  return warehouseLogEntries;
+}
+
+function renderWarehouseDepartmentOptions() {
+  const currentDepartment = window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT;
+
+  return `
+    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${getWarehouseDailyInputDepartments()
+      .map(
+        (department) => `
+          <option value="${department}" ${
+          currentDepartment === department ? "selected" : ""
+        }>
+            ${department}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderWarehouseManagerOptions() {
+  const settings = getWarehouseInputSettings();
+  const currentManager = window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY;
+  const managers = settings.managerNames || [];
+
+  if (managers.length === 0) {
+    return `
+      <option value="" ${currentManager === "" ? "selected" : ""}>
+        Select manager
+      </option>
+      <option value="Manager Ana" ${
+        currentManager === "Manager Ana" ? "selected" : ""
+      }>
+        Manager Ana
+      </option>
+    `;
+  }
+
+  return `
+    <option value="" ${currentManager === "" ? "selected" : ""}>
+      Select manager
+    </option>
+    ${managers
+      .map((manager) => {
+        const managerName = getSettingName(manager);
+
+        return `
+          <option value="${managerName}" ${
+          currentManager === managerName ? "selected" : ""
+        }>
+            ${managerName}
+          </option>
+        `;
+      })
+      .join("")}
+  `;
+}
+
+function renderWarehouseDailyInputRows() {
+  const allWarehouseItems = getAllWarehouseDailyInputItems();
+  const warehouseItems = getWarehouseDailyInputItems();
+  const inputData = getStoredWarehouseDailyInput();
+
+  if (allWarehouseItems.length === 0) {
+    return `
+      <tr>
+        <td colspan="8">
+          No Warehouse items found. Add Warehouse items in the Master List first.
+        </td>
+      </tr>
+    `;
+  }
+
+  if (warehouseItems.length === 0) {
+    return `
+      <tr>
+        <td colspan="8">
+          No Warehouse items found for the selected department.
+        </td>
+      </tr>
+    `;
+  }
+
+  return warehouseItems
+    .map((item) => {
+      const rowData = inputData[item.itemId] || {};
+      const reviewStatus = getWarehouseDailyReviewStatus(rowData);
+
+      return `
+        <tr>
+          <td>${item.itemId || "-"}</td>
+          <td>${item.officialItemName || "-"}</td>
+          <td>${item.unit || "-"}</td>
+
+          <td>
+            <input
+              class="daily-input-cell warehouse-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transferIn"
+              type="number"
+              min="0"
+              step="any"
+              value="${getWarehouseDailyInputValue(
+                inputData,
+                item.itemId,
+                "transferIn"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell warehouse-daily-input-cell blue-input"
+              data-item-id="${item.itemId}"
+              data-field="transferOut"
+              type="number"
+              min="0"
+              step="any"
+              value="${getWarehouseDailyInputValue(
+                inputData,
+                item.itemId,
+                "transferOut"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell warehouse-daily-input-cell blue-input"
+              data-item-id="${item.itemId}"
+              data-field="waste"
+              type="number"
+              min="0"
+              step="any"
+              value="${getWarehouseDailyInputValue(
+                inputData,
+                item.itemId,
+                "waste"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell warehouse-daily-input-cell notes-input"
+              data-item-id="${item.itemId}"
+              data-field="notes"
+              type="text"
+              value="${getWarehouseDailyInputValue(
+                inputData,
+                item.itemId,
+                "notes"
+              )}"
+            />
+          </td>
+
+          <td>
+            ${
+              reviewStatus
+                ? `<span class="badge ${
+                    reviewStatus === "CHECK" ? "danger-badge" : ""
+                  }">${reviewStatus}</span>`
+                : "-"
+            }
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function getWarehouseDailyInputSummary() {
+  const inputData = getStoredWarehouseDailyInput();
+  const rows = Object.values(inputData);
+
+  const rowsWithInput = rows.filter(
+    (row) => getWarehouseDailyReviewStatus(row) !== ""
+  );
+  const readyRows = rows.filter(
+    (row) => getWarehouseDailyReviewStatus(row) === "READY"
+  );
+  const checkRows = rows.filter(
+    (row) => getWarehouseDailyReviewStatus(row) === "CHECK"
+  );
+
+  return {
+    rowsWithInput: rowsWithInput.length,
+    readyRows: readyRows.length,
+    checkRows: checkRows.length
+  };
+}
+
+function renderWarehouseEditModeContent() {
+  return `
+    <div class="table-wrap">
+      <table class="daily-input-table">
+        <thead>
+          <tr>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Unit</th>
+            <th>Transfer In</th>
+            <th>Transfer Out</th>
+            <th>Waste</th>
+            <th>Notes</th>
+            <th>Review</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${renderWarehouseDailyInputRows()}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderWarehouseSubmitPreviewList() {
+  const warehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+
+  if (warehouseLogEntries.length === 0) {
+    return `
+      <p class="submit-preview-empty">
+        No warehouse movements ready to submit yet. Go back to edit mode and fill in any movement field.
+      </p>
+    `;
+  }
+
+  return `
+    <ul class="submit-preview-list review-mode-list">
+      ${warehouseLogEntries
+        .map(
+          (entry) => `
+            <li>
+              <div>
+                <strong>${entry.itemName}</strong>
+                <span>
+                  ${entry.movementType}: ${entry.quantity} ${entry.unit}
+                </span>
+              </div>
+
+              <div class="preview-actions">
+                <button
+                  class="tiny-button"
+                  data-preview-edit="true"
+                >
+                  Edit
+                </button>
+
+                <button
+                  class="tiny-button danger"
+                  data-preview-remove-item="${entry.itemId}"
+                  data-preview-remove-field="${entry.movementField}"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          `
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function renderWarehouseReviewModeContent() {
+  return `
+    <div class="submit-preview-box">
+      <div>
+        <h4>Warehouse Submit Review</h4>
+        <p>
+          Review the movements below before posting. Use Edit to return to the table,
+          or Remove to clear a pending movement from today’s input.
+        </p>
+      </div>
+
+      ${renderWarehouseSubmitPreviewList()}
+
+      <div class="form-actions review-actions">
+        <button class="ghost-button" id="back-to-warehouse-edit-mode">
+          Back to Edit
+        </button>
+
+        <button class="primary-button" id="submit-warehouse-daily-input">
+          Submit to Warehouse Log
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function getWarehouseDailyInputContent() {
+  const isReviewMode = window.DMC_WAREHOUSE_DAILY_INPUT_MODE === "review";
+
+  return `
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Warehouse Daily Input — Today Only</h3>
+          <p>
+            Enter today’s Warehouse movements, review them, then submit to Warehouse Log Transaction.
+          </p>
+        </div>
+
+        <div class="form-actions">
+          ${
+            isReviewMode
+              ? `<button class="ghost-button" id="back-to-warehouse-edit-mode-top">Back to Edit</button>`
+              : `<button class="primary-button" id="ready-for-warehouse-review">Ready for Review</button>`
+          }
+
+          <button class="ghost-button" id="clear-warehouse-daily-input">
+            Clear Today
+          </button>
+        </div>
+      </div>
+
+      <div class="warehouse-daily-input-toolbar">
+        <label>
+          Location
+          <input type="text" value="Warehouse" disabled />
+        </label>
+
+        <label>
+          Department
+          <select id="warehouse-daily-input-department" ${
+            isReviewMode ? "disabled" : ""
+          }>
+            ${renderWarehouseDepartmentOptions()}
+          </select>
+        </label>
+
+        <label class="filter-search">
+          Current Mode
+          <input
+            type="text"
+            value="${isReviewMode ? "Review Mode" : "Warehouse Daily Input"}"
+            disabled
+          />
+        </label>
+
+        <label>
+          Manager Reviewed By
+          <select id="warehouse-manager-reviewed-by" ${
+            isReviewMode ? "disabled" : ""
+          }>
+            ${renderWarehouseManagerOptions()}
+          </select>
+        </label>
+      </div>
+
+      ${
+        isReviewMode
+          ? renderWarehouseReviewModeContent()
+          : renderWarehouseEditModeContent()
+      }
+    </section>
+  `;
+}
+
+function refreshWarehouseDailyInputPage() {
+  window.DMC_PAGES["warehouse-daily-input"].content =
+    getWarehouseDailyInputContent();
+
+  renderPage("warehouse-daily-input");
+}
+
+function returnToWarehouseEditMode() {
+  window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
+  refreshWarehouseDailyInputPage();
+}
+
+function showWarehouseInputModal({ type, title, message, confirmLabel }) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel
+    });
+    return;
+  }
+
+  alert(message);
+}
+
+function showWarehouseInputConfirm({
+  type,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm
+}) {
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      onConfirm
+    });
+    return;
+  }
+
+  if (confirm(message)) {
+    onConfirm();
+  }
+}
+
+function setupWarehouseDailyInputEvents() {
+  const departmentSelect = document.getElementById(
+    "warehouse-daily-input-department"
+  );
+
+  if (departmentSelect) {
+    departmentSelect.addEventListener("change", () => {
+      window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT = departmentSelect.value;
+      window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
+      refreshWarehouseDailyInputPage();
+    });
+  }
+
+  const managerSelect = document.getElementById("warehouse-manager-reviewed-by");
+
+  if (managerSelect) {
+    managerSelect.addEventListener("change", () => {
+      window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY = managerSelect.value;
+    });
+  }
+
+  document.querySelectorAll(".warehouse-daily-input-cell").forEach((input) => {
+    input.addEventListener("change", () => {
+      const inputData = getStoredWarehouseDailyInput();
+      const itemId = input.dataset.itemId;
+      const field = input.dataset.field;
+
+      inputData[itemId] = inputData[itemId] || {};
+      inputData[itemId][field] = input.value;
+
+      saveWarehouseDailyInput(inputData);
+      refreshWarehouseDailyInputPage();
+    });
+  });
+
+  const readyButton = document.getElementById("ready-for-warehouse-review");
+
+  if (readyButton) {
+    readyButton.addEventListener("click", () => {
+      const warehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+      const summary = getWarehouseDailyInputSummary();
+
+      if (!window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY) {
+        showWarehouseInputModal({
+          type: "warning",
+          title: "Manager Required",
+          message:
+            "Please choose the manager who reviewed this Warehouse Daily Input before continuing.",
+          confirmLabel: "Got it"
+        });
+        return;
+      }
+
+      if (warehouseLogEntries.length === 0) {
+        showWarehouseInputModal({
+          type: "warning",
+          title: "No Movements Ready",
+          message:
+            "No Warehouse Daily Input movements are ready for review yet.",
+          confirmLabel: "Got it"
+        });
+        return;
+      }
+
+      if (summary.checkRows > 0) {
+        showWarehouseInputModal({
+          type: "warning",
+          title: "Rows Need Review",
+          message:
+            "Some rows still need review. Please fix CHECK rows before posting.",
+          confirmLabel: "Got it"
+        });
+        return;
+      }
+
+      window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "review";
+      refreshWarehouseDailyInputPage();
+    });
+  }
+
+  const backButtons = [
+    document.getElementById("back-to-warehouse-edit-mode"),
+    document.getElementById("back-to-warehouse-edit-mode-top")
+  ];
+
+  backButtons.forEach((button) => {
+    if (button) {
+      button.addEventListener("click", returnToWarehouseEditMode);
+    }
+  });
+
+  document.querySelectorAll("[data-preview-edit]").forEach((button) => {
+    button.addEventListener("click", returnToWarehouseEditMode);
+  });
+
+  document.querySelectorAll("[data-preview-remove-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const itemId = button.dataset.previewRemoveItem;
+      const field = button.dataset.previewRemoveField;
+      const inputData = getStoredWarehouseDailyInput();
+
+      if (inputData[itemId]) {
+        inputData[itemId][field] = "";
+      }
+
+      saveWarehouseDailyInput(inputData);
+      refreshWarehouseDailyInputPage();
+    });
+  });
+
+  const clearButton = document.getElementById("clear-warehouse-daily-input");
+
+  if (clearButton) {
+    clearButton.addEventListener("click", () => {
+      showWarehouseInputConfirm({
+        type: "danger",
+        title: "Clear Warehouse Daily Input?",
+        message:
+          "This will clear today’s Warehouse Daily Input rows. This does not affect already submitted Warehouse Log entries.",
+        confirmLabel: "Clear Today",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          localStorage.removeItem(DMC_WAREHOUSE_DAILY_INPUT_KEY);
+          window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
+          refreshWarehouseDailyInputPage();
+        }
+      });
+    });
+  }
+
+  const submitButton = document.getElementById("submit-warehouse-daily-input");
+
+  if (submitButton) {
+    submitButton.addEventListener("click", () => {
+      const newWarehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+
+      if (newWarehouseLogEntries.length === 0) {
+        showWarehouseInputModal({
+          type: "warning",
+          title: "No Warehouse Entries",
+          message: "No Warehouse Daily Input entries are ready to submit.",
+          confirmLabel: "Got it"
+        });
+        return;
+      }
+
+      showWarehouseInputConfirm({
+        type: "success",
+        title: "Submit Warehouse Daily Input?",
+        message: `Submit ${newWarehouseLogEntries.length} Warehouse Log entries and clear today’s input?`,
+        confirmLabel: "Submit Entries",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          const currentWarehouseLogEntries = getStoredWarehouseLogEntries();
+          const updatedWarehouseLogEntries = [
+            ...currentWarehouseLogEntries,
+            ...newWarehouseLogEntries
+          ];
+
+          saveWarehouseLogEntries(updatedWarehouseLogEntries);
+          localStorage.removeItem(DMC_WAREHOUSE_DAILY_INPUT_KEY);
+
+          window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
+
+          showWarehouseInputModal({
+            type: "success",
+            title: "Warehouse Daily Input Submitted",
+            message:
+              "Warehouse Daily Input was submitted to Warehouse Log Transaction.",
+            confirmLabel: "Continue"
+          });
+
+          refreshWarehouseDailyInputPage();
+        }
+      });
+    });
+  }
+}
+
+window.DMC_PAGES["warehouse-daily-input"] = {
+  eyebrow: "Warehouse",
+  title: "Warehouse Daily Input",
+  description:
+    "Daily input sheet for Warehouse transfer in, transfer out, waste, and notes.",
+  getContent: getWarehouseDailyInputContent,
+  content: getWarehouseDailyInputContent(),
+  afterRender: setupWarehouseDailyInputEvents
+};
