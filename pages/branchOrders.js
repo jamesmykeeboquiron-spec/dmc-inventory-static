@@ -79,10 +79,9 @@ function getWarehouseOrderSettings() {
 
   if (!storedSettings) {
     return {
-      managerNames: [],
-      managers: [],
       staffNames: [],
-      staff: []
+      staff: [],
+      staffMembers: []
     };
   }
 
@@ -90,10 +89,9 @@ function getWarehouseOrderSettings() {
     return JSON.parse(storedSettings);
   } catch {
     return {
-      managerNames: [],
-      managers: [],
       staffNames: [],
-      staff: []
+      staff: [],
+      staffMembers: []
     };
   }
 }
@@ -106,49 +104,11 @@ function getSettingName(option) {
   return option?.name || "";
 }
 
-function getManagerNamesForWarehouseOrders() {
-  const settings = getWarehouseOrderSettings();
-  const managers = settings.managerNames || settings.managers || [];
-
-  return managers.map(getSettingName).filter(Boolean);
-}
-
 function getStaffNamesForWarehouseOrders() {
   const settings = getWarehouseOrderSettings();
   const staff = settings.staffNames || settings.staff || settings.staffMembers || [];
 
   return staff.map(getSettingName).filter(Boolean);
-}
-
-function renderManagerOptions(currentValue) {
-  const managers = getManagerNamesForWarehouseOrders();
-
-  if (managers.length === 0) {
-    return `
-      <option value="" ${!currentValue ? "selected" : ""}>Select manager</option>
-      <option value="Manager Ana" ${
-        currentValue === "Manager Ana" ? "selected" : ""
-      }>Manager Ana</option>
-      <option value="Manager Lou" ${
-        currentValue === "Manager Lou" ? "selected" : ""
-      }>Manager Lou</option>
-    `;
-  }
-
-  return `
-    <option value="" ${!currentValue ? "selected" : ""}>Select manager</option>
-    ${managers
-      .map(
-        (manager) => `
-          <option value="${manager}" ${
-          currentValue === manager ? "selected" : ""
-        }>
-            ${manager}
-          </option>
-        `
-      )
-      .join("")}
-  `;
 }
 
 function renderStaffOptions(currentValue) {
@@ -407,8 +367,7 @@ function getFulfillmentDraft(order) {
     return {
       lines: {},
       preparedBy: "",
-      deliveryNotes: "",
-      requestedBy: ""
+      deliveryNotes: ""
     };
   }
 
@@ -430,8 +389,7 @@ function getFulfillmentDraft(order) {
     window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId] = {
       lines: lineDrafts,
       preparedBy: existingFulfillment.preparedBy || "",
-      deliveryNotes: existingFulfillment.deliveryNotes || "",
-      requestedBy: order.requestedBy || ""
+      deliveryNotes: existingFulfillment.deliveryNotes || ""
     };
   }
 
@@ -645,12 +603,10 @@ function renderSelectedWarehouseOrder() {
       </div>
 
       <div class="branch-order-info-grid warehouse-order-info-grid">
-        <label>
+        <div>
           <p class="eyebrow">Requested By</p>
-          <select id="warehouse-order-requested-by" ${isLocked ? "disabled" : ""}>
-            ${renderManagerOptions(draft.requestedBy || order.requestedBy || "")}
-          </select>
-        </label>
+          <strong>${order.requestedBy || "Branch Manager"}</strong>
+        </div>
 
         <div>
           <p class="eyebrow">Order Notes</p>
@@ -861,11 +817,9 @@ function saveFulfillmentDraftFromInputs(order) {
   const deliveryNotesInput = document.getElementById(
     "fulfillment-delivery-notes"
   );
-  const requestedByInput = document.getElementById("warehouse-order-requested-by");
 
   draft.preparedBy = preparedByInput?.value || "";
   draft.deliveryNotes = deliveryNotesInput?.value || "";
-  draft.requestedBy = requestedByInput?.value || "";
 
   window.DMC_BRANCH_ORDER_FULFILLMENT_DRAFT[order.orderId] = draft;
 }
@@ -909,8 +863,7 @@ function buildWarehouseTransferOutEntries(order, fulfillmentDraft) {
         stockEffect: "deduct",
         quantity: sentQty,
         unit: line.unit || "",
-        managerReviewedBy:
-          fulfillmentDraft.requestedBy || order.requestedBy || "",
+        managerReviewedBy: order.requestedBy || "",
         preparedBy: fulfillmentDraft.preparedBy || "",
         source: "Warehouse Order Fulfillment",
         destination: source,
@@ -986,9 +939,8 @@ function setupBranchOrdersEvents() {
   const deliveryNotesInput = document.getElementById(
     "fulfillment-delivery-notes"
   );
-  const requestedByInput = document.getElementById("warehouse-order-requested-by");
 
-  [preparedByInput, deliveryNotesInput, requestedByInput].forEach((input) => {
+  [preparedByInput, deliveryNotesInput].forEach((input) => {
     if (input) {
       input.addEventListener("change", () => {
         saveFulfillmentDraftFromInputs(selectedOrder);
@@ -1058,11 +1010,6 @@ function setupBranchOrdersEvents() {
         return;
       }
 
-      if (!draft.requestedBy.trim()) {
-        alert("Please select Requested By.");
-        return;
-      }
-
       const confirmed = confirm(
         `Mark order ${selectedOrder.orderId} as On the Way? This will deduct Warehouse Stock.`
       );
@@ -1078,7 +1025,6 @@ function setupBranchOrdersEvents() {
         "On the Way",
         "Warehouse marked the order as On the Way. Warehouse Transfer Out was logged.",
         {
-          requestedBy: draft.requestedBy,
           fulfillment: {
             ...draft,
             sentAt: new Date().toISOString()
