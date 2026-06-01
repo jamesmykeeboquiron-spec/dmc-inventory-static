@@ -81,6 +81,102 @@ function saveIncomingDeliveryIssues(issues) {
   );
 }
 
+function getIncomingDeliverySettings() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (!storedSettings) {
+    return {
+      managerNames: [],
+      managers: [],
+      branchManagers: [],
+      staffMembers: [],
+      staff: []
+    };
+  }
+
+  try {
+    return JSON.parse(storedSettings);
+  } catch {
+    return {
+      managerNames: [],
+      managers: [],
+      branchManagers: [],
+      staffMembers: [],
+      staff: []
+    };
+  }
+}
+
+function getIncomingDeliverySettingName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || option?.fullName || option?.label || "";
+}
+
+function getIncomingDeliveryManagers() {
+  const settings = getIncomingDeliverySettings();
+
+  const managerSources = [
+    ...(settings.managerNames || []),
+    ...(settings.managers || []),
+    ...(settings.branchManagers || [])
+  ];
+
+  const staffManagers = (settings.staffMembers || settings.staff || []).filter(
+    (staff) => {
+      const role = String(staff.role || staff.position || staff.access || "")
+        .toLowerCase();
+
+      return role.includes("manager") || role.includes("admin");
+    }
+  );
+
+  return [...managerSources, ...staffManagers]
+    .map(getIncomingDeliverySettingName)
+    .filter(Boolean);
+}
+
+function renderIncomingReceivedByOptions(currentValue) {
+  const managers = getIncomingDeliveryManagers();
+
+  if (managers.length === 0) {
+    return `
+      <option value="" ${!currentValue ? "selected" : ""}>
+        Select receiving manager
+      </option>
+      <option value="Branch Manager" ${
+        currentValue === "Branch Manager" ? "selected" : ""
+      }>
+        Branch Manager
+      </option>
+      <option value="Manager Ana" ${
+        currentValue === "Manager Ana" ? "selected" : ""
+      }>
+        Manager Ana
+      </option>
+    `;
+  }
+
+  return `
+    <option value="" ${!currentValue ? "selected" : ""}>
+      Select receiving manager
+    </option>
+    ${managers
+      .map(
+        (manager) => `
+          <option value="${manager}" ${
+          currentValue === manager ? "selected" : ""
+        }>
+            ${manager}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
 function showIncomingDeliveryModal({ type, title, message, confirmLabel }) {
   if (typeof window.DMC_SHOW_MODAL === "function") {
     window.DMC_SHOW_MODAL({
@@ -695,12 +791,9 @@ function renderIncomingDeliveryDetail() {
       <div class="incoming-receiving-meta">
         <label>
           Received By
-          <input
-            id="incoming-received-by"
-            type="text"
-            placeholder="Branch staff / manager"
-            value="${draft.receivedBy || ""}"
-          />
+          <select id="incoming-received-by">
+            ${renderIncomingReceivedByOptions(draft.receivedBy || "")}
+          </select>
         </label>
 
         <label>
@@ -861,7 +954,7 @@ function confirmIncomingDelivery(order) {
     showIncomingDeliveryModal({
       type: "warning",
       title: "Received By Required",
-      message: "Please enter who received this delivery.",
+      message: "Please select who received this delivery.",
       confirmLabel: "Got it"
     });
     return;
@@ -999,6 +1092,10 @@ function setupIncomingDeliveriesEvents() {
   [receivedByInput, receivingNotesInput].forEach((input) => {
     if (input) {
       input.addEventListener("input", () => {
+        saveIncomingDeliveryDraftFromInputs(selectedOrder);
+      });
+
+      input.addEventListener("change", () => {
         saveIncomingDeliveryDraftFromInputs(selectedOrder);
       });
     }
