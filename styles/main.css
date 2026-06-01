@@ -6281,3 +6281,95 @@ input[type="date"]:disabled {
     display: grid;
   }
 }
+
+/* =========================================================
+   WAREHOUSE ORDER QUEUE / BRANCH ORDERS UPGRADE
+========================================================= */
+
+.warehouse-order-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.warehouse-order-filter-grid label,
+.warehouse-order-info-grid label,
+.warehouse-fulfillment-meta-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-order-filter-grid select,
+.warehouse-order-info-grid select,
+.warehouse-fulfillment-meta-grid select {
+  height: 44px;
+}
+
+.warehouse-order-info-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.warehouse-fulfillment-meta-grid {
+  grid-template-columns: 1fr;
+}
+
+.warehouse-order-fulfillment-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 22px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px);
+}
+
+.warehouse-order-fulfillment-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.warehouse-order-fulfillment-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--gold);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.warehouse-order-fulfillment-table thead tr {
+  background: rgba(255, 255, 255, 0.095);
+}
+
+.warehouse-order-fulfillment-table th,
+.warehouse-order-fulfillment-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.warehouse-order-fulfillment-table input {
+  max-width: 120px;
+}
+
+@media (max-width: 1100px) {
+  .warehouse-order-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .warehouse-order-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
