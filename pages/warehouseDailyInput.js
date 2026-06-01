@@ -14,6 +14,9 @@ window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY =
 window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT =
   window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT || "all";
 
+window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH =
+  window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH || "";
+
 function getWarehouseInputMasterListItems() {
   const storedItems = localStorage.getItem(
     DMC_MASTER_LIST_STORAGE_KEY_FOR_WAREHOUSE_INPUT
@@ -37,11 +40,11 @@ function getWarehouseInputSettings() {
     try {
       return JSON.parse(storedSettings);
     } catch {
-      return { managerNames: [] };
+      return { managerNames: [], managers: [] };
     }
   }
 
-  return { managerNames: [] };
+  return { managerNames: [], managers: [] };
 }
 
 function getSettingName(option) {
@@ -82,15 +85,27 @@ function getWarehouseDailyInputItems() {
     window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT || "all"
   ).toLowerCase();
 
-  return getAllWarehouseDailyInputItems().filter((item) => {
-    if (selectedDepartment === "all") {
-      return true;
-    }
+  const searchValue = String(
+    window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH || ""
+  )
+    .toLowerCase()
+    .trim();
 
-    return (
-      String(item.department || "Unassigned").toLowerCase() ===
-      selectedDepartment
-    );
+  return getAllWarehouseDailyInputItems().filter((item) => {
+    const itemDepartment = String(
+      item.department || "Unassigned"
+    ).toLowerCase();
+
+    const matchesDepartment =
+      selectedDepartment === "all" || itemDepartment === selectedDepartment;
+
+    const matchesSearch =
+      !searchValue ||
+      String(item.itemId || "").toLowerCase().includes(searchValue) ||
+      String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
+      String(item.unit || "").toLowerCase().includes(searchValue);
+
+    return matchesDepartment && matchesSearch;
   });
 }
 
@@ -203,7 +218,7 @@ function getWarehouseDailyReviewStatus(rowData) {
 }
 
 function buildWarehouseLogEntriesFromDailyInput() {
-  const warehouseItems = getWarehouseDailyInputItems();
+  const warehouseItems = getAllWarehouseDailyInputItems();
   const inputData = getStoredWarehouseDailyInput();
   const batchId = createWarehouseDailyInputBatchId();
   const submittedAt = getCurrentWarehouseInputTimestamp();
@@ -304,7 +319,7 @@ function renderWarehouseDepartmentOptions() {
 function renderWarehouseManagerOptions() {
   const settings = getWarehouseInputSettings();
   const currentManager = window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY;
-  const managers = settings.managerNames || [];
+  const managers = settings.managerNames || settings.managers || [];
 
   if (managers.length === 0) {
     return `
@@ -358,7 +373,7 @@ function renderWarehouseDailyInputRows() {
     return `
       <tr>
         <td colspan="8">
-          No Warehouse items found for the selected department.
+          No Warehouse items found for the selected filter.
         </td>
       </tr>
     `;
@@ -475,8 +490,8 @@ function getWarehouseDailyInputSummary() {
 
 function renderWarehouseEditModeContent() {
   return `
-    <div class="table-wrap">
-      <table class="daily-input-table">
+    <div class="table-wrap warehouse-daily-input-table-wrap">
+      <table class="daily-input-table warehouse-daily-input-table">
         <thead>
           <tr>
             <th>Item ID</th>
@@ -600,11 +615,6 @@ function getWarehouseDailyInputContent() {
 
       <div class="warehouse-daily-input-toolbar">
         <label>
-          Location
-          <input type="text" value="Warehouse" disabled />
-        </label>
-
-        <label>
           Department
           <select id="warehouse-daily-input-department" ${
             isReviewMode ? "disabled" : ""
@@ -614,11 +624,13 @@ function getWarehouseDailyInputContent() {
         </label>
 
         <label class="filter-search">
-          Current Mode
+          Search
           <input
+            id="warehouse-daily-input-search"
             type="text"
-            value="${isReviewMode ? "Review Mode" : "Warehouse Daily Input"}"
-            disabled
+            placeholder="Search item name or Item ID..."
+            value="${window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH}"
+            ${isReviewMode ? "disabled" : ""}
           />
         </label>
 
@@ -701,6 +713,15 @@ function setupWarehouseDailyInputEvents() {
     departmentSelect.addEventListener("change", () => {
       window.DMC_WAREHOUSE_DAILY_INPUT_DEPARTMENT = departmentSelect.value;
       window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
+      refreshWarehouseDailyInputPage();
+    });
+  }
+
+  const searchInput = document.getElementById("warehouse-daily-input-search");
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_WAREHOUSE_DAILY_INPUT_SEARCH = searchInput.value;
       refreshWarehouseDailyInputPage();
     });
   }
