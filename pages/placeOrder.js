@@ -42,7 +42,10 @@ function getPlaceOrderSettings() {
   if (!storedSettings) {
     return {
       managerNames: [],
-      managers: []
+      managers: [],
+      branchManagers: [],
+      staffMembers: [],
+      staff: []
     };
   }
 
@@ -51,7 +54,10 @@ function getPlaceOrderSettings() {
   } catch {
     return {
       managerNames: [],
-      managers: []
+      managers: [],
+      branchManagers: [],
+      staffMembers: [],
+      staff: []
     };
   }
 }
@@ -61,14 +67,30 @@ function getSettingName(option) {
     return option;
   }
 
-  return option?.name || "";
+  return option?.name || option?.fullName || option?.label || "";
 }
 
 function getPlaceOrderManagers() {
   const settings = getPlaceOrderSettings();
-  const managers = settings.managerNames || settings.managers || [];
 
-  return managers.map(getSettingName).filter(Boolean);
+  const managerSources = [
+    ...(settings.managerNames || []),
+    ...(settings.managers || []),
+    ...(settings.branchManagers || [])
+  ];
+
+  const staffManagers = (settings.staffMembers || settings.staff || []).filter(
+    (staff) => {
+      const role = String(staff.role || staff.position || staff.access || "")
+        .toLowerCase();
+
+      return role.includes("manager") || role.includes("admin");
+    }
+  );
+
+  return [...managerSources, ...staffManagers]
+    .map(getSettingName)
+    .filter(Boolean);
 }
 
 function renderRequestedByOptions() {
@@ -127,6 +149,45 @@ function getStoredBranchOrders() {
 
 function saveBranchOrders(orders) {
   localStorage.setItem(DMC_PLACE_ORDER_STORAGE_KEY, JSON.stringify(orders));
+}
+
+function showPlaceOrderModal({ type, title, message, confirmLabel }) {
+  if (typeof window.DMC_SHOW_MODAL === "function") {
+    window.DMC_SHOW_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel
+    });
+    return;
+  }
+
+  alert(message);
+}
+
+function showPlaceOrderConfirm({
+  type,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm
+}) {
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      onConfirm
+    });
+    return;
+  }
+
+  if (confirm(message)) {
+    onConfirm();
+  }
 }
 
 function getPlaceOrderDepartments() {
@@ -518,12 +579,22 @@ function setupPlaceOrderEvents() {
       const requestedQty = Number(window.DMC_PLACE_ORDER_QTY || 0);
 
       if (!selectedItem) {
-        alert("Please select an item first.");
+        showPlaceOrderModal({
+          type: "warning",
+          title: "No Item Selected",
+          message: "Please select an item first.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (Number.isNaN(requestedQty) || requestedQty <= 0) {
-        alert("Please enter a requested quantity greater than 0.");
+        showPlaceOrderModal({
+          type: "warning",
+          title: "Quantity Required",
+          message: "Please enter a requested quantity greater than 0.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
@@ -566,18 +637,21 @@ function setupPlaceOrderEvents() {
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      const confirmed = confirm("Clear this order cart?");
+      showPlaceOrderConfirm({
+        type: "danger",
+        title: "Clear Order Cart?",
+        message: "This will remove all items currently in the order cart.",
+        confirmLabel: "Clear Cart",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          window.DMC_PLACE_ORDER_CART = [];
+          window.DMC_PLACE_ORDER_QTY = "";
+          window.DMC_PLACE_ORDER_NOTES = "";
+          window.DMC_PLACE_ORDER_URGENT = false;
 
-      if (!confirmed) {
-        return;
-      }
-
-      window.DMC_PLACE_ORDER_CART = [];
-      window.DMC_PLACE_ORDER_QTY = "";
-      window.DMC_PLACE_ORDER_NOTES = "";
-      window.DMC_PLACE_ORDER_URGENT = false;
-
-      refreshPlaceOrderPage();
+          refreshPlaceOrderPage();
+        }
+      });
     });
   }
 
@@ -586,58 +660,75 @@ function setupPlaceOrderEvents() {
       const cart = window.DMC_PLACE_ORDER_CART;
 
       if (cart.length === 0) {
-        alert("No items in the order cart.");
+        showPlaceOrderModal({
+          type: "warning",
+          title: "Order Cart Empty",
+          message: "No items in the order cart.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       if (!window.DMC_PLACE_ORDER_REQUESTED_BY) {
-        alert("Please select the requesting manager.");
+        showPlaceOrderModal({
+          type: "warning",
+          title: "Requesting Manager Required",
+          message: "Please select the requesting manager.",
+          confirmLabel: "Got it"
+        });
         return;
       }
 
       const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
 
-      const confirmed = confirm(
-        `Submit ${cart.length} item request(s) for ${selectedDepartment} to Warehouse?`
-      );
+      showPlaceOrderConfirm({
+        type: "success",
+        title: "Submit Order to Warehouse?",
+        message: `Submit ${cart.length} item request(s) for ${selectedDepartment} to Warehouse?`,
+        confirmLabel: "Submit Order",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          const orders = getStoredBranchOrders();
 
-      if (!confirmed) {
-        return;
-      }
-
-      const orders = getStoredBranchOrders();
-
-      const newOrder = {
-        orderId: createOrderId(),
-        source: "DMC-Iriga Branch",
-        requestSource: "DMC-Iriga Branch",
-        branch: "DMC-Iriga Branch",
-        destination: "Warehouse",
-        department: selectedDepartment,
-        requestedBy: window.DMC_PLACE_ORDER_REQUESTED_BY,
-        orderDate: getTodayOrderDate(),
-        urgent: window.DMC_PLACE_ORDER_URGENT,
-        notes: window.DMC_PLACE_ORDER_NOTES,
-        status: "Submitted",
-        statusHistory: [
-          {
+          const newOrder = {
+            orderId: createOrderId(),
+            source: "DMC-Iriga Branch",
+            requestSource: "DMC-Iriga Branch",
+            branch: "DMC-Iriga Branch",
+            destination: "Warehouse",
+            department: selectedDepartment,
+            requestedBy: window.DMC_PLACE_ORDER_REQUESTED_BY,
+            orderDate: getTodayOrderDate(),
+            urgent: window.DMC_PLACE_ORDER_URGENT,
+            notes: window.DMC_PLACE_ORDER_NOTES,
             status: "Submitted",
-            timestamp: new Date().toISOString(),
-            note: "DMC-Iriga Branch submitted order request to Warehouse."
-          }
-        ],
-        lines: cart
-      };
+            statusHistory: [
+              {
+                status: "Submitted",
+                timestamp: new Date().toISOString(),
+                note: "DMC-Iriga Branch submitted order request to Warehouse."
+              }
+            ],
+            lines: cart
+          };
 
-      saveBranchOrders([newOrder, ...orders]);
+          saveBranchOrders([newOrder, ...orders]);
 
-      window.DMC_PLACE_ORDER_CART = [];
-      window.DMC_PLACE_ORDER_QTY = "";
-      window.DMC_PLACE_ORDER_NOTES = "";
-      window.DMC_PLACE_ORDER_URGENT = false;
+          window.DMC_PLACE_ORDER_CART = [];
+          window.DMC_PLACE_ORDER_QTY = "";
+          window.DMC_PLACE_ORDER_NOTES = "";
+          window.DMC_PLACE_ORDER_URGENT = false;
 
-      alert("Order submitted to Warehouse Branch Orders.");
-      refreshPlaceOrderPage();
+          showPlaceOrderModal({
+            type: "success",
+            title: "Order Submitted",
+            message: "Order submitted to Warehouse Branch Orders.",
+            confirmLabel: "Continue"
+          });
+
+          refreshPlaceOrderPage();
+        }
+      });
     });
   }
 }
