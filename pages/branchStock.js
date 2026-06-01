@@ -591,7 +591,20 @@ function setupBranchStockEvents() {
         window.DMC_SHOW_MODAL({
           type: "info",
           title: `${item.officialItemName}`,
-          message: `Current stock: ${item.currentStock} ${item.unit}. Minimum stock: ${item.minimumStock} ${item.unit}. Status: ${status}. Transfer In: ${totals.transferIn}, Usage: ${totals.usage}, Waste: ${totals.waste}, Transfer Out: ${totals.transferOut}, Adjustment: ${totals.adjustment}. Last movement: ${item.lastMovement}.`,
+          message: [
+            `Current stock: ${item.currentStock} ${item.unit}`,
+            `Minimum stock: ${item.minimumStock} ${item.unit}`,
+            `Status: ${status}`,
+            "",
+            "Branch movements:",
+            `Transfer In: ${totals.transferIn}`,
+            `Usage: ${totals.usage}`,
+            `Waste: ${totals.waste}`,
+            `Transfer Out: ${totals.transferOut}`,
+            `Adjustment: ${totals.adjustment}`,
+            "",
+            `Last movement: ${item.lastMovement}`
+          ].join("\n"),
           confirmLabel: "Got it"
         });
       }
