@@ -217,6 +217,23 @@ function getWarehouseDailyReviewStatus(rowData) {
   return "READY";
 }
 
+function getWarehouseDailyReviewRows() {
+  const inputData = getStoredWarehouseDailyInput();
+
+  return getAllWarehouseDailyInputItems()
+    .map((item) => {
+      const rowData = inputData[item.itemId] || {};
+      const reviewStatus = getWarehouseDailyReviewStatus(rowData);
+
+      return {
+        item,
+        rowData,
+        reviewStatus
+      };
+    })
+    .filter((row) => row.reviewStatus === "READY");
+}
+
 function buildWarehouseLogEntriesFromDailyInput() {
   const warehouseItems = getAllWarehouseDailyInputItems();
   const inputData = getStoredWarehouseDailyInput();
@@ -247,7 +264,12 @@ function buildWarehouseLogEntriesFromDailyInput() {
 
   warehouseItems.forEach((item) => {
     const rowData = inputData[item.itemId] || {};
+    const reviewStatus = getWarehouseDailyReviewStatus(rowData);
     const notes = String(rowData.notes || "").trim();
+
+    if (reviewStatus !== "READY") {
+      return;
+    }
 
     movementFields.forEach((movement) => {
       const rawValue = String(rowData[movement.field] || "").trim();
@@ -490,6 +512,10 @@ function getWarehouseDailyInputSummary() {
 
 function renderWarehouseEditModeContent() {
   return `
+    <div class="keyboard-hint">
+      Press Tab to move across Transfer In → Transfer Out → Waste → Notes, then continue to the next row.
+    </div>
+
     <div class="table-wrap warehouse-daily-input-table-wrap">
       <table class="daily-input-table warehouse-daily-input-table">
         <thead>
@@ -513,75 +539,97 @@ function renderWarehouseEditModeContent() {
   `;
 }
 
-function renderWarehouseSubmitPreviewList() {
-  const warehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+function renderWarehouseReviewModeContent() {
+  const reviewRows = getWarehouseDailyReviewRows();
 
-  if (warehouseLogEntries.length === 0) {
+  if (reviewRows.length === 0) {
     return `
-      <p class="submit-preview-empty">
-        No warehouse movements ready to submit yet. Go back to edit mode and fill in any movement field.
-      </p>
+      <div class="submit-preview-box">
+        <h4>Warehouse Submit Review</h4>
+        <p>No rows are ready to post. Go back to edit mode and fill in today’s movements.</p>
+
+        <div class="form-actions review-actions">
+          <button class="ghost-button" id="back-to-warehouse-edit-mode">
+            Back to Edit
+          </button>
+        </div>
+      </div>
     `;
   }
 
   return `
-    <ul class="submit-preview-list review-mode-list">
-      ${warehouseLogEntries
-        .map(
-          (entry) => `
-            <li>
-              <div>
-                <strong>${entry.itemName}</strong>
-                <span>
-                  ${entry.movementType}: ${entry.quantity} ${entry.unit}
-                </span>
-              </div>
-
-              <div class="preview-actions">
-                <button
-                  class="tiny-button"
-                  data-preview-edit="true"
-                >
-                  Edit
-                </button>
-
-                <button
-                  class="tiny-button danger"
-                  data-preview-remove-item="${entry.itemId}"
-                  data-preview-remove-field="${entry.movementField}"
-                >
-                  Remove
-                </button>
-              </div>
-            </li>
-          `
-        )
-        .join("")}
-    </ul>
-  `;
-}
-
-function renderWarehouseReviewModeContent() {
-  return `
     <div class="submit-preview-box">
-      <div>
-        <h4>Warehouse Submit Review</h4>
-        <p>
-          Review the movements below before posting. Use Edit to return to the table,
-          or Remove to clear a pending movement from today’s input.
-        </p>
+      <div class="review-mode-header">
+        <div>
+          <h4>Warehouse Submit Review</h4>
+          <p>
+            ${reviewRows.length} item row${
+    reviewRows.length === 1 ? "" : "s"
+  } ready to post. Review the table before submitting to Warehouse Log.
+          </p>
+        </div>
+
+        <div class="form-actions review-actions">
+          <button class="ghost-button" id="back-to-warehouse-edit-mode">
+            Back to Edit
+          </button>
+
+          <button class="primary-button" id="submit-warehouse-daily-input">
+            Submit to Warehouse Log
+          </button>
+        </div>
       </div>
 
-      ${renderWarehouseSubmitPreviewList()}
+      <div class="table-wrap warehouse-review-table-wrap">
+        <table class="daily-input-table warehouse-review-table">
+          <thead>
+            <tr>
+              <th>Item ID</th>
+              <th>Item Name</th>
+              <th>Unit</th>
+              <th>Transfer In</th>
+              <th>Transfer Out</th>
+              <th>Waste</th>
+              <th>Notes</th>
+              <th>Action</th>
+            </tr>
+          </thead>
 
-      <div class="form-actions review-actions">
-        <button class="ghost-button" id="back-to-warehouse-edit-mode">
-          Back to Edit
-        </button>
+          <tbody>
+            ${reviewRows
+              .map(({ item, rowData }) => {
+                return `
+                  <tr>
+                    <td>${item.itemId || "-"}</td>
+                    <td>${item.officialItemName || "-"}</td>
+                    <td>${item.unit || "-"}</td>
+                    <td>${rowData.transferIn || "-"}</td>
+                    <td>${rowData.transferOut || "-"}</td>
+                    <td>${rowData.waste || "-"}</td>
+                    <td>${rowData.notes || "-"}</td>
+                    <td>
+                      <div class="row-actions">
+                        <button
+                          class="tiny-button"
+                          data-preview-edit="true"
+                        >
+                          Edit
+                        </button>
 
-        <button class="primary-button" id="submit-warehouse-daily-input">
-          Submit to Warehouse Log
-        </button>
+                        <button
+                          class="tiny-button danger"
+                          data-preview-remove-row="${item.itemId}"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
       </div>
     </div>
   `;
@@ -704,6 +752,36 @@ function showWarehouseInputConfirm({
   }
 }
 
+function saveWarehouseCellValue(input) {
+  const inputData = getStoredWarehouseDailyInput();
+  const itemId = input.dataset.itemId;
+  const field = input.dataset.field;
+
+  inputData[itemId] = inputData[itemId] || {};
+  inputData[itemId][field] = input.value;
+
+  saveWarehouseDailyInput(inputData);
+}
+
+function focusNextWarehouseInput(currentInput, direction = 1) {
+  const inputs = Array.from(
+    document.querySelectorAll(".warehouse-daily-input-cell")
+  ).filter((input) => !input.disabled);
+
+  const currentIndex = inputs.indexOf(currentInput);
+
+  if (currentIndex === -1) {
+    return;
+  }
+
+  const nextInput = inputs[currentIndex + direction];
+
+  if (nextInput) {
+    nextInput.focus();
+    nextInput.select();
+  }
+}
+
 function setupWarehouseDailyInputEvents() {
   const departmentSelect = document.getElementById(
     "warehouse-daily-input-department"
@@ -735,16 +813,19 @@ function setupWarehouseDailyInputEvents() {
   }
 
   document.querySelectorAll(".warehouse-daily-input-cell").forEach((input) => {
-    input.addEventListener("change", () => {
-      const inputData = getStoredWarehouseDailyInput();
-      const itemId = input.dataset.itemId;
-      const field = input.dataset.field;
+    input.addEventListener("input", () => {
+      saveWarehouseCellValue(input);
+    });
 
-      inputData[itemId] = inputData[itemId] || {};
-      inputData[itemId][field] = input.value;
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Tab") {
+        return;
+      }
 
-      saveWarehouseDailyInput(inputData);
-      refreshWarehouseDailyInputPage();
+      event.preventDefault();
+      saveWarehouseCellValue(input);
+
+      focusNextWarehouseInput(input, event.shiftKey ? -1 : 1);
     });
   });
 
@@ -808,15 +889,12 @@ function setupWarehouseDailyInputEvents() {
     button.addEventListener("click", returnToWarehouseEditMode);
   });
 
-  document.querySelectorAll("[data-preview-remove-item]").forEach((button) => {
+  document.querySelectorAll("[data-preview-remove-row]").forEach((button) => {
     button.addEventListener("click", () => {
-      const itemId = button.dataset.previewRemoveItem;
-      const field = button.dataset.previewRemoveField;
+      const itemId = button.dataset.previewRemoveRow;
       const inputData = getStoredWarehouseDailyInput();
 
-      if (inputData[itemId]) {
-        inputData[itemId][field] = "";
-      }
+      delete inputData[itemId];
 
       saveWarehouseDailyInput(inputData);
       refreshWarehouseDailyInputPage();
