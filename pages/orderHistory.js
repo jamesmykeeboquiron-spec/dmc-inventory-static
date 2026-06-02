@@ -8,8 +8,6 @@ window.DMC_ORDER_HISTORY_SELECTED_STATUS =
 window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT =
   window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT || "all";
 
-window.DMC_ORDER_HISTORY_SEARCH = window.DMC_ORDER_HISTORY_SEARCH || "";
-
 window.DMC_ORDER_HISTORY_START_DATE =
   window.DMC_ORDER_HISTORY_START_DATE || "";
 
@@ -110,9 +108,6 @@ function isOpenOrderHistoryStatus(status) {
 
 function getFilteredOrderHistoryOrders() {
   const status = window.DMC_ORDER_HISTORY_SELECTED_STATUS;
-  const searchValue = String(window.DMC_ORDER_HISTORY_SEARCH || "")
-    .toLowerCase()
-    .trim();
 
   return getSortedOrderHistoryOrders().filter((order) => {
     const orderDate = String(order.orderDate || "");
@@ -131,29 +126,7 @@ function getFilteredOrderHistoryOrders() {
       !window.DMC_ORDER_HISTORY_END_DATE ||
       orderDate <= window.DMC_ORDER_HISTORY_END_DATE;
 
-    const matchesSearch =
-      !searchValue ||
-      String(order.orderId || "").toLowerCase().includes(searchValue) ||
-      String(order.branch || "").toLowerCase().includes(searchValue) ||
-      String(order.department || "").toLowerCase().includes(searchValue) ||
-      String(order.status || "").toLowerCase().includes(searchValue) ||
-      String(order.notes || "").toLowerCase().includes(searchValue) ||
-      String(order.requestedBy || "").toLowerCase().includes(searchValue) ||
-      String(order.fulfillment?.preparedBy || "")
-        .toLowerCase()
-        .includes(searchValue) ||
-      String(order.receiving?.receivedBy || "")
-        .toLowerCase()
-        .includes(searchValue) ||
-      (order.lines || []).some(
-        (line) =>
-          String(line.itemId || "").toLowerCase().includes(searchValue) ||
-          String(line.itemName || "").toLowerCase().includes(searchValue) ||
-          String(line.section || "").toLowerCase().includes(searchValue) ||
-          String(line.department || "").toLowerCase().includes(searchValue)
-      );
-
-    return matchesStatus && matchesStartDate && matchesEndDate && matchesSearch;
+    return matchesStatus && matchesStartDate && matchesEndDate;
   });
 }
 
@@ -720,14 +693,7 @@ function getOrderHistoryContent() {
           <span class="badge">Order Filters</span>
         </div>
 
-        <div class="filter-bar branch-order-search-bar order-history-filter-bar">
-          <label>
-            Status
-            <select id="order-history-status-filter">
-              ${renderOrderHistoryStatusOptions()}
-            </select>
-          </label>
-
+        <div class="filter-bar branch-order-search-bar order-history-filter-bar order-history-left-filter-clean">
           <label>
             Start Date
             <input
@@ -746,17 +712,14 @@ function getOrderHistoryContent() {
             />
           </label>
 
-          <label class="filter-search">
-            Search
-            <input
-              id="order-history-search"
-              type="text"
-              placeholder="Search order, item, status..."
-              value="${window.DMC_ORDER_HISTORY_SEARCH}"
-            />
+          <label>
+            Status
+            <select id="order-history-status-filter">
+              ${renderOrderHistoryStatusOptions()}
+            </select>
           </label>
 
-          <div class="ledger-quick-actions">
+          <div class="ledger-quick-actions order-history-shortcuts">
             <button class="ghost-button" id="order-history-today-filter">Today</button>
             <button class="ghost-button" id="order-history-month-filter">This Month</button>
             <button class="ghost-button" id="order-history-clear-filter">Clear</button>
@@ -781,7 +744,6 @@ function setupOrderHistoryEvents() {
   const lineDepartmentFilter = document.getElementById(
     "order-history-line-department-filter"
   );
-  const searchInput = document.getElementById("order-history-search");
   const startDateInput = document.getElementById("order-history-start-date");
   const endDateInput = document.getElementById("order-history-end-date");
   const todayButton = document.getElementById("order-history-today-filter");
@@ -801,14 +763,6 @@ function setupOrderHistoryEvents() {
       window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT =
         lineDepartmentFilter.value;
 
-      refreshOrderHistoryPage();
-    });
-  }
-
-  if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      window.DMC_ORDER_HISTORY_SEARCH = searchInput.value;
-      window.DMC_ORDER_HISTORY_SELECTED_ID = "";
       refreshOrderHistoryPage();
     });
   }
@@ -855,7 +809,6 @@ function setupOrderHistoryEvents() {
     clearButton.addEventListener("click", () => {
       window.DMC_ORDER_HISTORY_SELECTED_STATUS = "open";
       window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT = "all";
-      window.DMC_ORDER_HISTORY_SEARCH = "";
       window.DMC_ORDER_HISTORY_START_DATE = "";
       window.DMC_ORDER_HISTORY_END_DATE = "";
       window.DMC_ORDER_HISTORY_SELECTED_ID = "";
