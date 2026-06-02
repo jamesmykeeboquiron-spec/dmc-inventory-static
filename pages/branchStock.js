@@ -116,7 +116,8 @@ function getBranchLatestMovementForItem(itemId) {
 
 function getLatestRemainingCountForItem(itemId) {
   const remainingEntries = getBranchLedgerEntriesForItem(itemId).filter(
-    (entry) => entry.movementType === "Remaining Count" || entry.stockEffect === "set"
+    (entry) =>
+      entry.movementType === "Remaining Count" || entry.stockEffect === "set"
   );
 
   if (remainingEntries.length === 0) {
@@ -252,7 +253,8 @@ function getBranchTransferInAfterLastCount(item) {
     .filter((entry) => {
       const isAfterLastCount = getBranchEntryTime(entry) > latestRemainingTime;
       const isTransferIn =
-        entry.movementType === "Transfer In" || getBranchEntryStockEffect(entry) === "add";
+        entry.movementType === "Transfer In" ||
+        getBranchEntryStockEffect(entry) === "add";
 
       return isAfterLastCount && isTransferIn;
     })
@@ -451,14 +453,30 @@ function renderBranchStockLevel(item) {
     Math.max(0, Math.round((currentStock / Math.max(minimumStock, 1)) * 100))
   );
 
+  const status = getBranchStockStatus(item);
+  const statusClass = getBranchStatusBadgeClass(status);
+
   return `
-    <div class="stock-level">
-      <div class="stock-level-meta">
-        <span>${currentStock} ${item.unit || ""}</span>
-        <span>min ${minimumStock} ${item.unit || ""}</span>
+    <div class="stock-current-card ${statusClass}">
+      <div class="stock-current-top">
+        <div>
+          <span class="stock-current-label">Current Stock</span>
+          <strong>${currentStock}</strong>
+          <em>${item.unit || ""}</em>
+        </div>
+
+        <small>Start stock for next shift</small>
       </div>
-      <div class="stock-level-track">
-        <div class="stock-level-fill" style="width: ${percent}%"></div>
+
+      <div class="stock-current-meter">
+        <div class="stock-level-track">
+          <div class="stock-level-fill" style="width: ${percent}%"></div>
+        </div>
+
+        <div class="stock-current-min">
+          <span>Minimum</span>
+          <strong>${minimumStock} ${item.unit || ""}</strong>
+        </div>
       </div>
     </div>
   `;
