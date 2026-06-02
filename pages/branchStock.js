@@ -446,6 +446,21 @@ function getBranchStatusBadgeClass(status) {
 
 function renderBranchStockLevel(item) {
   const currentStock = Number(item.currentStock || 0);
+  const status = getBranchStockStatus(item);
+  const statusClass = getBranchStatusBadgeClass(status);
+
+  return `
+    <div class="stock-current-card compact ${statusClass}">
+      <div class="stock-current-bubble">
+        <strong>${currentStock}</strong>
+        <em>${item.unit || ""}</em>
+      </div>
+    </div>
+  `;
+}
+
+function renderBranchStockMeter(item) {
+  const currentStock = Number(item.currentStock || 0);
   const minimumStock = Number(item.minimumStock || 0);
 
   const percent = Math.min(
@@ -453,25 +468,15 @@ function renderBranchStockLevel(item) {
     Math.max(0, Math.round((currentStock / Math.max(minimumStock, 1)) * 100))
   );
 
-  const status = getBranchStockStatus(item);
-  const statusClass = getBranchStatusBadgeClass(status);
-
   return `
-    <div class="stock-current-card ${statusClass}">
-      <div class="stock-current-bubble">
-        <strong>${currentStock}</strong>
-        <em>${item.unit || ""}</em>
+    <div class="stock-level-only">
+      <div class="stock-level-track">
+        <div class="stock-level-fill" style="width: ${percent}%"></div>
       </div>
 
-      <div class="stock-current-meter">
-        <div class="stock-level-track">
-          <div class="stock-level-fill" style="width: ${percent}%"></div>
-        </div>
-
-        <div class="stock-current-min">
-          <span>Minimum</span>
-          <strong>${minimumStock} ${item.unit || ""}</strong>
-        </div>
+      <div class="stock-current-min">
+        <span>Minimum</span>
+        <strong>${minimumStock} ${item.unit || ""}</strong>
       </div>
     </div>
   `;
@@ -498,7 +503,7 @@ function renderBranchStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="7">No branch stock items match the current filters.</td>
+        <td colspan="8">No branch stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -516,6 +521,7 @@ function renderBranchStockRows() {
           </td>
           <td>${item.unit || "-"}</td>
           <td>${renderBranchStockLevel(item)}</td>
+          <td>${renderBranchStockMeter(item)}</td>
           <td>
             <span class="badge ${getBranchStatusBadgeClass(status)}">
               ${status}
@@ -589,6 +595,7 @@ function renderBranchStockPanel() {
               <th>Item</th>
               <th>Unit</th>
               <th>Current Stock</th>
+              <th>Stock Level</th>
               <th>Status</th>
               <th>Last Movement</th>
               <th>Actions</th>
