@@ -261,116 +261,6 @@ function renderBranchLogMovementOptions() {
   `;
 }
 
-function getBranchMovementBadgeClass(movementType) {
-  if (movementType === "Transfer In" || movementType === "Received") {
-    return "success";
-  }
-
-  if (movementType === "Remaining Count") {
-    return "info-badge";
-  }
-
-  if (movementType === "Waste") {
-    return "danger";
-  }
-
-  if (movementType === "Usage") {
-    return "warning";
-  }
-
-  if (movementType === "Daily Note") {
-    return "";
-  }
-
-  return "info-badge";
-}
-
-function getBranchEntryStockEffect(entry) {
-  if (entry.stockEffect) {
-    return entry.stockEffect;
-  }
-
-  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
-    return "add";
-  }
-
-  if (entry.movementType === "Remaining Count") {
-    return "set";
-  }
-
-  return "report";
-}
-
-function getBranchEffectBadgeClass(stockEffect) {
-  if (stockEffect === "add") {
-    return "success";
-  }
-
-  if (stockEffect === "deduct") {
-    return "danger";
-  }
-
-  if (stockEffect === "set") {
-    return "info-badge";
-  }
-
-  return "";
-}
-
-function getBranchEffectLabel(stockEffect) {
-  if (stockEffect === "add") {
-    return "Add";
-  }
-
-  if (stockEffect === "deduct") {
-    return "Deduct";
-  }
-
-  if (stockEffect === "set") {
-    return "Set Count";
-  }
-
-  return "Report";
-}
-
-function getBranchSignedQuantity(entry) {
-  const stockEffect = getBranchEntryStockEffect(entry);
-  const quantity = Number(entry.quantity || 0);
-  const unit = entry.unit || "";
-
-  if (stockEffect === "add") {
-    return `+${quantity} ${unit}`;
-  }
-
-  if (stockEffect === "deduct") {
-    return `-${quantity} ${unit}`;
-  }
-
-  if (stockEffect === "set") {
-    return `${quantity} ${unit}`;
-  }
-
-  if (quantity === 0) {
-    return "—";
-  }
-
-  return `${quantity} ${unit}`;
-}
-
-function getBranchQuantityClass(entry) {
-  const stockEffect = getBranchEntryStockEffect(entry);
-
-  if (stockEffect === "add") {
-    return "positive-text";
-  }
-
-  if (stockEffect === "deduct") {
-    return "negative-text";
-  }
-
-  return "";
-}
-
 function getBranchBatchSourceLabel(batch) {
   const firstEntry = batch.entries[0] || {};
   const source = String(firstEntry.source || "");
@@ -397,7 +287,7 @@ function getBranchBatchSourceLabel(batch) {
 function getBranchBatchEffectCounts(batch) {
   return batch.entries.reduce(
     (counts, entry) => {
-      const effect = getBranchEntryStockEffect(entry);
+      const effect = entry.stockEffect || "report";
 
       if (effect === "add") {
         counts.add += 1;
@@ -420,66 +310,57 @@ function getBranchBatchEffectCounts(batch) {
   );
 }
 
-function getBranchBatchMovementSummary(batch) {
-  return batch.entries.reduce(
-    (summary, entry) => {
-      const quantity = Number(entry.quantity || 0);
-      const movementType = entry.movementType || "";
-      const unit = entry.unit || "";
+function getBranchLogNumber(value) {
+  const numberValue = Number(value || 0);
 
-      if (movementType === "Transfer In") {
-        summary.transferInQty += quantity;
-        summary.transferInRows += 1;
-        summary.transferInUnit = summary.transferInUnit || unit;
-      }
-
-      if (movementType === "Remaining Count") {
-        summary.remainingRows += 1;
-      }
-
-      if (movementType === "Usage") {
-        summary.usageQty += quantity;
-        summary.usageRows += 1;
-        summary.usageUnit = summary.usageUnit || unit;
-      }
-
-      if (movementType === "Waste") {
-        summary.wasteQty += quantity;
-        summary.wasteRows += 1;
-        summary.wasteUnit = summary.wasteUnit || unit;
-      }
-
-      if (movementType === "Daily Note") {
-        summary.noteRows += 1;
-      }
-
-      return summary;
-    },
-    {
-      transferInQty: 0,
-      transferInRows: 0,
-      transferInUnit: "",
-      remainingRows: 0,
-      usageQty: 0,
-      usageRows: 0,
-      usageUnit: "",
-      wasteQty: 0,
-      wasteRows: 0,
-      wasteUnit: "",
-      noteRows: 0
-    }
-  );
+  return Number.isNaN(numberValue) ? 0 : numberValue;
 }
 
-function getBranchBatchNotes(batch) {
-  return batch.entries
-    .filter((entry) => String(entry.notes || "").trim() !== "")
-    .map((entry) => ({
-      itemName: entry.itemName || "-",
+function getBranchLogGroupedItemRows(batch) {
+  const groupedRows = {};
+
+  batch.entries.forEach((entry) => {
+    const itemId = entry.itemId || "NO-ID";
+
+    groupedRows[itemId] = groupedRows[itemId] || {
+      section: entry.section || "-",
       itemId: entry.itemId || "-",
-      movementType: entry.movementType || "-",
-      notes: entry.notes
-    }));
+      itemName: entry.itemName || "-",
+      unit: entry.unit || "-",
+      transferIn: 0,
+      remaining: "",
+      usage: 0,
+      waste: 0,
+      notes: []
+    };
+
+    const row = groupedRows[itemId];
+    const quantity = getBranchLogNumber(entry.quantity);
+
+    if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+      row.transferIn += quantity;
+    }
+
+    if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+      row.remaining = quantity;
+    }
+
+    if (entry.movementType === "Usage") {
+      row.usage += quantity;
+    }
+
+    if (entry.movementType === "Waste") {
+      row.waste += quantity;
+    }
+
+    if (String(entry.notes || "").trim() !== "") {
+      row.notes.push(entry.notes);
+    }
+  });
+
+  return Object.values(groupedRows).sort((a, b) => {
+    return String(a.itemName).localeCompare(String(b.itemName));
+  });
 }
 
 function renderBranchBatchList() {
@@ -542,81 +423,54 @@ function renderBranchBatchList() {
     .join("");
 }
 
-function renderBranchBatchSummaryCards(batch) {
-  const summary = getBranchBatchMovementSummary(batch);
+function renderBranchBatchLineTable(batch) {
+  const rows = getBranchLogGroupedItemRows(batch);
 
-  return `
-    <div class="delivery-log-info-grid branch-log-summary-grid">
-      <div>
-        <p class="eyebrow">Transfer In</p>
-        <strong>${summary.transferInQty} ${summary.transferInUnit}</strong>
-        <span>${summary.transferInRows} row${summary.transferInRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Remaining Counts</p>
-        <strong>${summary.remainingRows}</strong>
-        <span>closing count row${summary.remainingRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Usage Reported</p>
-        <strong>${summary.usageQty} ${summary.usageUnit}</strong>
-        <span>${summary.usageRows} row${summary.usageRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Waste Reported</p>
-        <strong>${summary.wasteQty} ${summary.wasteUnit}</strong>
-        <span>${summary.wasteRows} row${summary.wasteRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Notes</p>
-        <strong>${summary.noteRows}</strong>
-        <span>note row${summary.noteRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Total Rows</p>
-        <strong>${batch.entries.length}</strong>
-        <span>ledger row${batch.entries.length === 1 ? "" : "s"}</span>
-      </div>
-    </div>
-  `;
-}
-
-function renderBranchBatchNotes(batch) {
-  const notes = getBranchBatchNotes(batch);
-
-  if (notes.length === 0) {
+  if (rows.length === 0) {
     return `
-      <div class="instruction-box">
-        <strong>No Notes:</strong>
-        <span>No notes were included in this batch.</span>
-      </div>
+      <p class="submit-preview-empty">No branch movement lines found.</p>
     `;
   }
 
   return `
-    <div class="delivery-log-issue-list">
-      ${notes
-        .map(
-          (note) => `
-            <div class="delivery-log-issue-card">
-              <div>
-                <p class="eyebrow">${note.movementType}</p>
-                <strong>${note.itemName}</strong>
-                <span>${note.itemId}</span>
-              </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Trans In</th>
+            <th>Remaining</th>
+            <th>Usage</th>
+            <th>Waste</th>
+            <th>Unit</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
 
-              <div>
-                <p>${note.notes}</p>
-              </div>
-            </div>
-          `
-        )
-        .join("")}
+        <tbody>
+          ${rows
+            .map((row) => {
+              const uniqueNotes = [...new Set(row.notes)].filter(Boolean);
+
+              return `
+                <tr>
+                  <td>${row.section || "-"}</td>
+                  <td>${row.itemId || "-"}</td>
+                  <td>${row.itemName || "-"}</td>
+                  <td>${row.transferIn || "-"}</td>
+                  <td>${row.remaining === "" ? "-" : row.remaining}</td>
+                  <td>${row.usage || "-"}</td>
+                  <td>${row.waste || "-"}</td>
+                  <td>${row.unit || "-"}</td>
+                  <td>${uniqueNotes.length ? uniqueNotes.join(" | ") : "-"}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -682,72 +536,8 @@ function renderSelectedBranchBatchDetails() {
       </div>
 
       <div class="branch-order-section">
-        <h4>Batch Summary</h4>
-        ${renderBranchBatchSummaryCards(selectedBatch)}
-      </div>
-
-      <div class="branch-order-section">
-        <h4>Posted Movements</h4>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Movement</th>
-                <th>Qty</th>
-                <th>Effect</th>
-                <th>Destination</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              ${selectedBatch.entries
-                .map((entry) => {
-                  const stockEffect = getBranchEntryStockEffect(entry);
-
-                  return `
-                    <tr>
-                      <td>
-                        <strong>${entry.itemName || "-"}</strong>
-                        <small class="table-subtext">${entry.itemId || "-"}</small>
-                      </td>
-
-                      <td>
-                        <span class="badge ${getBranchMovementBadgeClass(
-                          entry.movementType
-                        )}">
-                          ${entry.movementType || "-"}
-                        </span>
-                      </td>
-
-                      <td class="${getBranchQuantityClass(entry)}">
-                        <strong>${getBranchSignedQuantity(entry)}</strong>
-                      </td>
-
-                      <td>
-                        <span class="badge ${getBranchEffectBadgeClass(
-                          stockEffect
-                        )}">
-                          ${getBranchEffectLabel(stockEffect)}
-                        </span>
-                      </td>
-
-                      <td>${entry.destination || "-"}</td>
-                      <td>${entry.notes || "-"}</td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="branch-order-section">
-        <h4>Notes</h4>
-        ${renderBranchBatchNotes(selectedBatch)}
+        <h4>Branch Movement Lines</h4>
+        ${renderBranchBatchLineTable(selectedBatch)}
       </div>
 
       <div class="instruction-box">
