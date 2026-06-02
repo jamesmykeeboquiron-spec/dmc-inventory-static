@@ -1,547 +1,698 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_master_list_items";
-const DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT = "dmc_inventory_ledger_entries";
-const DMC_BRANCH_DAILY_INPUT_PREFIX = "dmc_branch_daily_input_today_";
+const DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE =
+  "dmc_inventory_ledger_entries";
 
-window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT =
-  window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT || "Bar";
+window.DMC_BRANCH_LOG_FILTERS = window.DMC_BRANCH_LOG_FILTERS || {
+  startDate: "",
+  endDate: "",
+  department: "all",
+  movementType: "all",
+  search: "",
+  selectedBatchId: ""
+};
 
-window.DMC_BRANCH_LOG_MODE = window.DMC_BRANCH_LOG_MODE || "edit";
-
-function getDailyInputMasterListItems() {
-  const storedItems = localStorage.getItem(
-    DMC_MASTER_LIST_STORAGE_KEY_FOR_DAILY_INPUT
-  );
-
-  if (storedItems) {
-    try {
-      return JSON.parse(storedItems);
-    } catch {
-      return window.DMC_DATA?.masterList?.items || [];
-    }
-  }
-
-  return window.DMC_DATA?.masterList?.items || [];
-}
-
-function getBranchDepartments() {
-  const storedSettings = localStorage.getItem("dmc_inventory_settings");
-
-  if (storedSettings) {
-    try {
-      const settings = JSON.parse(storedSettings);
-      return (settings.departments || []).filter(
-        (department) => department.name !== "Commissary"
-      );
-    } catch {
-      return [
-        { id: "bar", name: "Bar" },
-        { id: "kitchen", name: "Kitchen" },
-        { id: "dining", name: "Dining" }
-      ];
-    }
-  }
-
-  return [
-    { id: "bar", name: "Bar" },
-    { id: "kitchen", name: "Kitchen" },
-    { id: "dining", name: "Dining" }
-  ];
-}
-
-function getDepartmentCode(departmentName) {
-  const codeMap = {
-    Bar: "BAR",
-    Kitchen: "KIT",
-    Dining: "DIN"
-  };
-
-  return (
-    codeMap[departmentName] ||
-    String(departmentName || "")
-      .toUpperCase()
-      .slice(0, 3)
-  );
-}
-
-function getDailyInputStorageKey() {
-  const departmentCode = getDepartmentCode(
-    window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT
-  ).toLowerCase();
-
-  return `${DMC_BRANCH_DAILY_INPUT_PREFIX}${departmentCode}`;
-}
-
-function getItemsForSelectedDepartment() {
-  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-
-  return getDailyInputMasterListItems().filter(
-    (item) =>
-      String(item.department || "").toLowerCase() ===
-      String(selectedDepartment || "").toLowerCase()
-  );
-}
-
-function getStoredBranchDailyInput() {
-  const storedInput = localStorage.getItem(getDailyInputStorageKey());
-
-  if (!storedInput) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(storedInput);
-  } catch {
-    return {};
-  }
-}
-
-function saveBranchDailyInput(inputData) {
-  localStorage.setItem(getDailyInputStorageKey(), JSON.stringify(inputData));
-}
-
-function getStoredLedgerEntriesForDailyInput() {
+function getStoredBranchLogEntriesForLogPage() {
   const storedEntries = localStorage.getItem(
-    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT
+    DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE
   );
 
   if (!storedEntries) {
-    return window.DMC_DATA?.ledger || [];
+    return [];
   }
 
   try {
-    return JSON.parse(storedEntries);
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return [];
+    }
+
+    return parsedEntries;
   } catch {
-    return window.DMC_DATA?.ledger || [];
+    return [];
   }
 }
 
-function saveLedgerEntriesFromDailyInput(entries) {
-  localStorage.setItem(
-    DMC_LEDGER_STORAGE_KEY_FOR_DAILY_INPUT,
-    JSON.stringify(entries)
+function entryBelongsToBranchLog(entry) {
+  const location = String(entry.location || entry.branch || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
+
+  if (
+    location.includes("warehouse") ||
+    source.includes("warehouse daily input")
+  ) {
+    return false;
+  }
+
+  return (
+    location.includes("dmc-iriga") ||
+    location.includes("branch") ||
+    destination.includes("dmc-iriga") ||
+    destination.includes("branch") ||
+    source.includes("incoming delivery receipt") ||
+    source.includes("branch daily input") ||
+    source.includes("branch daily input closing count") ||
+    !entry.location
   );
 }
 
-function getTodayDateString() {
-  return new Date().toISOString().slice(0, 10);
+function getBranchLogEntriesOnly() {
+  return getStoredBranchLogEntriesForLogPage().filter(entryBelongsToBranchLog);
 }
 
-function getCurrentTimestamp() {
-  return new Date().toISOString();
+function getBranchLogDepartments() {
+  return [
+    ...new Set(
+      getBranchLogEntriesOnly()
+        .map((entry) => entry.department || "")
+        .filter(Boolean)
+    )
+  ].sort();
 }
 
-function getReadableTimestamp() {
-  const now = new Date();
-
-  return now.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function createDailyInputBatchId() {
-  const now = new Date();
-  const departmentCode = getDepartmentCode(
-    window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT
-  );
-  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
-  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
-
-  return `${departmentCode}-${datePart}-${timePart}`;
-}
-
-function getDailyReviewStatus(rowData) {
-  const inputFields = [
-    "received",
-    "transferIn",
-    "usage",
-    "waste",
-    "transferOut",
-    "adjustment",
-    "notes"
+function getBranchLogMovementTypes() {
+  const preferredOrder = [
+    "Transfer In",
+    "Remaining Count",
+    "Usage",
+    "Waste",
+    "Daily Note",
+    "Received",
+    "Adjustment"
   ];
 
-  const hasAnyInput = inputFields.some((field) => {
-    return String(rowData?.[field] || "").trim() !== "";
-  });
+  const movementTypes = [
+    ...new Set(
+      getBranchLogEntriesOnly()
+        .map((entry) => entry.movementType || "")
+        .filter(Boolean)
+    )
+  ];
 
-  if (!hasAnyInput) {
+  return movementTypes.sort((a, b) => {
+    const aIndex = preferredOrder.indexOf(a);
+    const bIndex = preferredOrder.indexOf(b);
+
+    if (aIndex === -1 && bIndex === -1) {
+      return a.localeCompare(b);
+    }
+
+    if (aIndex === -1) {
+      return 1;
+    }
+
+    if (bIndex === -1) {
+      return -1;
+    }
+
+    return aIndex - bIndex;
+  });
+}
+
+function getFilteredBranchLogEntries() {
+  const filters = window.DMC_BRANCH_LOG_FILTERS;
+  const searchValue = String(filters.search || "").toLowerCase().trim();
+  const selectedDepartment = String(filters.department || "all");
+  const selectedMovementType = String(filters.movementType || "all");
+  const startDate = String(filters.startDate || "");
+  const endDate = String(filters.endDate || "");
+
+  return getBranchLogEntriesOnly().filter((entry) => {
+    const entryDate = String(entry.date || "");
+
+    const matchesStartDate = !startDate || entryDate >= startDate;
+    const matchesEndDate = !endDate || entryDate <= endDate;
+
+    const matchesDepartment =
+      selectedDepartment === "all" ||
+      String(entry.department || "") === selectedDepartment;
+
+    const matchesMovementType =
+      selectedMovementType === "all" ||
+      String(entry.movementType || "") === selectedMovementType;
+
+    const matchesSearch =
+      !searchValue ||
+      String(entry.batchId || "").toLowerCase().includes(searchValue) ||
+      String(entry.itemId || "").toLowerCase().includes(searchValue) ||
+      String(entry.itemName || "").toLowerCase().includes(searchValue) ||
+      String(entry.department || "").toLowerCase().includes(searchValue) ||
+      String(entry.section || "").toLowerCase().includes(searchValue) ||
+      String(entry.source || "").toLowerCase().includes(searchValue) ||
+      String(entry.destination || "").toLowerCase().includes(searchValue) ||
+      String(entry.notes || "").toLowerCase().includes(searchValue) ||
+      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue);
+
+    return (
+      matchesStartDate &&
+      matchesEndDate &&
+      matchesDepartment &&
+      matchesMovementType &&
+      matchesSearch
+    );
+  });
+}
+
+function groupBranchLogEntriesByBatch(entries) {
+  return entries.reduce((groups, entry) => {
+    const batchId = entry.batchId || "No Batch ID";
+
+    groups[batchId] = groups[batchId] || [];
+    groups[batchId].push(entry);
+
+    return groups;
+  }, {});
+}
+
+function getBranchLogBatches() {
+  const filteredEntries = getFilteredBranchLogEntries();
+  const groupedEntries = groupBranchLogEntriesByBatch(filteredEntries);
+
+  return Object.entries(groupedEntries)
+    .map(([batchId, entries]) => ({
+      batchId,
+      entries
+    }))
+    .sort((a, b) => {
+      const aSubmitted = a.entries[0]?.submittedAt || a.entries[0]?.date || "";
+      const bSubmitted = b.entries[0]?.submittedAt || b.entries[0]?.date || "";
+
+      return String(bSubmitted).localeCompare(String(aSubmitted));
+    });
+}
+
+function getSelectedBranchLogBatch() {
+  const batches = getBranchLogBatches();
+
+  if (batches.length === 0) {
+    return null;
+  }
+
+  const selectedBatchId = window.DMC_BRANCH_LOG_FILTERS.selectedBatchId;
+
+  const selectedBatch = batches.find(
+    (batch) => batch.batchId === selectedBatchId
+  );
+
+  return selectedBatch || null;
+}
+
+function renderBranchLogDepartmentOptions() {
+  const currentDepartment = window.DMC_BRANCH_LOG_FILTERS.department;
+
+  return `
+    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${getBranchLogDepartments()
+      .map(
+        (department) => `
+          <option value="${department}" ${
+          currentDepartment === department ? "selected" : ""
+        }>
+            ${department}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderBranchLogMovementOptions() {
+  const currentMovementType = window.DMC_BRANCH_LOG_FILTERS.movementType;
+
+  return `
+    <option value="all" ${currentMovementType === "all" ? "selected" : ""}>
+      All Movements
+    </option>
+    ${getBranchLogMovementTypes()
+      .map(
+        (movementType) => `
+          <option value="${movementType}" ${
+          currentMovementType === movementType ? "selected" : ""
+        }>
+            ${movementType}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function getBranchMovementBadgeClass(movementType) {
+  if (movementType === "Transfer In" || movementType === "Received") {
+    return "success";
+  }
+
+  if (movementType === "Remaining Count") {
+    return "info-badge";
+  }
+
+  if (movementType === "Waste") {
+    return "danger";
+  }
+
+  if (movementType === "Usage") {
+    return "warning";
+  }
+
+  if (movementType === "Daily Note") {
     return "";
   }
 
-  const numericFields = [
-    "received",
-    "transferIn",
-    "usage",
-    "waste",
-    "transferOut",
-    "adjustment"
-  ];
+  return "info-badge";
+}
 
-  const hasInvalidNumber = numericFields.some((field) => {
-    const value = String(rowData?.[field] || "").trim();
-
-    if (value === "") {
-      return false;
-    }
-
-    return Number.isNaN(Number(value));
-  });
-
-  if (hasInvalidNumber) {
-    return "CHECK";
+function getBranchEntryStockEffect(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
   }
 
-  return "READY";
+  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Usage" ||
+    entry.movementType === "Waste" ||
+    entry.movementType === "Daily Note"
+  ) {
+    return "report";
+  }
+
+  if (entry.movementType === "Remaining Count") {
+    return "set";
+  }
+
+  return "report";
 }
 
-function buildLedgerEntriesFromBranchDailyInput() {
-  const departmentItems = getItemsForSelectedDepartment();
-  const inputData = getStoredBranchDailyInput();
-  const batchId = createDailyInputBatchId();
-  const submittedAt = getCurrentTimestamp();
-  const submittedAtDisplay = getReadableTimestamp();
-  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
+function getBranchEffectBadgeClass(stockEffect) {
+  if (stockEffect === "add") {
+    return "success";
+  }
 
-  const movementFields = [
-    { field: "received", movementType: "Received" },
-    { field: "transferIn", movementType: "Transfer In" },
-    { field: "usage", movementType: "Usage" },
-    { field: "waste", movementType: "Waste" },
-    { field: "transferOut", movementType: "Transfer Out" },
-    { field: "adjustment", movementType: "Adjustment" }
-  ];
+  if (stockEffect === "deduct") {
+    return "danger";
+  }
 
-  const ledgerEntries = [];
+  if (stockEffect === "set") {
+    return "info-badge";
+  }
 
-  departmentItems.forEach((item) => {
-    const rowData = inputData[item.itemId] || {};
-    const notes = String(rowData.notes || "").trim();
+  return "";
+}
 
-    movementFields.forEach((movement) => {
-      const rawValue = String(rowData[movement.field] || "").trim();
+function getBranchEffectLabel(stockEffect) {
+  if (stockEffect === "add") {
+    return "Add";
+  }
 
-      if (rawValue === "") {
-        return;
+  if (stockEffect === "deduct") {
+    return "Deduct";
+  }
+
+  if (stockEffect === "set") {
+    return "Set Count";
+  }
+
+  return "Report";
+}
+
+function getBranchSignedQuantity(entry) {
+  const stockEffect = getBranchEntryStockEffect(entry);
+  const quantity = Number(entry.quantity || 0);
+  const unit = entry.unit || "";
+
+  if (stockEffect === "add") {
+    return `+${quantity} ${unit}`;
+  }
+
+  if (stockEffect === "deduct") {
+    return `-${quantity} ${unit}`;
+  }
+
+  if (stockEffect === "set") {
+    return `${quantity} ${unit}`;
+  }
+
+  if (quantity === 0) {
+    return `—`;
+  }
+
+  return `${quantity} ${unit}`;
+}
+
+function getBranchQuantityClass(entry) {
+  const stockEffect = getBranchEntryStockEffect(entry);
+
+  if (stockEffect === "add") {
+    return "positive-text";
+  }
+
+  if (stockEffect === "deduct") {
+    return "negative-text";
+  }
+
+  return "";
+}
+
+function getBranchBatchSourceLabel(batch) {
+  const firstEntry = batch.entries[0] || {};
+  const source = String(firstEntry.source || "");
+
+  if (source.includes("Incoming Delivery")) {
+    return "Incoming Delivery Batch";
+  }
+
+  if (source.includes("Closing Count")) {
+    return "Branch Daily Closing Batch";
+  }
+
+  if (source.includes("Branch Daily Input")) {
+    return "Branch Daily Input Batch";
+  }
+
+  if (source.includes("Daily Input")) {
+    return "Daily Input Batch";
+  }
+
+  return "Branch Movement Batch";
+}
+
+function getBranchBatchEffectCounts(batch) {
+  return batch.entries.reduce(
+    (counts, entry) => {
+      const effect = getBranchEntryStockEffect(entry);
+
+      if (effect === "add") {
+        counts.add += 1;
+      } else if (effect === "deduct") {
+        counts.deduct += 1;
+      } else if (effect === "set") {
+        counts.set += 1;
+      } else {
+        counts.report += 1;
       }
 
-      const quantity = Number(rawValue);
-
-      if (Number.isNaN(quantity) || quantity === 0) {
-        return;
-      }
-
-      ledgerEntries.push({
-        date: getTodayDateString(),
-        submittedAt,
-        submittedAtDisplay,
-        batchId,
-        department: selectedDepartment,
-        section: item.section || "",
-        itemId: item.itemId || "",
-        itemName: item.officialItemName || "",
-        movementType: movement.movementType,
-        movementField: movement.field,
-        quantity,
-        unit: item.unit || "",
-        source: `${selectedDepartment} Daily Input`,
-        notes
-      });
-    });
-  });
-
-  return ledgerEntries;
+      return counts;
+    },
+    {
+      add: 0,
+      deduct: 0,
+      set: 0,
+      report: 0
+    }
+  );
 }
 
-function getDailyInputValue(inputData, itemId, fieldName) {
-  return inputData?.[itemId]?.[fieldName] || "";
-}
+function renderBranchBatchList() {
+  const batches = getBranchLogBatches();
 
-function renderDepartmentOptions() {
-  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-
-  return getBranchDepartments()
-    .map(
-      (department) => `
-        <option value="${department.name}" ${
-        selectedDepartment === department.name ? "selected" : ""
-      }>
-          ${department.name}
-        </option>
-      `
-    )
-    .join("");
-}
-
-function renderBranchDailyInputRows() {
-  const departmentItems = getItemsForSelectedDepartment();
-  const inputData = getStoredBranchDailyInput();
-  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-
-  if (departmentItems.length === 0) {
+  if (batches.length === 0) {
     return `
-      <tr>
-        <td colspan="12">
-          No ${selectedDepartment} items found. Add ${selectedDepartment} items in the Master List first.
-        </td>
-      </tr>
+      <div class="warehouse-log-empty-card">
+        No submitted Branch batches match the current filters.
+      </div>
     `;
   }
 
-  return departmentItems
-    .map((item) => {
-      const rowData = inputData[item.itemId] || {};
-      const reviewStatus = getDailyReviewStatus(rowData);
+  return batches
+    .map((batch) => {
+      const firstEntry = batch.entries[0] || {};
+      const counts = getBranchBatchEffectCounts(batch);
+      const isActive =
+        window.DMC_BRANCH_LOG_FILTERS.selectedBatchId === batch.batchId;
 
       return `
-        <tr>
-          <td>${item.section || "-"}</td>
-          <td>${item.itemId || "-"}</td>
-          <td>${item.officialItemName || "-"}</td>
-          <td>${item.unit || "-"}</td>
+        <button
+          class="warehouse-log-batch-card ${isActive ? "active" : ""}"
+          data-branch-batch-id="${batch.batchId}"
+        >
+          <div class="warehouse-log-batch-card-top">
+            <div>
+              <strong>${getBranchBatchSourceLabel(batch)}</strong>
+              <span>${batch.batchId}</span>
+            </div>
 
-          <td>
-            <input class="daily-input-cell" data-item-id="${item.itemId}" data-field="received" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "received")}" />
-          </td>
+            <em>${batch.entries.length} rows</em>
+          </div>
 
-          <td>
-            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="transferIn" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "transferIn")}" />
-          </td>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Date</span>
+            <strong>${firstEntry.date || "-"}</strong>
+          </div>
 
-          <td>
-            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="usage" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "usage")}" />
-          </td>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Department</span>
+            <strong>${firstEntry.department || "-"}</strong>
+          </div>
 
-          <td>
-            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="waste" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "waste")}" />
-          </td>
-
-          <td>
-            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="transferOut" type="number" min="0" step="any" value="${getDailyInputValue(inputData, item.itemId, "transferOut")}" />
-          </td>
-
-          <td>
-            <input class="daily-input-cell blue-input" data-item-id="${item.itemId}" data-field="adjustment" type="number" step="any" value="${getDailyInputValue(inputData, item.itemId, "adjustment")}" />
-          </td>
-
-          <td>
-            <input class="daily-input-cell notes-input" data-item-id="${item.itemId}" data-field="notes" type="text" value="${getDailyInputValue(inputData, item.itemId, "notes")}" />
-          </td>
-
-          <td>
-            ${
-              reviewStatus
-                ? `<span class="badge ${
-                    reviewStatus === "CHECK" ? "danger-badge" : ""
-                  }">${reviewStatus}</span>`
-                : "-"
-            }
-          </td>
-        </tr>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Effect</span>
+            <strong>
+              <span class="positive-text">+${counts.add}</span>
+              /
+              <span>${counts.set} set</span>
+              /
+              <span>${counts.report} report</span>
+            </strong>
+          </div>
+        </button>
       `;
     })
     .join("");
 }
 
-function getBranchDailyInputSummary() {
-  const inputData = getStoredBranchDailyInput();
-  const rows = Object.values(inputData);
+function renderSelectedBranchBatchDetails() {
+  const selectedBatch = getSelectedBranchLogBatch();
 
-  const rowsWithInput = rows.filter((row) => getDailyReviewStatus(row) !== "");
-  const readyRows = rows.filter((row) => getDailyReviewStatus(row) === "READY");
-  const checkRows = rows.filter((row) => getDailyReviewStatus(row) === "CHECK");
-
-  return {
-    rowsWithInput: rowsWithInput.length,
-    readyRows: readyRows.length,
-    checkRows: checkRows.length
-  };
-}
-
-function renderSubmitPreviewList() {
-  const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
-
-  if (ledgerEntries.length === 0) {
+  if (!selectedBatch) {
     return `
-      <p class="submit-preview-empty">
-        No movements ready to submit yet. Go back to edit mode and fill in any movement field.
-      </p>
+      <div class="warehouse-log-empty-detail">
+        <div>
+          <div class="empty-detail-icon">↕</div>
+          <h4>Select a submitted batch</h4>
+          <p>
+            Choose a batch from the left panel to view posted branch movements,
+            closing counts, notes, and stock effect.
+          </p>
+        </div>
+      </div>
     `;
   }
 
+  const firstEntry = selectedBatch.entries[0] || {};
+  const reviewedBy =
+    firstEntry.managerReviewedBy ||
+    firstEntry.receivedBy ||
+    firstEntry.preparedBy ||
+    "-";
+
   return `
-    <ul class="submit-preview-list review-mode-list">
-      ${ledgerEntries
-        .map(
-          (entry) => `
-            <li>
-              <div>
-                <strong>${entry.itemName}</strong>
-                <span>${entry.movementType}: ${entry.quantity} ${entry.unit}</span>
-              </div>
+    <div class="warehouse-log-detail-card">
+      <div class="warehouse-log-detail-summary">
+        <div>
+          <p>Batch ID</p>
+          <strong>${selectedBatch.batchId}</strong>
+        </div>
 
-              <div class="preview-actions">
-                <button
-                  class="tiny-button"
-                  data-preview-edit="true"
-                >
-                  Edit
-                </button>
+        <div>
+          <p>Submitted</p>
+          <strong>${firstEntry.submittedAtDisplay || firstEntry.date || "-"}</strong>
+        </div>
 
-                <button
-                  class="tiny-button danger"
-                  data-preview-remove-item="${entry.itemId}"
-                  data-preview-remove-field="${entry.movementField}"
-                >
-                  Remove
-                </button>
-              </div>
-            </li>
-          `
-        )
-        .join("")}
-    </ul>
-  `;
-}
+        <div>
+          <p>Department</p>
+          <strong>${firstEntry.department || "-"}</strong>
+        </div>
 
-function renderEditModeContent(summary) {
-  return `
-    <div class="instruction-box">
-      <strong>Instruction:</strong>
-      <span>
-        Item rows and IDs should not be edited here. Add or correct items in
-        Master List. This page is only for today’s transaction input.
-      </span>
-    </div>
+        <div>
+          <p>Reviewed / Received By</p>
+          <strong>${reviewedBy}</strong>
+        </div>
 
-    <div class="table-wrap">
-      <table class="daily-input-table">
-        <thead>
-          <tr>
-            <th>Section</th>
-            <th>Item ID</th>
-            <th>Item Name</th>
-            <th>Unit</th>
-            <th>Received</th>
-            <th>Transfer In</th>
-            <th>Usage</th>
-            <th>Waste</th>
-            <th>Transfer Out</th>
-            <th>Adjustment</th>
-            <th>Notes</th>
-            <th>Review</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          ${renderBranchDailyInputRows()}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderReviewModeContent() {
-  return `
-    <div class="submit-preview-box">
-      <div>
-        <h4>Submit Review</h4>
-        <p>
-          Review the movements below before posting. Use Edit to return to the table,
-          or Remove to clear a pending movement from today’s input.
-        </p>
+        <div>
+          <p>Source</p>
+          <strong>${firstEntry.source || "-"}</strong>
+        </div>
       </div>
 
-      ${renderSubmitPreviewList()}
+      <div class="warehouse-log-detail-header">
+        <div>
+          <p>Posted Movements</p>
+          <h4>${selectedBatch.entries.length} branch ledger row${
+    selectedBatch.entries.length === 1 ? "" : "s"
+  } in this batch</h4>
+        </div>
 
-      <div class="form-actions review-actions">
-        <button class="ghost-button" id="back-to-edit-mode">
-          Back to Edit
-        </button>
+        <span class="badge success">Posted</span>
+      </div>
 
-        <button class="primary-button" id="submit-branch-daily-input">
-          Submit to Ledger
-        </button>
+      <div class="table-wrap warehouse-log-detail-table-wrap">
+        <table class="warehouse-log-detail-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Movement</th>
+              <th>Qty</th>
+              <th>Effect</th>
+              <th>Destination</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${selectedBatch.entries
+              .map((entry) => {
+                const stockEffect = getBranchEntryStockEffect(entry);
+
+                return `
+                  <tr>
+                    <td>
+                      <strong>${entry.itemName || "-"}</strong>
+                      <small class="table-subtext">${entry.itemId || "-"}</small>
+                    </td>
+                    <td>
+                      <span class="badge ${getBranchMovementBadgeClass(
+                        entry.movementType
+                      )}">
+                        ${entry.movementType || "-"}
+                      </span>
+                    </td>
+                    <td class="${getBranchQuantityClass(entry)}">
+                      <strong>${getBranchSignedQuantity(entry)}</strong>
+                    </td>
+                    <td>
+                      <span class="badge ${getBranchEffectBadgeClass(
+                        stockEffect
+                      )}">
+                        ${getBranchEffectLabel(stockEffect)}
+                      </span>
+                    </td>
+                    <td>${entry.destination || "-"}</td>
+                    <td>${entry.notes || "-"}</td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="warehouse-log-note">
+        Branch Stock uses Remaining Count as the latest stock truth, then adds
+        later Transfer In. Usage and Waste rows are kept for monthly reports and
+        are not double-deducted from stock.
       </div>
     </div>
   `;
 }
 
 function getBranchLogTransactionContent() {
-  const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-  const departmentItems = getItemsForSelectedDepartment();
-  const summary = getBranchDailyInputSummary();
-  const isReviewMode = window.DMC_BRANCH_LOG_MODE === "review";
+  const filters = window.DMC_BRANCH_LOG_FILTERS;
+  const batches = getBranchLogBatches();
 
   return `
-    <section class="grid">
-      <div class="card">
-        <p>${selectedDepartment} Items</p>
-        <strong>${departmentItems.length}</strong>
-      </div>
-
-      <div class="card">
-        <p>Rows With Input</p>
-        <strong>${summary.rowsWithInput}</strong>
-      </div>
-
-      <div class="card">
-        <p>Ready</p>
-        <strong>${summary.readyRows}</strong>
-      </div>
-
-      <div class="card">
-        <p>Needs Check</p>
-        <strong>${summary.checkRows}</strong>
-      </div>
-    </section>
-
-    <section class="panel">
+    <section class="panel warehouse-log-page">
       <div class="panel-header">
         <div>
-          <h3>${selectedDepartment} Daily Input — Today Only</h3>
+          <h3>Branch Log Transaction</h3>
           <p>
-            Select a department, enter today’s movements, review them, then submit to Ledger.
+            Read-only history of Branch Daily Input, Incoming Deliveries, Remaining Count,
+            Usage, Waste, and branch notes.
           </p>
         </div>
 
-        <div class="form-actions">
-          ${
-            isReviewMode
-              ? `<button class="ghost-button" id="back-to-edit-mode-top">Back to Edit</button>`
-              : `<button class="primary-button" id="ready-for-review">Ready for Review</button>`
-          }
-
-          <button class="ghost-button" id="clear-branch-daily-input">
-            Clear Today
-          </button>
-        </div>
+        <span class="badge">Movement History</span>
       </div>
 
-      <div class="filter-bar">
-        <label>
-          Department
-          <select id="branch-log-department-select" ${isReviewMode ? "disabled" : ""}>
-            ${renderDepartmentOptions()}
-          </select>
-        </label>
+      <div class="warehouse-log-layout">
+        <aside class="warehouse-log-left-panel">
+          <div class="warehouse-log-filters">
+            <div class="warehouse-log-date-grid">
+              <label>
+                Start Date
+                <input
+                  id="branch-log-start-date"
+                  type="date"
+                  value="${filters.startDate}"
+                />
+              </label>
 
-        <label class="filter-search">
-          Current Mode
-          <input
-            type="text"
-            value="${isReviewMode ? "Review Mode" : `${selectedDepartment} Daily Input`}"
-            disabled
-          />
-        </label>
+              <label>
+                End Date
+                <input
+                  id="branch-log-end-date"
+                  type="date"
+                  value="${filters.endDate}"
+                />
+              </label>
+            </div>
+
+            <label>
+              Department
+              <select id="branch-log-department-filter">
+                ${renderBranchLogDepartmentOptions()}
+              </select>
+            </label>
+
+            <label>
+              Movement Type
+              <select id="branch-log-movement-filter">
+                ${renderBranchLogMovementOptions()}
+              </select>
+            </label>
+
+            <label class="filter-search">
+              Search
+              <input
+                id="branch-log-search"
+                type="text"
+                placeholder="Search item, batch, source, notes..."
+                value="${filters.search}"
+              />
+            </label>
+
+            <div class="warehouse-log-filter-actions">
+              <button class="ghost-button" id="clear-branch-log-filters">
+                Clear
+              </button>
+
+              <button class="primary-button" id="export-branch-log">
+                Export
+              </button>
+            </div>
+          </div>
+
+          <div class="warehouse-log-list-header">
+            <p>Submitted Batches</p>
+            <span>${batches.length} found</span>
+          </div>
+
+          <div class="warehouse-log-batch-list">
+            ${renderBranchBatchList()}
+          </div>
+        </aside>
+
+        <section class="warehouse-log-right-panel">
+          <div class="warehouse-log-right-header">
+            <div>
+              <p>Batch Details</p>
+              <h4>${
+                getSelectedBranchLogBatch()?.batchId ||
+                "No batch selected"
+              }</h4>
+            </div>
+
+            <span>Read Only</span>
+          </div>
+
+          ${renderSelectedBranchBatchDetails()}
+        </section>
       </div>
-
-      ${isReviewMode ? renderReviewModeContent() : renderEditModeContent(summary)}
     </section>
   `;
 }
@@ -553,141 +704,99 @@ function refreshBranchLogTransactionPage() {
   renderPage("branch-log-transaction");
 }
 
-function returnToEditMode() {
-  window.DMC_BRANCH_LOG_MODE = "edit";
-  refreshBranchLogTransactionPage();
-}
-
 function setupBranchLogTransactionEvents() {
-  const departmentSelect = document.getElementById(
-    "branch-log-department-select"
-  );
+  const startDateInput = document.getElementById("branch-log-start-date");
+  const endDateInput = document.getElementById("branch-log-end-date");
+  const departmentFilter = document.getElementById("branch-log-department-filter");
+  const movementFilter = document.getElementById("branch-log-movement-filter");
+  const searchInput = document.getElementById("branch-log-search");
+  const clearButton = document.getElementById("clear-branch-log-filters");
+  const exportButton = document.getElementById("export-branch-log");
 
-  if (departmentSelect) {
-    departmentSelect.addEventListener("change", () => {
-      window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT = departmentSelect.value;
-      window.DMC_BRANCH_LOG_MODE = "edit";
+  if (startDateInput) {
+    startDateInput.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_FILTERS.startDate = startDateInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
       refreshBranchLogTransactionPage();
     });
   }
 
-  document.querySelectorAll(".daily-input-cell").forEach((input) => {
-    input.addEventListener("change", () => {
-      const inputData = getStoredBranchDailyInput();
-      const itemId = input.dataset.itemId;
-      const field = input.dataset.field;
-
-      inputData[itemId] = inputData[itemId] || {};
-      inputData[itemId][field] = input.value;
-
-      saveBranchDailyInput(inputData);
-    });
-  });
-
-  const readyButton = document.getElementById("ready-for-review");
-
-  if (readyButton) {
-    readyButton.addEventListener("click", () => {
-      const ledgerEntries = buildLedgerEntriesFromBranchDailyInput();
-
-      if (ledgerEntries.length === 0) {
-        alert("No movements ready for review.");
-        return;
-      }
-
-      window.DMC_BRANCH_LOG_MODE = "review";
+  if (endDateInput) {
+    endDateInput.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_FILTERS.endDate = endDateInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
       refreshBranchLogTransactionPage();
     });
   }
 
-  const backButtons = [
-    document.getElementById("back-to-edit-mode"),
-    document.getElementById("back-to-edit-mode-top")
-  ];
-
-  backButtons.forEach((button) => {
-    if (button) {
-      button.addEventListener("click", returnToEditMode);
-    }
-  });
-
-  document.querySelectorAll("[data-preview-edit]").forEach((button) => {
-    button.addEventListener("click", returnToEditMode);
-  });
-
-  document.querySelectorAll("[data-preview-remove-item]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const itemId = button.dataset.previewRemoveItem;
-      const field = button.dataset.previewRemoveField;
-      const inputData = getStoredBranchDailyInput();
-
-      if (inputData[itemId]) {
-        inputData[itemId][field] = "";
-      }
-
-      saveBranchDailyInput(inputData);
+  if (departmentFilter) {
+    departmentFilter.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_FILTERS.department = departmentFilter.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
       refreshBranchLogTransactionPage();
     });
-  });
+  }
 
-  const clearButton = document.getElementById("clear-branch-daily-input");
-  const submitButton = document.getElementById("submit-branch-daily-input");
+  if (movementFilter) {
+    movementFilter.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_FILTERS.movementType = movementFilter.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
+    });
+  }
 
-  if (submitButton) {
-    submitButton.addEventListener("click", () => {
-      const newLedgerEntries = buildLedgerEntriesFromBranchDailyInput();
-      const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-
-      if (newLedgerEntries.length === 0) {
-        alert(`No ${selectedDepartment} daily input entries to submit.`);
-        return;
-      }
-
-      const confirmed = confirm(
-        `Submit ${newLedgerEntries.length} ledger entries for ${selectedDepartment} and clear today's input?`
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      const currentLedgerEntries = getStoredLedgerEntriesForDailyInput();
-      const updatedLedgerEntries = [
-        ...currentLedgerEntries,
-        ...newLedgerEntries
-      ];
-
-      saveLedgerEntriesFromDailyInput(updatedLedgerEntries);
-      localStorage.removeItem(getDailyInputStorageKey());
-
-      window.DMC_BRANCH_LOG_MODE = "edit";
-
-      alert(`${selectedDepartment} Daily Input submitted to Ledger.`);
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_BRANCH_LOG_FILTERS.search = searchInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
       refreshBranchLogTransactionPage();
     });
   }
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      const selectedDepartment = window.DMC_BRANCH_LOG_SELECTED_DEPARTMENT;
-      const confirmed = confirm(`Clear today's ${selectedDepartment} Daily Input?`);
+      window.DMC_BRANCH_LOG_FILTERS = {
+        startDate: "",
+        endDate: "",
+        department: "all",
+        movementType: "all",
+        search: "",
+        selectedBatchId: ""
+      };
 
-      if (!confirmed) {
-        return;
-      }
-
-      localStorage.removeItem(getDailyInputStorageKey());
-      window.DMC_BRANCH_LOG_MODE = "edit";
       refreshBranchLogTransactionPage();
     });
   }
+
+  if (exportButton) {
+    exportButton.addEventListener("click", () => {
+      if (typeof window.DMC_SHOW_MODAL === "function") {
+        window.DMC_SHOW_MODAL({
+          type: "info",
+          title: "Export Coming Soon",
+          message:
+            "Export/print for Branch Log Transaction will be connected after the reporting workflow is finalized.",
+          confirmLabel: "Got it"
+        });
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-branch-batch-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId =
+        button.dataset.branchBatchId;
+
+      refreshBranchLogTransactionPage();
+    });
+  });
 }
 
 window.DMC_PAGES["branch-log-transaction"] = {
   eyebrow: "DMC-Iriga Branch",
-  title: "Log Transaction",
+  title: "Branch Log Transaction",
   description:
-    "Daily input screen for branch/station transactions by department.",
+    "Read-only batch history of Branch Daily Input, receiving, usage, waste, and closing counts.",
   getContent: getBranchLogTransactionContent,
   content: getBranchLogTransactionContent(),
   afterRender: setupBranchLogTransactionEvents
