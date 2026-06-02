@@ -6715,3 +6715,71 @@ input[type="date"]:disabled {
 .stock-level-only .stock-current-min strong {
   font-size: 10px;
 }
+
+/* =========================================================
+   ORDER HISTORY SCROLL + FILTER LAYOUT
+========================================================= */
+
+.order-history-layout {
+  align-items: start;
+}
+
+.order-history-list-panel,
+.order-history-detail-scroll {
+  max-height: calc(100vh - 230px);
+  overflow: hidden;
+}
+
+.order-history-scroll-list {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.order-history-detail-scroll {
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.order-history-lines-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.order-history-status-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.compact-panel-header {
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.compact-panel-header select {
+  min-width: 180px;
+}
+
+@media (max-width: 900px) {
+  .order-history-list-panel,
+  .order-history-detail-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .order-history-scroll-list,
+  .order-history-lines-scroll,
+  .order-history-status-scroll {
+    max-height: none;
+  }
+
+  .compact-panel-header {
+    align-items: stretch;
+  }
+
+  .compact-panel-header select {
+    width: 100%;
+  }
+}
