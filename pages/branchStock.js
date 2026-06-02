@@ -67,20 +67,39 @@ function getBranchStockBaseItems() {
   return getStoredBranchMasterListItems().filter(itemBelongsToBranchStock);
 }
 
+function entryBelongsToBranchStock(entry) {
+  const location = String(entry.location || entry.branch || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
+
+  if (
+    location.includes("warehouse") ||
+    source.includes("warehouse daily input")
+  ) {
+    return false;
+  }
+
+  return (
+    location.includes("dmc-iriga") ||
+    location.includes("branch") ||
+    destination.includes("dmc-iriga") ||
+    destination.includes("branch") ||
+    source.includes("incoming delivery receipt") ||
+    source.includes("branch daily input") ||
+    !entry.location
+  );
+}
+
 function getBranchLedgerEntriesForItem(itemId) {
-  return getStoredBranchLedgerEntries().filter((entry) => {
-    const entryLocation = String(entry.location || entry.branch || "").toLowerCase();
+  return getStoredBranchLedgerEntries().filter(
+    (entry) =>
+      entryBelongsToBranchStock(entry) &&
+      String(entry.itemId || "") === String(itemId || "")
+  );
+}
 
-    const belongsToBranch =
-      entryLocation.includes("dmc-iriga") ||
-      entryLocation.includes("branch") ||
-      !entry.location;
-
-    return (
-      String(entry.itemId || "") === String(itemId || "") &&
-      belongsToBranch
-    );
-  });
+function getBranchEntryTime(entry) {
+  return String(entry.submittedAt || entry.date || "");
 }
 
 function getBranchLatestMovementForItem(itemId) {
@@ -91,11 +110,98 @@ function getBranchLatestMovementForItem(itemId) {
   }
 
   return [...entries].sort((a, b) => {
-    const aTime = a.submittedAt || a.date || "";
-    const bTime = b.submittedAt || b.date || "";
-
-    return String(bTime).localeCompare(String(aTime));
+    return getBranchEntryTime(b).localeCompare(getBranchEntryTime(a));
   })[0];
+}
+
+function getLatestRemainingCountForItem(itemId) {
+  const remainingEntries = getBranchLedgerEntriesForItem(itemId).filter(
+    (entry) => entry.movementType === "Remaining Count" || entry.stockEffect === "set"
+  );
+
+  if (remainingEntries.length === 0) {
+    return null;
+  }
+
+  return [...remainingEntries].sort((a, b) => {
+    return getBranchEntryTime(b).localeCompare(getBranchEntryTime(a));
+  })[0];
+}
+
+function getBranchEntryStockEffect(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
+  }
+
+  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Usage" ||
+    entry.movementType === "Waste" ||
+    entry.movementType === "Transfer Out"
+  ) {
+    return "deduct";
+  }
+
+  return "report";
+}
+
+function calculateBranchCurrentStock(item) {
+  const entries = getBranchLedgerEntriesForItem(item.itemId);
+  const latestRemainingCount = getLatestRemainingCountForItem(item.itemId);
+
+  if (latestRemainingCount) {
+    const latestRemainingTime = getBranchEntryTime(latestRemainingCount);
+    const startingFromRemaining = Number(latestRemainingCount.quantity || 0);
+
+    return entries
+      .filter((entry) => {
+        if (entry === latestRemainingCount) {
+          return false;
+        }
+
+        return getBranchEntryTime(entry) > latestRemainingTime;
+      })
+      .reduce((total, entry) => {
+        const quantity = Number(entry.quantity || 0);
+        const stockEffect = getBranchEntryStockEffect(entry);
+
+        if (stockEffect === "add") {
+          return total + quantity;
+        }
+
+        if (stockEffect === "deduct") {
+          return total - quantity;
+        }
+
+        if (stockEffect === "set") {
+          return quantity;
+        }
+
+        return total;
+      }, startingFromRemaining);
+  }
+
+  return entries.reduce((total, entry) => {
+    const quantity = Number(entry.quantity || 0);
+    const stockEffect = getBranchEntryStockEffect(entry);
+
+    if (stockEffect === "add") {
+      return total + quantity;
+    }
+
+    if (stockEffect === "deduct") {
+      return total - quantity;
+    }
+
+    if (stockEffect === "set") {
+      return quantity;
+    }
+
+    return total;
+  }, 0);
 }
 
 function calculateBranchMovementTotals(item) {
@@ -117,12 +223,8 @@ function calculateBranchMovementTotals(item) {
         totals.waste += quantity;
       }
 
-      if (entry.movementType === "Transfer Out") {
-        totals.transferOut += quantity;
-      }
-
-      if (entry.movementType === "Adjustment") {
-        totals.adjustment += quantity;
+      if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+        totals.remainingCount = quantity;
       }
 
       return totals;
@@ -131,44 +233,30 @@ function calculateBranchMovementTotals(item) {
       transferIn: 0,
       usage: 0,
       waste: 0,
-      transferOut: 0,
-      adjustment: 0
+      remainingCount: 0
     }
   );
 }
 
-function calculateBranchCurrentStock(item) {
+function getBranchTransferInAfterLastCount(item) {
   const entries = getBranchLedgerEntriesForItem(item.itemId);
+  const latestRemainingCount = getLatestRemainingCountForItem(item.itemId);
 
-  return entries.reduce((total, entry) => {
-    const quantity = Number(entry.quantity || 0);
+  if (!latestRemainingCount) {
+    return 0;
+  }
 
-    if (entry.stockEffect === "add") {
-      return total + quantity;
-    }
+  const latestRemainingTime = getBranchEntryTime(latestRemainingCount);
 
-    if (entry.stockEffect === "deduct") {
-      return total - quantity;
-    }
+  return entries
+    .filter((entry) => {
+      const isAfterLastCount = getBranchEntryTime(entry) > latestRemainingTime;
+      const isTransferIn =
+        entry.movementType === "Transfer In" || getBranchEntryStockEffect(entry) === "add";
 
-    if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
-      return total + quantity;
-    }
-
-    if (
-      entry.movementType === "Usage" ||
-      entry.movementType === "Waste" ||
-      entry.movementType === "Transfer Out"
-    ) {
-      return total - quantity;
-    }
-
-    if (entry.movementType === "Adjustment") {
-      return total + quantity;
-    }
-
-    return total;
-  }, 0);
+      return isAfterLastCount && isTransferIn;
+    })
+    .reduce((total, entry) => total + Number(entry.quantity || 0), 0);
 }
 
 function normalizeBranchStockItem(item) {
@@ -187,7 +275,8 @@ function normalizeBranchStockItem(item) {
       ? `${latestMovement.movementType} · ${latestMovement.date || "No date"}`
       : "No posted branch movement yet",
     note: latestMovement?.notes || item.notes || item.note || "",
-    movementTotals
+    movementTotals,
+    transferInAfterLastCount: getBranchTransferInAfterLastCount(item)
   };
 }
 
@@ -248,15 +337,9 @@ function getIncomingTodayCountForBranchStock() {
 
   return getStoredBranchLedgerEntries().filter((entry) => {
     const entryDate = String(entry.date || "").slice(0, 10);
-    const entryLocation = String(entry.location || entry.branch || "").toLowerCase();
-
-    const belongsToBranch =
-      entryLocation.includes("dmc-iriga") ||
-      entryLocation.includes("branch") ||
-      !entry.location;
 
     return (
-      belongsToBranch &&
+      entryBelongsToBranchStock(entry) &&
       entryDate === today &&
       entry.movementType === "Transfer In" &&
       entry.source === "Incoming Delivery Receipt"
@@ -386,8 +469,7 @@ function renderBranchMovementSummary(item) {
     transferIn: 0,
     usage: 0,
     waste: 0,
-    transferOut: 0,
-    adjustment: 0
+    remainingCount: 0
   };
 
   return `
@@ -418,11 +500,9 @@ function renderBranchStockRows() {
           <td>
             <strong>${item.officialItemName || "-"}</strong>
             ${renderBranchMovementSummary(item)}
-            ${
-              item.note
-                ? `<small class="table-subtext">${item.note}</small>`
-                : ""
-            }
+            <small class="table-subtext">
+              Current Stock is the starting reference for the next shift.
+            </small>
           </td>
           <td>${item.unit || "-"}</td>
           <td>${renderBranchStockLevel(item)}</td>
@@ -452,11 +532,11 @@ function renderBranchStockPanel() {
         <div>
           <h3>Branch Stock List</h3>
           <p>
-            Current Branch stock is calculated from confirmed Incoming Deliveries and Branch movements.
+            Current Stock is the available branch stock now and the starting reference for the next shift.
           </p>
         </div>
 
-        <span class="badge">Calculated Stock</span>
+        <span class="badge">Current Stock</span>
       </div>
 
       <div class="warehouse-stock-filter-shell">
@@ -498,7 +578,7 @@ function renderBranchStockPanel() {
               <th>Item ID</th>
               <th>Item</th>
               <th>Unit</th>
-              <th>Stock Level</th>
+              <th>Current Stock</th>
               <th>Status</th>
               <th>Last Movement</th>
               <th>Actions</th>
@@ -583,8 +663,7 @@ function setupBranchStockEvents() {
         transferIn: 0,
         usage: 0,
         waste: 0,
-        transferOut: 0,
-        adjustment: 0
+        remainingCount: 0
       };
 
       if (typeof window.DMC_SHOW_MODAL === "function") {
@@ -592,18 +671,19 @@ function setupBranchStockEvents() {
           type: "info",
           title: `${item.officialItemName}`,
           message: [
-            `Current stock: ${item.currentStock} ${item.unit}`,
-            `Minimum stock: ${item.minimumStock} ${item.unit}`,
+            `Current Stock: ${item.currentStock} ${item.unit}`,
+            `Minimum Stock: ${item.minimumStock} ${item.unit}`,
             `Status: ${status}`,
             "",
-            "Branch movements:",
-            `Transfer In: ${totals.transferIn}`,
-            `Usage: ${totals.usage}`,
-            `Waste: ${totals.waste}`,
-            `Transfer Out: ${totals.transferOut}`,
-            `Adjustment: ${totals.adjustment}`,
+            "Shift Reference:",
+            "Current Stock is the starting stock/reference for the next shift.",
             "",
-            `Last movement: ${item.lastMovement}`
+            "Recent / Reported Activity:",
+            `Transfer In: ${totals.transferIn}`,
+            `Usage Reported: ${totals.usage}`,
+            `Waste Reported: ${totals.waste}`,
+            "",
+            `Last Movement: ${item.lastMovement}`
           ].join("\n"),
           confirmLabel: "Got it"
         });
@@ -616,7 +696,7 @@ window.DMC_PAGES["branch-stock"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Stock",
   description:
-    "Current branch stock calculated from confirmed branch movements.",
+    "Current branch stock and starting reference for the next shift.",
   getContent: getBranchStockContent,
   content: getBranchStockContent(),
   afterRender: setupBranchStockEvents
