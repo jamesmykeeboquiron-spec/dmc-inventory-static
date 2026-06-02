@@ -1,40 +1,45 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE =
-  "dmc_inventory_ledger_entries";
+const DMC_DELIVERY_LOG_ORDERS_STORAGE_KEY = "dmc_branch_orders";
+const DMC_DELIVERY_LOG_ISSUES_STORAGE_KEY = "dmc_delivery_issues";
 
-window.DMC_BRANCH_LOG_FILTERS = window.DMC_BRANCH_LOG_FILTERS || {
-  startDate: "",
-  endDate: "",
-  department: "all",
-  movementType: "all",
-  search: "",
-  selectedBatchId: ""
-};
+window.DMC_DELIVERY_LOG_STATUS_FILTER =
+  window.DMC_DELIVERY_LOG_STATUS_FILTER || "all";
 
-function getStoredBranchLogEntriesForLogPage() {
-  const storedEntries = localStorage.getItem(
-    DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE
-  );
+window.DMC_DELIVERY_LOG_SEARCH = window.DMC_DELIVERY_LOG_SEARCH || "";
 
-  if (!storedEntries) {
+window.DMC_DELIVERY_LOG_SELECTED_ID =
+  window.DMC_DELIVERY_LOG_SELECTED_ID || "";
+
+function getStoredDeliveryLogOrders() {
+  const storedOrders = localStorage.getItem(DMC_DELIVERY_LOG_ORDERS_STORAGE_KEY);
+
+  if (!storedOrders) {
     return [];
   }
 
   try {
-    const parsedEntries = JSON.parse(storedEntries);
-
-    if (!Array.isArray(parsedEntries)) {
-      return [];
-    }
-
-    return parsedEntries;
+    return JSON.parse(storedOrders);
   } catch {
     return [];
   }
 }
 
-function formatBranchLogDateTime(value) {
+function getStoredDeliveryLogIssues() {
+  const storedIssues = localStorage.getItem(DMC_DELIVERY_LOG_ISSUES_STORAGE_KEY);
+
+  if (!storedIssues) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(storedIssues);
+  } catch {
+    return [];
+  }
+}
+
+function formatDeliveryLogDateTime(value) {
   if (!value) {
     return "-";
   }
@@ -54,185 +59,128 @@ function formatBranchLogDateTime(value) {
   });
 }
 
-function entryBelongsToBranchLog(entry) {
-  const location = String(entry.location || entry.branch || "").toLowerCase();
-  const source = String(entry.source || "").toLowerCase();
-  const destination = String(entry.destination || "").toLowerCase();
-
-  if (
-    location.includes("warehouse") ||
-    source.includes("warehouse daily input")
-  ) {
-    return false;
+function getDeliveryLogTimestamp(order) {
+  if (order.receiving?.receivedAt) {
+    return new Date(order.receiving.receivedAt).getTime();
   }
 
-  return (
-    location.includes("dmc-iriga") ||
-    location.includes("branch") ||
-    destination.includes("dmc-iriga") ||
-    destination.includes("branch") ||
-    source.includes("incoming delivery receipt") ||
-    source.includes("branch daily input") ||
-    source.includes("branch daily input closing count") ||
-    !entry.location
+  if (order.fulfillment?.sentAt) {
+    return new Date(order.fulfillment.sentAt).getTime();
+  }
+
+  if (order.orderDate) {
+    return new Date(order.orderDate).getTime();
+  }
+
+  return 0;
+}
+
+function getDeliveryLogIssueCount(orderId) {
+  return getStoredDeliveryLogIssues().filter(
+    (issue) => issue.orderId === orderId
+  ).length;
+}
+
+function getDeliveryLogIssuesForOrder(orderId) {
+  return getStoredDeliveryLogIssues().filter(
+    (issue) => issue.orderId === orderId
   );
 }
 
-function getBranchLogEntriesOnly() {
-  return getStoredBranchLogEntriesForLogPage().filter(entryBelongsToBranchLog);
-}
+function getDeliveryLogOrders() {
+  const statusFilter = window.DMC_DELIVERY_LOG_STATUS_FILTER;
+  const searchValue = String(window.DMC_DELIVERY_LOG_SEARCH || "")
+    .toLowerCase()
+    .trim();
 
-function getBranchLogDepartments() {
-  return [
-    ...new Set(
-      getBranchLogEntriesOnly()
-        .map((entry) => entry.department || "")
-        .filter(Boolean)
+  return getStoredDeliveryLogOrders()
+    .filter((order) =>
+      ["On the Way", "Completed", "Variance"].includes(order.status)
     )
-  ].sort();
+    .filter((order) => {
+      const matchesStatus =
+        statusFilter === "all" || order.status === statusFilter;
+
+      const issueCount = getDeliveryLogIssueCount(order.orderId);
+
+      const matchesSearch =
+        !searchValue ||
+        String(order.orderId || "").toLowerCase().includes(searchValue) ||
+        String(order.branch || "").toLowerCase().includes(searchValue) ||
+        String(order.department || "").toLowerCase().includes(searchValue) ||
+        String(order.status || "").toLowerCase().includes(searchValue) ||
+        String(order.fulfillment?.driver || "")
+          .toLowerCase()
+          .includes(searchValue) ||
+        String(order.fulfillment?.preparedBy || "")
+          .toLowerCase()
+          .includes(searchValue) ||
+        String(order.receiving?.receivedBy || "")
+          .toLowerCase()
+          .includes(searchValue) ||
+        (order.lines || []).some(
+          (line) =>
+            String(line.itemId || "").toLowerCase().includes(searchValue) ||
+            String(line.itemName || "").toLowerCase().includes(searchValue) ||
+            String(line.section || "").toLowerCase().includes(searchValue)
+        ) ||
+        String(issueCount).includes(searchValue);
+
+      return matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => getDeliveryLogTimestamp(b) - getDeliveryLogTimestamp(a));
 }
 
-function getBranchLogMovementTypes() {
-  const preferredOrder = [
-    "Transfer In",
-    "Remaining Count",
-    "Usage",
-    "Waste",
-    "Daily Note",
-    "Received",
-    "Adjustment"
-  ];
+function getSelectedDeliveryLogOrder() {
+  const orders = getDeliveryLogOrders();
 
-  const movementTypes = [
-    ...new Set(
-      getBranchLogEntriesOnly()
-        .map((entry) => entry.movementType || "")
-        .filter(Boolean)
-    )
-  ];
-
-  return movementTypes.sort((a, b) => {
-    const aIndex = preferredOrder.indexOf(a);
-    const bIndex = preferredOrder.indexOf(b);
-
-    if (aIndex === -1 && bIndex === -1) {
-      return a.localeCompare(b);
-    }
-
-    if (aIndex === -1) {
-      return 1;
-    }
-
-    if (bIndex === -1) {
-      return -1;
-    }
-
-    return aIndex - bIndex;
-  });
-}
-
-function getFilteredBranchLogEntries() {
-  const filters = window.DMC_BRANCH_LOG_FILTERS;
-  const searchValue = String(filters.search || "").toLowerCase().trim();
-  const selectedDepartment = String(filters.department || "all");
-  const selectedMovementType = String(filters.movementType || "all");
-  const startDate = String(filters.startDate || "");
-  const endDate = String(filters.endDate || "");
-
-  return getBranchLogEntriesOnly().filter((entry) => {
-    const entryDate = String(entry.date || "");
-
-    const matchesStartDate = !startDate || entryDate >= startDate;
-    const matchesEndDate = !endDate || entryDate <= endDate;
-
-    const matchesDepartment =
-      selectedDepartment === "all" ||
-      String(entry.department || "") === selectedDepartment;
-
-    const matchesMovementType =
-      selectedMovementType === "all" ||
-      String(entry.movementType || "") === selectedMovementType;
-
-    const matchesSearch =
-      !searchValue ||
-      String(entry.batchId || "").toLowerCase().includes(searchValue) ||
-      String(entry.itemId || "").toLowerCase().includes(searchValue) ||
-      String(entry.itemName || "").toLowerCase().includes(searchValue) ||
-      String(entry.department || "").toLowerCase().includes(searchValue) ||
-      String(entry.section || "").toLowerCase().includes(searchValue) ||
-      String(entry.source || "").toLowerCase().includes(searchValue) ||
-      String(entry.destination || "").toLowerCase().includes(searchValue) ||
-      String(entry.notes || "").toLowerCase().includes(searchValue) ||
-      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue);
-
-    return (
-      matchesStartDate &&
-      matchesEndDate &&
-      matchesDepartment &&
-      matchesMovementType &&
-      matchesSearch
+  if (window.DMC_DELIVERY_LOG_SELECTED_ID) {
+    const selectedOrder = orders.find(
+      (order) => order.orderId === window.DMC_DELIVERY_LOG_SELECTED_ID
     );
-  });
-}
 
-function groupBranchLogEntriesByBatch(entries) {
-  return entries.reduce((groups, entry) => {
-    const batchId = entry.batchId || "No Batch ID";
-
-    groups[batchId] = groups[batchId] || [];
-    groups[batchId].push(entry);
-
-    return groups;
-  }, {});
-}
-
-function getBranchLogBatches() {
-  const filteredEntries = getFilteredBranchLogEntries();
-  const groupedEntries = groupBranchLogEntriesByBatch(filteredEntries);
-
-  return Object.entries(groupedEntries)
-    .map(([batchId, entries]) => ({
-      batchId,
-      entries
-    }))
-    .sort((a, b) => {
-      const aSubmitted = a.entries[0]?.submittedAt || a.entries[0]?.date || "";
-      const bSubmitted = b.entries[0]?.submittedAt || b.entries[0]?.date || "";
-
-      return String(bSubmitted).localeCompare(String(aSubmitted));
-    });
-}
-
-function getSelectedBranchLogBatch() {
-  const batches = getBranchLogBatches();
-
-  if (batches.length === 0) {
-    return null;
+    if (selectedOrder) {
+      return selectedOrder;
+    }
   }
 
-  const selectedBatchId = window.DMC_BRANCH_LOG_FILTERS.selectedBatchId;
-
-  const selectedBatch = batches.find(
-    (batch) => batch.batchId === selectedBatchId
-  );
-
-  return selectedBatch || batches[0] || null;
+  return orders[0] || null;
 }
 
-function renderBranchLogDepartmentOptions() {
-  const currentDepartment = window.DMC_BRANCH_LOG_FILTERS.department;
+function getDeliveryLogSummary() {
+  const deliveryOrders = getStoredDeliveryLogOrders().filter((order) =>
+    ["On the Way", "Completed", "Variance"].includes(order.status)
+  );
+
+  return {
+    total: deliveryOrders.length,
+    onTheWay: deliveryOrders.filter((order) => order.status === "On the Way")
+      .length,
+    completed: deliveryOrders.filter((order) => order.status === "Completed")
+      .length,
+    variance: deliveryOrders.filter((order) => order.status === "Variance")
+      .length
+  };
+}
+
+function getDeliveryLogStatusBadgeClass(status) {
+  if (status === "On the Way") return "info-badge";
+  if (status === "Completed") return "";
+  if (status === "Variance") return "warning-badge";
+  return "";
+}
+
+function renderDeliveryLogStatusOptions() {
+  const current = window.DMC_DELIVERY_LOG_STATUS_FILTER;
+  const statuses = ["On the Way", "Completed", "Variance"];
 
   return `
-    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
-      All Departments
-    </option>
-    ${getBranchLogDepartments()
+    <option value="all" ${current === "all" ? "selected" : ""}>All Deliveries</option>
+    ${statuses
       .map(
-        (department) => `
-          <option value="${department}" ${
-          currentDepartment === department ? "selected" : ""
-        }>
-            ${department}
+        (status) => `
+          <option value="${status}" ${current === status ? "selected" : ""}>
+            ${status}
           </option>
         `
       )
@@ -240,378 +188,179 @@ function renderBranchLogDepartmentOptions() {
   `;
 }
 
-function renderBranchLogMovementOptions() {
-  const currentMovementType = window.DMC_BRANCH_LOG_FILTERS.movementType;
+function renderDeliveryLogList() {
+  const orders = getDeliveryLogOrders();
+  const selectedOrder = getSelectedDeliveryLogOrder();
 
-  return `
-    <option value="all" ${currentMovementType === "all" ? "selected" : ""}>
-      All Movements
-    </option>
-    ${getBranchLogMovementTypes()
-      .map(
-        (movementType) => `
-          <option value="${movementType}" ${
-          currentMovementType === movementType ? "selected" : ""
-        }>
-            ${movementType}
-          </option>
-        `
-      )
-      .join("")}
-  `;
-}
-
-function getBranchMovementBadgeClass(movementType) {
-  if (movementType === "Transfer In" || movementType === "Received") {
-    return "success";
-  }
-
-  if (movementType === "Remaining Count") {
-    return "info-badge";
-  }
-
-  if (movementType === "Waste") {
-    return "danger";
-  }
-
-  if (movementType === "Usage") {
-    return "warning";
-  }
-
-  if (movementType === "Daily Note") {
-    return "";
-  }
-
-  return "info-badge";
-}
-
-function getBranchEntryStockEffect(entry) {
-  if (entry.stockEffect) {
-    return entry.stockEffect;
-  }
-
-  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
-    return "add";
-  }
-
-  if (entry.movementType === "Remaining Count") {
-    return "set";
-  }
-
-  return "report";
-}
-
-function getBranchEffectBadgeClass(stockEffect) {
-  if (stockEffect === "add") {
-    return "success";
-  }
-
-  if (stockEffect === "deduct") {
-    return "danger";
-  }
-
-  if (stockEffect === "set") {
-    return "info-badge";
-  }
-
-  return "";
-}
-
-function getBranchEffectLabel(stockEffect) {
-  if (stockEffect === "add") {
-    return "Add";
-  }
-
-  if (stockEffect === "deduct") {
-    return "Deduct";
-  }
-
-  if (stockEffect === "set") {
-    return "Set Count";
-  }
-
-  return "Report";
-}
-
-function getBranchSignedQuantity(entry) {
-  const stockEffect = getBranchEntryStockEffect(entry);
-  const quantity = Number(entry.quantity || 0);
-  const unit = entry.unit || "";
-
-  if (stockEffect === "add") {
-    return `+${quantity} ${unit}`;
-  }
-
-  if (stockEffect === "deduct") {
-    return `-${quantity} ${unit}`;
-  }
-
-  if (stockEffect === "set") {
-    return `${quantity} ${unit}`;
-  }
-
-  if (quantity === 0) {
-    return "—";
-  }
-
-  return `${quantity} ${unit}`;
-}
-
-function getBranchQuantityClass(entry) {
-  const stockEffect = getBranchEntryStockEffect(entry);
-
-  if (stockEffect === "add") {
-    return "positive-text";
-  }
-
-  if (stockEffect === "deduct") {
-    return "negative-text";
-  }
-
-  return "";
-}
-
-function getBranchBatchSourceLabel(batch) {
-  const firstEntry = batch.entries[0] || {};
-  const source = String(firstEntry.source || "");
-
-  if (source.includes("Incoming Delivery")) {
-    return "Incoming Delivery Batch";
-  }
-
-  if (source.includes("Closing Count")) {
-    return "Branch Daily Closing Batch";
-  }
-
-  if (source.includes("Branch Daily Input")) {
-    return "Branch Daily Input Batch";
-  }
-
-  if (source.includes("Daily Input")) {
-    return "Daily Input Batch";
-  }
-
-  return "Branch Movement Batch";
-}
-
-function getBranchBatchEffectCounts(batch) {
-  return batch.entries.reduce(
-    (counts, entry) => {
-      const effect = getBranchEntryStockEffect(entry);
-
-      if (effect === "add") {
-        counts.add += 1;
-      } else if (effect === "deduct") {
-        counts.deduct += 1;
-      } else if (effect === "set") {
-        counts.set += 1;
-      } else {
-        counts.report += 1;
-      }
-
-      return counts;
-    },
-    {
-      add: 0,
-      deduct: 0,
-      set: 0,
-      report: 0
-    }
-  );
-}
-
-function getBranchBatchMovementSummary(batch) {
-  return batch.entries.reduce(
-    (summary, entry) => {
-      const quantity = Number(entry.quantity || 0);
-      const movementType = entry.movementType || "";
-      const unit = entry.unit || "";
-
-      if (movementType === "Transfer In") {
-        summary.transferInQty += quantity;
-        summary.transferInRows += 1;
-        summary.transferInUnit = summary.transferInUnit || unit;
-      }
-
-      if (movementType === "Remaining Count") {
-        summary.remainingRows += 1;
-      }
-
-      if (movementType === "Usage") {
-        summary.usageQty += quantity;
-        summary.usageRows += 1;
-        summary.usageUnit = summary.usageUnit || unit;
-      }
-
-      if (movementType === "Waste") {
-        summary.wasteQty += quantity;
-        summary.wasteRows += 1;
-        summary.wasteUnit = summary.wasteUnit || unit;
-      }
-
-      if (movementType === "Daily Note") {
-        summary.noteRows += 1;
-      }
-
-      return summary;
-    },
-    {
-      transferInQty: 0,
-      transferInRows: 0,
-      transferInUnit: "",
-      remainingRows: 0,
-      usageQty: 0,
-      usageRows: 0,
-      usageUnit: "",
-      wasteQty: 0,
-      wasteRows: 0,
-      wasteUnit: "",
-      noteRows: 0
-    }
-  );
-}
-
-function getBranchBatchNotes(batch) {
-  return batch.entries
-    .filter((entry) => String(entry.notes || "").trim() !== "")
-    .map((entry) => ({
-      itemName: entry.itemName || "-",
-      itemId: entry.itemId || "-",
-      movementType: entry.movementType || "-",
-      notes: entry.notes
-    }));
-}
-
-function renderBranchBatchList() {
-  const batches = getBranchLogBatches();
-
-  if (batches.length === 0) {
+  if (orders.length === 0) {
     return `
-      <div class="warehouse-log-empty-card">
-        No submitted Branch batches match the current filters.
+      <div class="order-list-empty">
+        <p>No delivery records found.</p>
+        <span>Orders marked On the Way, Completed, or Variance will appear here.</span>
       </div>
     `;
   }
 
-  return batches
-    .map((batch) => {
-      const firstEntry = batch.entries[0] || {};
-      const counts = getBranchBatchEffectCounts(batch);
-      const isActive =
-        window.DMC_BRANCH_LOG_FILTERS.selectedBatchId === batch.batchId ||
-        (!window.DMC_BRANCH_LOG_FILTERS.selectedBatchId &&
-          getSelectedBranchLogBatch()?.batchId === batch.batchId);
-
-      return `
-        <button
-          class="warehouse-log-batch-card ${isActive ? "active" : ""}"
-          data-branch-batch-id="${batch.batchId}"
-        >
-          <div class="warehouse-log-batch-card-top">
-            <div>
-              <strong>${getBranchBatchSourceLabel(batch)}</strong>
-              <span>${batch.batchId}</span>
-            </div>
-
-            <em>${batch.entries.length} rows</em>
-          </div>
-
-          <div class="warehouse-log-batch-card-meta">
-            <span>Date</span>
-            <strong>${firstEntry.date || "-"}</strong>
-          </div>
-
-          <div class="warehouse-log-batch-card-meta">
-            <span>Department</span>
-            <strong>${firstEntry.department || "-"}</strong>
-          </div>
-
-          <div class="warehouse-log-batch-card-meta">
-            <span>Effect</span>
-            <strong>
-              <span class="positive-text">+${counts.add}</span>
-              /
-              <span>${counts.set} set</span>
-              /
-              <span>${counts.report} report</span>
-            </strong>
-          </div>
-        </button>
-      `;
-    })
-    .join("");
-}
-
-function renderBranchBatchSummaryCards(batch) {
-  const summary = getBranchBatchMovementSummary(batch);
-
   return `
-    <div class="delivery-log-info-grid branch-log-summary-grid">
-      <div>
-        <p class="eyebrow">Transfer In</p>
-        <strong>${summary.transferInQty} ${summary.transferInUnit}</strong>
-        <span>${summary.transferInRows} row${summary.transferInRows === 1 ? "" : "s"}</span>
-      </div>
+    <div class="delivery-log-list">
+      ${orders
+        .map((order) => {
+          const issueCount = getDeliveryLogIssueCount(order.orderId);
 
-      <div>
-        <p class="eyebrow">Remaining Counts</p>
-        <strong>${summary.remainingRows}</strong>
-        <span>closing count row${summary.remainingRows === 1 ? "" : "s"}</span>
-      </div>
+          return `
+            <button
+              class="delivery-log-list-item ${
+                selectedOrder?.orderId === order.orderId ? "active" : ""
+              }"
+              data-select-delivery-log="${order.orderId}"
+            >
+              <div>
+                <strong>${order.orderId}</strong>
+                <p>${order.branch || "DMC-Iriga Branch"} • ${order.department || "-"}</p>
+                <span>
+                  Sent: ${formatDeliveryLogDateTime(order.fulfillment?.sentAt)}
+                </span>
+              </div>
 
-      <div>
-        <p class="eyebrow">Usage Reported</p>
-        <strong>${summary.usageQty} ${summary.usageUnit}</strong>
-        <span>${summary.usageRows} row${summary.usageRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Waste Reported</p>
-        <strong>${summary.wasteQty} ${summary.wasteUnit}</strong>
-        <span>${summary.wasteRows} row${summary.wasteRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Notes</p>
-        <strong>${summary.noteRows}</strong>
-        <span>note row${summary.noteRows === 1 ? "" : "s"}</span>
-      </div>
-
-      <div>
-        <p class="eyebrow">Total Rows</p>
-        <strong>${batch.entries.length}</strong>
-        <span>ledger row${batch.entries.length === 1 ? "" : "s"}</span>
-      </div>
+              <div class="delivery-log-list-meta">
+                ${
+                  issueCount
+                    ? `<span class="badge warning-badge">${issueCount} Issue(s)</span>`
+                    : ""
+                }
+                <span class="badge ${getDeliveryLogStatusBadgeClass(order.status)}">
+                  ${order.status || "-"}
+                </span>
+              </div>
+            </button>
+          `;
+        })
+        .join("")}
     </div>
   `;
 }
 
-function renderBranchBatchNotes(batch) {
-  const notes = getBranchBatchNotes(batch);
+function getDeliveryLogSentTotal(order) {
+  return (order.lines || []).reduce((total, line) => {
+    const sentQty = Number(
+      order.fulfillment?.lines?.[line.itemId]?.sentQty ??
+        line.requestedQty ??
+        0
+    );
 
-  if (notes.length === 0) {
+    return total + (Number.isNaN(sentQty) ? 0 : sentQty);
+  }, 0);
+}
+
+function getDeliveryLogReceivedTotal(order) {
+  const receivingLines = order.receiving?.lines || {};
+
+  return (order.lines || []).reduce((total, line) => {
+    const receivedQty = Number(receivingLines[line.itemId]?.receivedQty || 0);
+
+    return total + (Number.isNaN(receivedQty) ? 0 : receivedQty);
+  }, 0);
+}
+
+function renderDeliveryLogLines(order) {
+  if (!order || !order.lines || order.lines.length === 0) {
+    return `
+      <p class="submit-preview-empty">No delivery lines found.</p>
+    `;
+  }
+
+  const receivingLines = order.receiving?.lines || {};
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Sent Qty</th>
+            <th>Received Qty</th>
+            <th>Variance</th>
+            <th>Unit</th>
+            <th>Condition</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${order.lines
+            .map((line) => {
+              const sentQty = Number(
+                order.fulfillment?.lines?.[line.itemId]?.sentQty ??
+                  line.requestedQty ??
+                  0
+              );
+
+              const receivedQty = Number(
+                receivingLines[line.itemId]?.receivedQty ?? ""
+              );
+
+              const hasReceivedQty = !Number.isNaN(receivedQty);
+              const displayedReceivedQty = hasReceivedQty ? receivedQty : "-";
+              const variance = hasReceivedQty ? receivedQty - sentQty : "-";
+              const condition = receivingLines[line.itemId]?.condition || "-";
+
+              return `
+                <tr>
+                  <td>${line.section || "-"}</td>
+                  <td>${line.itemId || "-"}</td>
+                  <td>${line.itemName || "-"}</td>
+                  <td>${sentQty}</td>
+                  <td>${displayedReceivedQty}</td>
+                  <td>
+                    <span class="${variance !== 0 && variance !== "-" ? "danger-text" : ""}">
+                      ${variance}
+                    </span>
+                  </td>
+                  <td>${line.unit || "-"}</td>
+                  <td>${condition}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDeliveryLogIssues(order) {
+  const issues = getDeliveryLogIssuesForOrder(order.orderId);
+
+  if (issues.length === 0) {
     return `
       <div class="instruction-box">
-        <strong>No Notes:</strong>
-        <span>No notes were included in this batch.</span>
+        <strong>No Issues:</strong>
+        <span>No delivery issue records were created for this delivery.</span>
       </div>
     `;
   }
 
   return `
     <div class="delivery-log-issue-list">
-      ${notes
+      ${issues
         .map(
-          (note) => `
+          (issue) => `
             <div class="delivery-log-issue-card">
               <div>
-                <p class="eyebrow">${note.movementType}</p>
-                <strong>${note.itemName}</strong>
-                <span>${note.itemId}</span>
+                <p class="eyebrow">${issue.issueReason || "Issue"}</p>
+                <strong>${issue.itemName || "-"}</strong>
+                <span>
+                  Sent ${issue.sentQty} / Received ${issue.receivedQty} ${issue.unit || ""}
+                </span>
               </div>
 
               <div>
-                <p>${note.notes}</p>
+                <span class="badge ${issue.status === "Resolved" ? "info-badge" : "warning-badge"}">
+                  ${issue.status || "Open"}
+                </span>
+                <p>${issue.resolution || "No resolution yet"}</p>
+                <span>${issue.resolutionCategory || ""}</span>
               </div>
             </div>
           `
@@ -621,354 +370,214 @@ function renderBranchBatchNotes(batch) {
   `;
 }
 
-function renderSelectedBranchBatchDetails() {
-  const selectedBatch = getSelectedBranchLogBatch();
+function renderSelectedDeliveryLogOrder() {
+  const order = getSelectedDeliveryLogOrder();
 
-  if (!selectedBatch) {
+  if (!order) {
     return `
       <section class="panel delivery-log-detail">
         <div class="order-list-empty">
-          <p>No batch selected.</p>
-          <span>Select a submitted batch from the left panel.</span>
+          <p>No delivery selected.</p>
+          <span>Select a delivery from the left panel.</span>
         </div>
       </section>
     `;
   }
 
-  const firstEntry = selectedBatch.entries[0] || {};
-  const reviewedBy =
-    firstEntry.managerReviewedBy ||
-    firstEntry.receivedBy ||
-    firstEntry.preparedBy ||
-    "-";
+  const sentTotal = getDeliveryLogSentTotal(order);
+  const receivedTotal = getDeliveryLogReceivedTotal(order);
+  const issueCount = getDeliveryLogIssueCount(order.orderId);
 
   return `
-    <section class="panel delivery-log-detail branch-log-detail">
+    <section class="panel delivery-log-detail">
       <div class="panel-header">
         <div>
-          <h3>${selectedBatch.batchId}</h3>
+          <h3>${order.orderId}</h3>
           <p>
-            DMC-Iriga Branch • ${firstEntry.department || "-"}
+            ${order.branch || "DMC-Iriga Branch"} • ${order.department || "-"}
           </p>
         </div>
 
         <div class="branch-order-list-meta">
-          <span class="badge success">Posted</span>
+          ${
+            issueCount
+              ? `<span class="badge warning-badge">${issueCount} Issue(s)</span>`
+              : ""
+          }
+          <span class="badge ${getDeliveryLogStatusBadgeClass(order.status)}">
+            ${order.status || "-"}
+          </span>
         </div>
       </div>
 
       <div class="delivery-log-info-grid">
         <div>
-          <p class="eyebrow">Submitted At</p>
-          <strong>${formatBranchLogDateTime(
-            firstEntry.submittedAt || firstEntry.date
-          )}</strong>
+          <p class="eyebrow">Prepared By</p>
+          <strong>${order.fulfillment?.preparedBy || "-"}</strong>
         </div>
 
         <div>
-          <p class="eyebrow">Reviewed / Received By</p>
-          <strong>${reviewedBy}</strong>
+          <p class="eyebrow">Driver / Rider</p>
+          <strong>${order.fulfillment?.driver || "-"}</strong>
         </div>
 
         <div>
-          <p class="eyebrow">Department</p>
-          <strong>${firstEntry.department || "-"}</strong>
+          <p class="eyebrow">Sent At</p>
+          <strong>${formatDeliveryLogDateTime(order.fulfillment?.sentAt)}</strong>
         </div>
 
         <div>
-          <p class="eyebrow">Source</p>
-          <strong>${firstEntry.source || "-"}</strong>
+          <p class="eyebrow">Received By</p>
+          <strong>${order.receiving?.receivedBy || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Received At</p>
+          <strong>${formatDeliveryLogDateTime(order.receiving?.receivedAt)}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Sent Total</p>
+          <strong>${sentTotal}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Received Total</p>
+          <strong>${receivedTotal}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Total Variance</p>
+          <strong class="${receivedTotal - sentTotal !== 0 ? "danger-text" : ""}">
+            ${receivedTotal - sentTotal}
+          </strong>
         </div>
       </div>
 
       <div class="branch-order-section">
-        <h4>Batch Summary</h4>
-        ${renderBranchBatchSummaryCards(selectedBatch)}
+        <h4>Delivery Lines</h4>
+        ${renderDeliveryLogLines(order)}
       </div>
 
       <div class="branch-order-section">
-        <h4>Posted Movements</h4>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Movement</th>
-                <th>Qty</th>
-                <th>Effect</th>
-                <th>Destination</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              ${selectedBatch.entries
-                .map((entry) => {
-                  const stockEffect = getBranchEntryStockEffect(entry);
-
-                  return `
-                    <tr>
-                      <td>
-                        <strong>${entry.itemName || "-"}</strong>
-                        <small class="table-subtext">${entry.itemId || "-"}</small>
-                      </td>
-
-                      <td>
-                        <span class="badge ${getBranchMovementBadgeClass(
-                          entry.movementType
-                        )}">
-                          ${entry.movementType || "-"}
-                        </span>
-                      </td>
-
-                      <td class="${getBranchQuantityClass(entry)}">
-                        <strong>${getBranchSignedQuantity(entry)}</strong>
-                      </td>
-
-                      <td>
-                        <span class="badge ${getBranchEffectBadgeClass(
-                          stockEffect
-                        )}">
-                          ${getBranchEffectLabel(stockEffect)}
-                        </span>
-                      </td>
-
-                      <td>${entry.destination || "-"}</td>
-                      <td>${entry.notes || "-"}</td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        </div>
+        <h4>Delivery Issues</h4>
+        ${renderDeliveryLogIssues(order)}
       </div>
 
       <div class="branch-order-section">
         <h4>Notes</h4>
-        ${renderBranchBatchNotes(selectedBatch)}
-      </div>
+        <div class="instruction-box">
+          <strong>Commissary Notes:</strong>
+          <span>${order.fulfillment?.deliveryNotes || "-"}</span>
+        </div>
 
-      <div class="instruction-box">
-        <strong>Stock Rule:</strong>
-        <span>
-          Branch Stock uses Remaining Count as the latest stock truth, then adds later Transfer In.
-          Usage and Waste are kept for monthly reports and are not double-deducted from stock.
-        </span>
+        <div class="instruction-box">
+          <strong>Branch Receiving Notes:</strong>
+          <span>${order.receiving?.receivingNotes || "-"}</span>
+        </div>
       </div>
     </section>
   `;
 }
 
-function getBranchLogTransactionContent() {
-  const filters = window.DMC_BRANCH_LOG_FILTERS;
-  const batches = getBranchLogBatches();
+function getDeliveryLogContent() {
+  const summary = getDeliveryLogSummary();
 
   return `
     <section class="grid">
       <div class="card">
-        <p>Total Batches</p>
-        <strong>${batches.length}</strong>
+        <p>Total Deliveries</p>
+        <strong>${summary.total}</strong>
       </div>
 
       <div class="card">
-        <p>Departments</p>
-        <strong>${getBranchLogDepartments().length}</strong>
+        <p>On the Way</p>
+        <strong>${summary.onTheWay}</strong>
       </div>
 
       <div class="card">
-        <p>Movement Types</p>
-        <strong>${getBranchLogMovementTypes().length}</strong>
+        <p>Completed</p>
+        <strong>${summary.completed}</strong>
+      </div>
+
+      <div class="card">
+        <p>Variance</p>
+        <strong>${summary.variance}</strong>
       </div>
     </section>
 
-    <section class="delivery-log-layout branch-log-layout">
+    <section class="delivery-log-layout">
       <section class="panel delivery-log-list-panel">
         <div class="panel-header">
           <div>
-            <h3>Branch Log Transaction</h3>
-            <p>
-              Read-only history of Branch Daily Input, incoming deliveries,
-              remaining counts, usage, waste, and branch notes.
-            </p>
+            <h3>Delivery Log</h3>
+            <p>Review delivery history, receiving status, and issue outcomes.</p>
           </div>
 
-          <span class="badge">Movement History</span>
+          <select id="delivery-log-status-filter">
+            ${renderDeliveryLogStatusOptions()}
+          </select>
         </div>
 
-        <div class="warehouse-log-filters">
-          <div class="warehouse-log-date-grid">
-            <label>
-              Start Date
-              <input
-                id="branch-log-start-date"
-                type="date"
-                value="${filters.startDate}"
-              />
-            </label>
-
-            <label>
-              End Date
-              <input
-                id="branch-log-end-date"
-                type="date"
-                value="${filters.endDate}"
-              />
-            </label>
-          </div>
-
-          <label>
-            Department
-            <select id="branch-log-department-filter">
-              ${renderBranchLogDepartmentOptions()}
-            </select>
-          </label>
-
-          <label>
-            Movement Type
-            <select id="branch-log-movement-filter">
-              ${renderBranchLogMovementOptions()}
-            </select>
-          </label>
-
+        <div class="filter-bar branch-order-search-bar">
           <label class="filter-search">
             Search
             <input
-              id="branch-log-search"
+              id="delivery-log-search"
               type="text"
-              placeholder="Search item, batch, source, notes..."
-              value="${filters.search}"
+              placeholder="Search order, item, driver, receiver..."
+              value="${window.DMC_DELIVERY_LOG_SEARCH}"
             />
           </label>
-
-          <div class="warehouse-log-filter-actions">
-            <button class="ghost-button" id="clear-branch-log-filters">
-              Clear
-            </button>
-
-            <button class="primary-button" id="export-branch-log">
-              Export
-            </button>
-          </div>
         </div>
 
-        <div class="warehouse-log-list-header">
-          <p>Submitted Batches</p>
-          <span>${batches.length} found</span>
-        </div>
-
-        <div class="warehouse-log-batch-list">
-          ${renderBranchBatchList()}
-        </div>
+        ${renderDeliveryLogList()}
       </section>
 
-      ${renderSelectedBranchBatchDetails()}
+      ${renderSelectedDeliveryLogOrder()}
     </section>
   `;
 }
 
-function refreshBranchLogTransactionPage() {
-  window.DMC_PAGES["branch-log-transaction"].content =
-    getBranchLogTransactionContent();
-
-  renderPage("branch-log-transaction");
+function refreshDeliveryLogPage() {
+  window.DMC_PAGES["delivery-log"].content = getDeliveryLogContent();
+  renderPage("delivery-log");
 }
 
-function setupBranchLogTransactionEvents() {
-  const startDateInput = document.getElementById("branch-log-start-date");
-  const endDateInput = document.getElementById("branch-log-end-date");
-  const departmentFilter = document.getElementById("branch-log-department-filter");
-  const movementFilter = document.getElementById("branch-log-movement-filter");
-  const searchInput = document.getElementById("branch-log-search");
-  const clearButton = document.getElementById("clear-branch-log-filters");
-  const exportButton = document.getElementById("export-branch-log");
+function setupDeliveryLogEvents() {
+  const statusFilter = document.getElementById("delivery-log-status-filter");
+  const searchInput = document.getElementById("delivery-log-search");
 
-  if (startDateInput) {
-    startDateInput.addEventListener("change", () => {
-      window.DMC_BRANCH_LOG_FILTERS.startDate = startDateInput.value;
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
-      refreshBranchLogTransactionPage();
-    });
-  }
-
-  if (endDateInput) {
-    endDateInput.addEventListener("change", () => {
-      window.DMC_BRANCH_LOG_FILTERS.endDate = endDateInput.value;
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
-      refreshBranchLogTransactionPage();
-    });
-  }
-
-  if (departmentFilter) {
-    departmentFilter.addEventListener("change", () => {
-      window.DMC_BRANCH_LOG_FILTERS.department = departmentFilter.value;
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
-      refreshBranchLogTransactionPage();
-    });
-  }
-
-  if (movementFilter) {
-    movementFilter.addEventListener("change", () => {
-      window.DMC_BRANCH_LOG_FILTERS.movementType = movementFilter.value;
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
-      refreshBranchLogTransactionPage();
+  if (statusFilter) {
+    statusFilter.addEventListener("change", () => {
+      window.DMC_DELIVERY_LOG_STATUS_FILTER = statusFilter.value;
+      window.DMC_DELIVERY_LOG_SELECTED_ID = "";
+      refreshDeliveryLogPage();
     });
   }
 
   if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      window.DMC_BRANCH_LOG_FILTERS.search = searchInput.value;
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
-      refreshBranchLogTransactionPage();
+    searchInput.addEventListener("change", () => {
+      window.DMC_DELIVERY_LOG_SEARCH = searchInput.value;
+      window.DMC_DELIVERY_LOG_SELECTED_ID = "";
+      refreshDeliveryLogPage();
     });
   }
 
-  if (clearButton) {
-    clearButton.addEventListener("click", () => {
-      window.DMC_BRANCH_LOG_FILTERS = {
-        startDate: "",
-        endDate: "",
-        department: "all",
-        movementType: "all",
-        search: "",
-        selectedBatchId: ""
-      };
-
-      refreshBranchLogTransactionPage();
-    });
-  }
-
-  if (exportButton) {
-    exportButton.addEventListener("click", () => {
-      if (typeof window.DMC_SHOW_MODAL === "function") {
-        window.DMC_SHOW_MODAL({
-          type: "info",
-          title: "Export Coming Soon",
-          message:
-            "Export/print for Branch Log Transaction will be connected after the reporting workflow is finalized.",
-          confirmLabel: "Got it"
-        });
-      }
-    });
-  }
-
-  document.querySelectorAll("[data-branch-batch-id]").forEach((button) => {
+  document.querySelectorAll("[data-select-delivery-log]").forEach((button) => {
     button.addEventListener("click", () => {
-      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId =
-        button.dataset.branchBatchId;
-
-      refreshBranchLogTransactionPage();
+      window.DMC_DELIVERY_LOG_SELECTED_ID = button.dataset.selectDeliveryLog;
+      refreshDeliveryLogPage();
     });
   });
 }
 
-window.DMC_PAGES["branch-log-transaction"] = {
-  eyebrow: "DMC-Iriga Branch",
-  title: "Branch Log Transaction",
+window.DMC_PAGES["delivery-log"] = {
+  eyebrow: "Warehouse",
+  title: "Delivery Log",
   description:
-    "Read-only batch history of Branch Daily Input, receiving, usage, waste, and closing counts.",
-  getContent: getBranchLogTransactionContent,
-  content: getBranchLogTransactionContent(),
-  afterRender: setupBranchLogTransactionEvents
+    "History of warehouse deliveries, branch receiving, and delivery issue outcomes.",
+  getContent: getDeliveryLogContent,
+  content: getDeliveryLogContent(),
+  afterRender: setupDeliveryLogEvents
 };
