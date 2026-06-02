@@ -138,10 +138,17 @@ const fallbackPages = {
       "Overview of one branch location, including stock status, pending orders, and incoming deliveries."
   },
 
-  "branch-stock": {
+    "branch-stock": {
     eyebrow: "DMC-Iriga Branch",
     title: "Branch Stock",
     description: "Tracks current stock available at the branch level."
+  },
+
+  "branch-daily-input": {
+    eyebrow: "DMC-Iriga Branch",
+    title: "Branch Daily Input",
+    description:
+      "End-of-shift branch count sheet with auto-computed usage and remaining stock."
   },
 
   "place-order": {
