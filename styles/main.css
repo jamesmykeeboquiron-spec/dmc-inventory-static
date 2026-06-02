@@ -6475,3 +6475,115 @@ input[type="date"]:disabled {
   white-space: pre-line;
   line-height: 1.65;
 }
+/* =========================================================
+   GLOBAL STOCK CURRENT CARD
+   Reusable for Branch Stock, Warehouse Stock, Commissary Stock
+========================================================= */
+
+.stock-current-card {
+  display: grid;
+  gap: 11px;
+  min-width: 210px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(72, 144, 255, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.085),
+      rgba(255, 255, 255, 0.025)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.stock-current-card.success {
+  border-color: rgba(60, 220, 120, 0.24);
+}
+
+.stock-current-card.warning {
+  border-color: rgba(255, 190, 60, 0.28);
+}
+
+.stock-current-card.danger {
+  border-color: rgba(255, 85, 85, 0.28);
+}
+
+.stock-current-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.stock-current-top > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.stock-current-label {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.stock-current-top strong {
+  font-size: 34px;
+  line-height: 0.95;
+  color: var(--text);
+  letter-spacing: -0.04em;
+}
+
+.stock-current-top em {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.stock-current-top small {
+  max-width: 88px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.stock-current-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.stock-current-min {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.stock-current-min strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .stock-current-card {
+    min-width: 170px;
+  }
+
+  .stock-current-top strong {
+    font-size: 26px;
+  }
+}
