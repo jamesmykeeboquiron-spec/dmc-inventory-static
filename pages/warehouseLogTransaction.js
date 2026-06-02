@@ -1,137 +1,162 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_WAREHOUSE_LOG_STORAGE_KEY_FOR_LOG_PAGE =
-  "dmc_warehouse_log_entries";
+const DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE =
+  "dmc_inventory_ledger_entries";
 
-window.DMC_WAREHOUSE_LOG_FILTERS = window.DMC_WAREHOUSE_LOG_FILTERS || {
+window.DMC_BRANCH_LOG_FILTERS = window.DMC_BRANCH_LOG_FILTERS || {
   startDate: "",
   endDate: "",
+  department: "all",
   movementType: "all",
   search: "",
   selectedBatchId: ""
 };
 
-function getStoredWarehouseLogEntriesForLogPage() {
+function getStoredBranchLogEntriesForLogPage() {
   const storedEntries = localStorage.getItem(
-    DMC_WAREHOUSE_LOG_STORAGE_KEY_FOR_LOG_PAGE
+    DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE
   );
 
   if (!storedEntries) {
-    return getWarehouseSampleLogEntries();
+    return getBranchSampleLogEntries();
   }
 
   try {
     const parsedEntries = JSON.parse(storedEntries);
 
     if (!Array.isArray(parsedEntries) || parsedEntries.length === 0) {
-      return getWarehouseSampleLogEntries();
+      return getBranchSampleLogEntries();
     }
 
     return parsedEntries;
   } catch {
-    return getWarehouseSampleLogEntries();
+    return getBranchSampleLogEntries();
   }
 }
 
-function getWarehouseSampleLogEntries() {
+function getBranchSampleLogEntries() {
   return [
     {
-      date: "2026-05-31",
-      submittedAtDisplay: "05/31/2026, 09:14 AM",
-      batchId: "WH-20260531-091420",
-      location: "Warehouse",
-      department: "Baking",
-      itemId: "RAW-FLO-001",
-      itemName: "All Purpose Flour",
+      date: "2026-06-01",
+      submittedAtDisplay: "06/01/2026, 09:36 AM",
+      batchId: "BR-20260601-093457",
+      location: "DMC-Iriga Branch",
+      department: "Bar",
+      section: "Coffee",
+      itemId: "BAR-COF-001",
+      itemName: "Coffee Beans",
       movementType: "Transfer In",
       movementField: "transferIn",
       stockEffect: "add",
-      quantity: 50,
+      quantity: 22,
       unit: "kg",
-      managerReviewedBy: "Manager Ana",
-      source: "Warehouse Daily Input",
-      destination: "Warehouse",
-      notes: "Invoice #000123"
+      source: "Incoming Delivery Receipt",
+      destination: "DMC-Iriga Branch",
+      notes: "Received from Warehouse by Manager Ana. Sample branch receipt."
     },
     {
-      date: "2026-05-31",
-      submittedAtDisplay: "05/31/2026, 09:14 AM",
-      batchId: "WH-20260531-091420",
-      location: "Warehouse",
-      department: "Baking",
-      itemId: "RAW-SUG-001",
-      itemName: "White Sugar",
-      movementType: "Transfer Out",
-      movementField: "transferOut",
+      date: "2026-05-27",
+      submittedAtDisplay: "05/27/2026, 01:24 PM",
+      batchId: "BAR-20260527-132401",
+      location: "DMC-Iriga Branch",
+      department: "Bar",
+      section: "Milk",
+      itemId: "BAR-MIL-001",
+      itemName: "Fresh Milk",
+      movementType: "Usage",
+      movementField: "usage",
       stockEffect: "deduct",
-      quantity: 10,
-      unit: "kg",
-      managerReviewedBy: "Manager Ana",
-      source: "Warehouse",
-      destination: "Outgoing Transfer",
-      notes: "Commissary request"
+      quantity: 5,
+      unit: "liter",
+      source: "Bar Daily Input",
+      destination: "Branch Use",
+      notes: "Sample usage entry."
     },
     {
-      date: "2026-05-31",
-      submittedAtDisplay: "05/31/2026, 09:14 AM",
-      batchId: "WH-20260531-091420",
-      location: "Warehouse",
-      department: "Dairy",
-      itemId: "RAW-MIL-001",
+      date: "2026-05-27",
+      submittedAtDisplay: "05/27/2026, 01:24 PM",
+      batchId: "BAR-20260527-132401",
+      location: "DMC-Iriga Branch",
+      department: "Bar",
+      section: "Milk",
+      itemId: "BAR-MIL-001",
       itemName: "Fresh Milk",
       movementType: "Waste",
       movementField: "waste",
       stockEffect: "deduct",
-      quantity: 2,
+      quantity: 1,
       unit: "liter",
-      managerReviewedBy: "Manager Ana",
-      source: "Warehouse",
+      source: "Bar Daily Input",
       destination: "Waste",
-      notes: "Spoiled item"
-    },
-    {
-      date: "2026-05-30",
-      submittedAtDisplay: "05/30/2026, 04:42 PM",
-      batchId: "WH-20260530-164205",
-      location: "Warehouse",
-      department: "Packaging",
-      itemId: "PKG-CUP-016",
-      itemName: "16oz Paper Cups",
-      movementType: "Transfer In",
-      movementField: "transferIn",
-      stockEffect: "add",
-      quantity: 500,
-      unit: "pcs",
-      managerReviewedBy: "Manager Lou",
-      source: "Warehouse Daily Input",
-      destination: "Warehouse",
-      notes: "Supplier delivery complete"
+      notes: "Sample waste entry."
     }
   ];
 }
 
-function getWarehouseLogMovementTypes() {
+function entryBelongsToBranchLog(entry) {
+  const location = String(entry.location || entry.branch || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
+
+  if (
+    location.includes("warehouse") ||
+    source.includes("warehouse daily input")
+  ) {
+    return false;
+  }
+
+  return (
+    location.includes("dmc-iriga") ||
+    location.includes("branch") ||
+    destination.includes("dmc-iriga") ||
+    destination.includes("branch") ||
+    source.includes("incoming delivery receipt") ||
+    source.includes("daily input") ||
+    !entry.location
+  );
+}
+
+function getBranchLogEntriesOnly() {
+  return getStoredBranchLogEntriesForLogPage().filter(entryBelongsToBranchLog);
+}
+
+function getBranchLogDepartments() {
   return [
     ...new Set(
-      getStoredWarehouseLogEntriesForLogPage()
+      getBranchLogEntriesOnly()
+        .map((entry) => entry.department || "")
+        .filter(Boolean)
+    )
+  ].sort();
+}
+
+function getBranchLogMovementTypes() {
+  return [
+    ...new Set(
+      getBranchLogEntriesOnly()
         .map((entry) => entry.movementType || "")
         .filter(Boolean)
     )
   ].sort();
 }
 
-function getFilteredWarehouseLogEntries() {
-  const filters = window.DMC_WAREHOUSE_LOG_FILTERS;
+function getFilteredBranchLogEntries() {
+  const filters = window.DMC_BRANCH_LOG_FILTERS;
   const searchValue = String(filters.search || "").toLowerCase().trim();
+  const selectedDepartment = String(filters.department || "all");
   const selectedMovementType = String(filters.movementType || "all");
   const startDate = String(filters.startDate || "");
   const endDate = String(filters.endDate || "");
 
-  return getStoredWarehouseLogEntriesForLogPage().filter((entry) => {
+  return getBranchLogEntriesOnly().filter((entry) => {
     const entryDate = String(entry.date || "");
 
     const matchesStartDate = !startDate || entryDate >= startDate;
     const matchesEndDate = !endDate || entryDate <= endDate;
+
+    const matchesDepartment =
+      selectedDepartment === "all" ||
+      String(entry.department || "") === selectedDepartment;
 
     const matchesMovementType =
       selectedMovementType === "all" ||
@@ -142,19 +167,23 @@ function getFilteredWarehouseLogEntries() {
       String(entry.batchId || "").toLowerCase().includes(searchValue) ||
       String(entry.itemId || "").toLowerCase().includes(searchValue) ||
       String(entry.itemName || "").toLowerCase().includes(searchValue) ||
-      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue) ||
+      String(entry.department || "").toLowerCase().includes(searchValue) ||
+      String(entry.section || "").toLowerCase().includes(searchValue) ||
+      String(entry.source || "").toLowerCase().includes(searchValue) ||
+      String(entry.destination || "").toLowerCase().includes(searchValue) ||
       String(entry.notes || "").toLowerCase().includes(searchValue);
 
     return (
       matchesStartDate &&
       matchesEndDate &&
+      matchesDepartment &&
       matchesMovementType &&
       matchesSearch
     );
   });
 }
 
-function groupWarehouseLogEntriesByBatch(entries) {
+function groupBranchLogEntriesByBatch(entries) {
   return entries.reduce((groups, entry) => {
     const batchId = entry.batchId || "No Batch ID";
 
@@ -165,9 +194,9 @@ function groupWarehouseLogEntriesByBatch(entries) {
   }, {});
 }
 
-function getWarehouseLogBatches() {
-  const filteredEntries = getFilteredWarehouseLogEntries();
-  const groupedEntries = groupWarehouseLogEntriesByBatch(filteredEntries);
+function getBranchLogBatches() {
+  const filteredEntries = getFilteredBranchLogEntries();
+  const groupedEntries = groupBranchLogEntriesByBatch(filteredEntries);
 
   return Object.entries(groupedEntries)
     .map(([batchId, entries]) => ({
@@ -182,14 +211,14 @@ function getWarehouseLogBatches() {
     });
 }
 
-function getSelectedWarehouseLogBatch() {
-  const batches = getWarehouseLogBatches();
+function getSelectedBranchLogBatch() {
+  const batches = getBranchLogBatches();
 
   if (batches.length === 0) {
     return null;
   }
 
-  const selectedBatchId = window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId;
+  const selectedBatchId = window.DMC_BRANCH_LOG_FILTERS.selectedBatchId;
 
   const selectedBatch = batches.find(
     (batch) => batch.batchId === selectedBatchId
@@ -198,14 +227,35 @@ function getSelectedWarehouseLogBatch() {
   return selectedBatch || null;
 }
 
-function renderWarehouseLogMovementOptions() {
-  const currentMovementType = window.DMC_WAREHOUSE_LOG_FILTERS.movementType;
+function renderBranchLogDepartmentOptions() {
+  const currentDepartment = window.DMC_BRANCH_LOG_FILTERS.department;
+
+  return `
+    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${getBranchLogDepartments()
+      .map(
+        (department) => `
+          <option value="${department}" ${
+          currentDepartment === department ? "selected" : ""
+        }>
+            ${department}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderBranchLogMovementOptions() {
+  const currentMovementType = window.DMC_BRANCH_LOG_FILTERS.movementType;
 
   return `
     <option value="all" ${currentMovementType === "all" ? "selected" : ""}>
       All Movements
     </option>
-    ${getWarehouseLogMovementTypes()
+    ${getBranchLogMovementTypes()
       .map(
         (movementType) => `
           <option value="${movementType}" ${
@@ -219,8 +269,8 @@ function renderWarehouseLogMovementOptions() {
   `;
 }
 
-function getWarehouseMovementBadgeClass(movementType) {
-  if (movementType === "Transfer In") {
+function getBranchMovementBadgeClass(movementType) {
+  if (movementType === "Transfer In" || movementType === "Received") {
     return "success";
   }
 
@@ -228,25 +278,66 @@ function getWarehouseMovementBadgeClass(movementType) {
     return "danger";
   }
 
-  return "warning";
+  if (movementType === "Usage" || movementType === "Transfer Out") {
+    return "warning";
+  }
+
+  return "info-badge";
 }
 
-function getWarehouseEffectBadgeClass(stockEffect) {
+function getBranchEffectBadgeClass(stockEffect) {
   return stockEffect === "add" ? "success" : "danger";
 }
 
-function getWarehouseSignedQuantity(entry) {
-  const sign = entry.stockEffect === "add" ? "+" : "-";
+function getBranchEntryStockEffect(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
+  }
+
+  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Usage" ||
+    entry.movementType === "Waste" ||
+    entry.movementType === "Transfer Out"
+  ) {
+    return "deduct";
+  }
+
+  return "add";
+}
+
+function getBranchSignedQuantity(entry) {
+  const stockEffect = getBranchEntryStockEffect(entry);
+  const sign = stockEffect === "add" ? "+" : "-";
+
   return `${sign}${entry.quantity} ${entry.unit || ""}`;
 }
 
-function renderWarehouseBatchList() {
-  const batches = getWarehouseLogBatches();
+function getBranchBatchSourceLabel(batch) {
+  const firstEntry = batch.entries[0] || {};
+  const source = String(firstEntry.source || "");
+
+  if (source.includes("Incoming Delivery")) {
+    return "Incoming Delivery Batch";
+  }
+
+  if (source.includes("Daily Input")) {
+    return "Daily Input Batch";
+  }
+
+  return "Branch Movement Batch";
+}
+
+function renderBranchBatchList() {
+  const batches = getBranchLogBatches();
 
   if (batches.length === 0) {
     return `
       <div class="warehouse-log-empty-card">
-        No submitted Warehouse batches match the current filters.
+        No submitted Branch batches match the current filters.
       </div>
     `;
   }
@@ -255,20 +346,20 @@ function renderWarehouseBatchList() {
     .map((batch) => {
       const firstEntry = batch.entries[0] || {};
       const addCount = batch.entries.filter(
-        (entry) => entry.stockEffect === "add"
+        (entry) => getBranchEntryStockEffect(entry) === "add"
       ).length;
       const deductCount = batch.entries.length - addCount;
       const isActive =
-        window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId === batch.batchId;
+        window.DMC_BRANCH_LOG_FILTERS.selectedBatchId === batch.batchId;
 
       return `
         <button
           class="warehouse-log-batch-card ${isActive ? "active" : ""}"
-          data-warehouse-batch-id="${batch.batchId}"
+          data-branch-batch-id="${batch.batchId}"
         >
           <div class="warehouse-log-batch-card-top">
             <div>
-              <strong>Daily Input Batch</strong>
+              <strong>${getBranchBatchSourceLabel(batch)}</strong>
               <span>${batch.batchId}</span>
             </div>
 
@@ -281,8 +372,8 @@ function renderWarehouseBatchList() {
           </div>
 
           <div class="warehouse-log-batch-card-meta">
-            <span>Manager</span>
-            <strong>${firstEntry.managerReviewedBy || "-"}</strong>
+            <span>Department</span>
+            <strong>${firstEntry.department || "-"}</strong>
           </div>
 
           <div class="warehouse-log-batch-card-meta">
@@ -299,8 +390,8 @@ function renderWarehouseBatchList() {
     .join("");
 }
 
-function renderSelectedBatchDetails() {
-  const selectedBatch = getSelectedWarehouseLogBatch();
+function renderSelectedBranchBatchDetails() {
+  const selectedBatch = getSelectedBranchLogBatch();
 
   if (!selectedBatch) {
     return `
@@ -309,8 +400,8 @@ function renderSelectedBatchDetails() {
           <div class="empty-detail-icon">↕</div>
           <h4>Select a submitted batch</h4>
           <p>
-            Choose a batch from the left panel to view the posted movements,
-            manager review, notes, and stock effect.
+            Choose a batch from the left panel to view posted branch movements,
+            notes, and stock effect.
           </p>
         </div>
       </div>
@@ -333,15 +424,20 @@ function renderSelectedBatchDetails() {
         </div>
 
         <div>
-          <p>Manager</p>
-          <strong>${firstEntry.managerReviewedBy || "-"}</strong>
+          <p>Department</p>
+          <strong>${firstEntry.department || "-"}</strong>
+        </div>
+
+        <div>
+          <p>Source</p>
+          <strong>${firstEntry.source || "-"}</strong>
         </div>
       </div>
 
       <div class="warehouse-log-detail-header">
         <div>
           <p>Posted Movements</p>
-          <h4>${selectedBatch.entries.length} stock movements in this batch</h4>
+          <h4>${selectedBatch.entries.length} branch stock movements in this batch</h4>
         </div>
 
         <span class="badge success">Posted</span>
@@ -361,64 +457,65 @@ function renderSelectedBatchDetails() {
 
           <tbody>
             ${selectedBatch.entries
-              .map(
-                (entry) => `
+              .map((entry) => {
+                const stockEffect = getBranchEntryStockEffect(entry);
+
+                return `
                   <tr>
                     <td>
                       <strong>${entry.itemName || "-"}</strong>
                       <small class="table-subtext">${entry.itemId || "-"}</small>
                     </td>
                     <td>
-                      <span class="badge ${getWarehouseMovementBadgeClass(
+                      <span class="badge ${getBranchMovementBadgeClass(
                         entry.movementType
                       )}">
                         ${entry.movementType || "-"}
                       </span>
                     </td>
                     <td class="${
-                      entry.stockEffect === "add"
+                      stockEffect === "add"
                         ? "positive-text"
                         : "negative-text"
                     }">
-                      <strong>${getWarehouseSignedQuantity(entry)}</strong>
+                      <strong>${getBranchSignedQuantity(entry)}</strong>
                     </td>
                     <td>
-                      <span class="badge ${getWarehouseEffectBadgeClass(
-                        entry.stockEffect
+                      <span class="badge ${getBranchEffectBadgeClass(
+                        stockEffect
                       )}">
-                        ${entry.stockEffect === "add" ? "Add" : "Deduct"}
+                        ${stockEffect === "add" ? "Add" : "Deduct"}
                       </span>
                     </td>
                     <td>${entry.notes || "-"}</td>
                   </tr>
-                `
-              )
+                `;
+              })
               .join("")}
           </tbody>
         </table>
       </div>
 
       <div class="warehouse-log-note">
-        Warehouse Stock can still calculate totals from this batch because each
-        batch contains individual movement rows. Batch view is only for easier
-        reviewing; stock math still reads every item movement inside the batch.
+        Branch Stock can calculate totals from this batch because each batch
+        contains individual item movement rows. Batch view is only for easier
+        reviewing; stock math still reads every movement inside the batch.
       </div>
     </div>
   `;
 }
 
-function getWarehouseLogTransactionContent() {
-  const filters = window.DMC_WAREHOUSE_LOG_FILTERS;
-  const batches = getWarehouseLogBatches();
+function getBranchLogTransactionContent() {
+  const filters = window.DMC_BRANCH_LOG_FILTERS;
+  const batches = getBranchLogBatches();
 
   return `
     <section class="panel warehouse-log-page">
       <div class="panel-header">
         <div>
-          <h3>Warehouse Log Transaction</h3>
+          <h3>Branch Log Transaction</h3>
           <p>
-            Posted Warehouse Daily Input movements are stored here for review,
-            audit, and stock calculations.
+            Posted Branch movements are stored here for review, audit, and Branch Stock calculations.
           </p>
         </div>
 
@@ -432,7 +529,7 @@ function getWarehouseLogTransactionContent() {
               <label>
                 Start Date
                 <input
-                  id="warehouse-log-start-date"
+                  id="branch-log-start-date"
                   type="date"
                   value="${filters.startDate}"
                 />
@@ -441,7 +538,7 @@ function getWarehouseLogTransactionContent() {
               <label>
                 End Date
                 <input
-                  id="warehouse-log-end-date"
+                  id="branch-log-end-date"
                   type="date"
                   value="${filters.endDate}"
                 />
@@ -449,28 +546,35 @@ function getWarehouseLogTransactionContent() {
             </div>
 
             <label>
+              Department
+              <select id="branch-log-department-filter">
+                ${renderBranchLogDepartmentOptions()}
+              </select>
+            </label>
+
+            <label>
               Movement Type
-              <select id="warehouse-log-movement-filter">
-                ${renderWarehouseLogMovementOptions()}
+              <select id="branch-log-movement-filter">
+                ${renderBranchLogMovementOptions()}
               </select>
             </label>
 
             <label class="filter-search">
               Search
               <input
-                id="warehouse-log-search"
+                id="branch-log-search"
                 type="text"
-                placeholder="Search item, batch, manager..."
+                placeholder="Search item, batch, source, notes..."
                 value="${filters.search}"
               />
             </label>
 
             <div class="warehouse-log-filter-actions">
-              <button class="ghost-button" id="clear-warehouse-log-filters">
+              <button class="ghost-button" id="clear-branch-log-filters">
                 Clear
               </button>
 
-              <button class="primary-button" id="export-warehouse-log">
+              <button class="primary-button" id="export-branch-log">
                 Export
               </button>
             </div>
@@ -482,7 +586,7 @@ function getWarehouseLogTransactionContent() {
           </div>
 
           <div class="warehouse-log-batch-list">
-            ${renderWarehouseBatchList()}
+            ${renderBranchBatchList()}
           </div>
         </aside>
 
@@ -491,7 +595,7 @@ function getWarehouseLogTransactionContent() {
             <div>
               <p>Batch Details</p>
               <h4>${
-                getSelectedWarehouseLogBatch()?.batchId ||
+                getSelectedBranchLogBatch()?.batchId ||
                 "No batch selected"
               }</h4>
             </div>
@@ -499,71 +603,81 @@ function getWarehouseLogTransactionContent() {
             <span>Read Only</span>
           </div>
 
-          ${renderSelectedBatchDetails()}
+          ${renderSelectedBranchBatchDetails()}
         </section>
       </div>
     </section>
   `;
 }
 
-function refreshWarehouseLogTransactionPage() {
-  window.DMC_PAGES["warehouse-log-transaction"].content =
-    getWarehouseLogTransactionContent();
+function refreshBranchLogTransactionPage() {
+  window.DMC_PAGES["branch-log-transaction"].content =
+    getBranchLogTransactionContent();
 
-  renderPage("warehouse-log-transaction");
+  renderPage("branch-log-transaction");
 }
 
-function setupWarehouseLogTransactionEvents() {
-  const startDateInput = document.getElementById("warehouse-log-start-date");
-  const endDateInput = document.getElementById("warehouse-log-end-date");
-  const movementFilter = document.getElementById("warehouse-log-movement-filter");
-  const searchInput = document.getElementById("warehouse-log-search");
-  const clearButton = document.getElementById("clear-warehouse-log-filters");
-  const exportButton = document.getElementById("export-warehouse-log");
+function setupBranchLogTransactionEvents() {
+  const startDateInput = document.getElementById("branch-log-start-date");
+  const endDateInput = document.getElementById("branch-log-end-date");
+  const departmentFilter = document.getElementById("branch-log-department-filter");
+  const movementFilter = document.getElementById("branch-log-movement-filter");
+  const searchInput = document.getElementById("branch-log-search");
+  const clearButton = document.getElementById("clear-branch-log-filters");
+  const exportButton = document.getElementById("export-branch-log");
 
   if (startDateInput) {
     startDateInput.addEventListener("change", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS.startDate = startDateInput.value;
-      window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId = "";
-      refreshWarehouseLogTransactionPage();
+      window.DMC_BRANCH_LOG_FILTERS.startDate = startDateInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
     });
   }
 
   if (endDateInput) {
     endDateInput.addEventListener("change", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS.endDate = endDateInput.value;
-      window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId = "";
-      refreshWarehouseLogTransactionPage();
+      window.DMC_BRANCH_LOG_FILTERS.endDate = endDateInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
+    });
+  }
+
+  if (departmentFilter) {
+    departmentFilter.addEventListener("change", () => {
+      window.DMC_BRANCH_LOG_FILTERS.department = departmentFilter.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
     });
   }
 
   if (movementFilter) {
     movementFilter.addEventListener("change", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS.movementType = movementFilter.value;
-      window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId = "";
-      refreshWarehouseLogTransactionPage();
+      window.DMC_BRANCH_LOG_FILTERS.movementType = movementFilter.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
     });
   }
 
   if (searchInput) {
     searchInput.addEventListener("input", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS.search = searchInput.value;
-      window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId = "";
-      refreshWarehouseLogTransactionPage();
+      window.DMC_BRANCH_LOG_FILTERS.search = searchInput.value;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId = "";
+      refreshBranchLogTransactionPage();
     });
   }
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS = {
+      window.DMC_BRANCH_LOG_FILTERS = {
         startDate: "",
         endDate: "",
+        department: "all",
         movementType: "all",
         search: "",
         selectedBatchId: ""
       };
 
-      refreshWarehouseLogTransactionPage();
+      refreshBranchLogTransactionPage();
     });
   }
 
@@ -574,29 +688,29 @@ function setupWarehouseLogTransactionEvents() {
           type: "info",
           title: "Export Coming Soon",
           message:
-            "Export/print for Warehouse Log Transaction will be connected after the reporting workflow is finalized.",
+            "Export/print for Branch Log Transaction will be connected after the reporting workflow is finalized.",
           confirmLabel: "Got it"
         });
       }
     });
   }
 
-  document.querySelectorAll("[data-warehouse-batch-id]").forEach((button) => {
+  document.querySelectorAll("[data-branch-batch-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      window.DMC_WAREHOUSE_LOG_FILTERS.selectedBatchId =
-        button.dataset.warehouseBatchId;
+      window.DMC_BRANCH_LOG_FILTERS.selectedBatchId =
+        button.dataset.branchBatchId;
 
-      refreshWarehouseLogTransactionPage();
+      refreshBranchLogTransactionPage();
     });
   });
 }
 
-window.DMC_PAGES["warehouse-log-transaction"] = {
-  eyebrow: "Warehouse",
-  title: "Warehouse Log Transaction",
+window.DMC_PAGES["branch-log-transaction"] = {
+  eyebrow: "DMC-Iriga Branch",
+  title: "Branch Log Transaction",
   description:
-    "Read-only batch history of posted Warehouse Daily Input movements.",
-  getContent: getWarehouseLogTransactionContent,
-  content: getWarehouseLogTransactionContent(),
-  afterRender: setupWarehouseLogTransactionEvents
+    "Read-only batch history of posted Branch movements.",
+  getContent: getBranchLogTransactionContent,
+  content: getBranchLogTransactionContent(),
+  afterRender: setupBranchLogTransactionEvents
 };
