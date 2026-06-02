@@ -439,21 +439,6 @@ function getBranchDailyReviewStatus(item, rowData) {
     return "CHECK";
   }
 
-  const hasRemaining =
-    String(rowData?.remaining || "").trim() !== "";
-
-  const hasCountMovement =
-    String(rowData?.transferIn || "").trim() !== "" ||
-    String(rowData?.waste || "").trim() !== "";
-
-  if (!hasRemaining && hasCountMovement) {
-    return "CHECK";
-  }
-
-  if (!hasRemaining) {
-    return "READY";
-  }
-
   const inputData = getBranchDailyInputStoredRows();
   const computed = getBranchDailyComputedValues(item, inputData);
 
@@ -543,6 +528,7 @@ function buildBranchLedgerEntriesFromDailyInput() {
 
   reviewRows.forEach(({ item, rowData, computed }) => {
     const notes = String(rowData.notes || "").trim();
+    const hasRemaining = String(rowData.remaining || "").trim() !== "";
 
     if (computed.transIn > 0) {
       entries.push({
@@ -567,7 +553,7 @@ function buildBranchLedgerEntriesFromDailyInput() {
       });
     }
 
-    if (computed.usageAuto > 0) {
+    if (hasRemaining && computed.usageAuto > 0) {
       entries.push({
         date: getTodayDateStringForBranchDailyInput(),
         submittedAt,
@@ -613,37 +599,62 @@ function buildBranchLedgerEntriesFromDailyInput() {
       });
     }
 
-    entries.push({
-      date: getTodayDateStringForBranchDailyInput(),
-      submittedAt,
-      submittedAtDisplay,
-      batchId,
-      location: "DMC-Iriga Branch",
-      department: item.department || "",
-      section: item.section || "",
-      itemId: item.itemId || "",
-      itemName: item.officialItemName || "",
-      movementType: "Remaining Count",
-      movementField: "remaining",
-      stockEffect: "set",
-      quantity: computed.remaining,
-      unit: item.unit || "",
-      managerReviewedBy,
-      source: "Branch Daily Input Closing Count",
-      destination: "DMC-Iriga Branch",
-      notes: [
-        `Closing count submitted by ${managerReviewedBy || "branch manager"}.`,
-        `Current: ${computed.currentStock}`,
-        `Trans In: ${computed.transIn}`,
-        `Total Available: ${computed.totalAvailable}`,
-        `Remaining: ${computed.remaining}`,
-        `Waste: ${computed.waste}`,
-        `Usage Auto: ${computed.usageAuto}`,
-        notes ? `Notes: ${notes}` : ""
-      ]
-        .filter(Boolean)
-        .join(" ")
-    });
+    if (hasRemaining) {
+      entries.push({
+        date: getTodayDateStringForBranchDailyInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "DMC-Iriga Branch",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Remaining Count",
+        movementField: "remaining",
+        stockEffect: "set",
+        quantity: computed.remaining,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Branch Daily Input Closing Count",
+        destination: "DMC-Iriga Branch",
+        notes: [
+          `Closing count submitted by ${managerReviewedBy || "branch manager"}.`,
+          `Current: ${computed.currentStock}`,
+          `Trans In: ${computed.transIn}`,
+          `Total Available: ${computed.totalAvailable}`,
+          `Remaining: ${computed.remaining}`,
+          `Waste: ${computed.waste}`,
+          `Usage Auto: ${computed.usageAuto}`,
+          notes ? `Notes: ${notes}` : ""
+        ]
+          .filter(Boolean)
+          .join(" ")
+      });
+    }
+
+    if (!hasRemaining && notes && computed.transIn <= 0 && computed.waste <= 0) {
+      entries.push({
+        date: getTodayDateStringForBranchDailyInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "DMC-Iriga Branch",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Daily Note",
+        movementField: "notes",
+        stockEffect: "report",
+        quantity: 0,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Branch Daily Input",
+        destination: "Branch Notes",
+        notes
+      });
+    }
   });
 
   return entries;
@@ -657,7 +668,7 @@ function renderBranchDailyInputRows() {
   if (allBranchItems.length === 0) {
     return `
       <tr>
-        <td colspan="10">
+        <td colspan="11">
           No Branch items found. Add branch items in the Master List first.
         </td>
       </tr>
@@ -667,7 +678,7 @@ function renderBranchDailyInputRows() {
   if (branchItems.length === 0) {
     return `
       <tr>
-        <td colspan="10">
+        <td colspan="11">
           No Branch items found for the selected filter.
         </td>
       </tr>
@@ -767,8 +778,8 @@ function renderBranchDailyEditModeContent() {
     <div class="instruction-box">
       <strong>Branch Daily Logic:</strong>
       <span>
-        Managers only enter Trans In, Remaining, Waste, and Notes. Usage is auto-computed as
-        Total Available - Remaining - Waste. Branch Stock should close to the submitted Remaining Count.
+        Blank rows are ignored. Managers can enter only the fields needed for that day.
+        Usage is auto-computed only when Remaining is entered.
       </span>
     </div>
 
@@ -805,7 +816,7 @@ function renderBranchDailyReviewModeContent() {
     return `
       <div class="submit-preview-box">
         <h4>Branch Submit Review</h4>
-        <p>No rows are ready to post. Go back to edit mode and enter remaining counts.</p>
+        <p>No rows are ready to post. Go back to edit mode and enter at least one field on one row.</p>
 
         <div class="form-actions review-actions">
           <button class="ghost-button" id="back-to-branch-daily-edit-mode">
@@ -824,7 +835,7 @@ function renderBranchDailyReviewModeContent() {
           <p>
             ${reviewRows.length} item row${
     reviewRows.length === 1 ? "" : "s"
-  } ready to post. Review remaining counts, waste, and auto-computed usage before submitting.
+  } ready to post. Fully blank rows are ignored.
           </p>
         </div>
 
@@ -868,9 +879,15 @@ function renderBranchDailyReviewModeContent() {
                     <td>${computed.currentStock}</td>
                     <td>${computed.transIn || "-"}</td>
                     <td>${computed.totalAvailable}</td>
-                    <td>${computed.remaining}</td>
+                    <td>${
+                      String(rowData.remaining || "").trim() === ""
+                        ? "-"
+                        : computed.remaining
+                    }</td>
                     <td>${computed.waste || "-"}</td>
-                    <td>${computed.usageAuto}</td>
+                    <td>${
+                      computed.usageAuto === "" ? "-" : computed.usageAuto
+                    }</td>
                     <td>${rowData.notes || "-"}</td>
                     <td>
                       <div class="row-actions">
@@ -927,7 +944,7 @@ function getBranchDailyInputContent() {
         <div>
           <h3>Branch Daily Input — Today Only</h3>
           <p>
-            Enter end-of-shift remaining counts, waste, and notes. Usage is auto-computed.
+            Enter end-of-shift counts, waste, and notes only for items that had activity.
           </p>
         </div>
 
@@ -1044,6 +1061,20 @@ function saveBranchDailyCellValue(input) {
   saveBranchDailyInputRows(inputData);
 }
 
+function saveAllVisibleBranchDailyInputs() {
+  const inputData = getBranchDailyInputStoredRows();
+
+  document.querySelectorAll(".branch-daily-input-cell").forEach((input) => {
+    const itemId = input.dataset.itemId;
+    const field = input.dataset.field;
+
+    inputData[itemId] = inputData[itemId] || {};
+    inputData[itemId][field] = input.value;
+  });
+
+  saveBranchDailyInputRows(inputData);
+}
+
 function focusNextBranchDailyInput(currentInput, direction = 1) {
   const inputs = Array.from(
     document.querySelectorAll(".branch-daily-input-cell")
@@ -1116,6 +1147,8 @@ function setupBranchDailyInputEvents() {
 
   if (readyButton) {
     readyButton.addEventListener("click", () => {
+      saveAllVisibleBranchDailyInputs();
+
       const branchEntries = buildBranchLedgerEntriesFromDailyInput();
       const summary = getBranchDailyInputSummary();
 
@@ -1135,7 +1168,7 @@ function setupBranchDailyInputEvents() {
           type: "warning",
           title: "No Rows Ready",
           message:
-            "No Branch Daily Input rows are ready for review yet. Please enter Remaining count for at least one item.",
+            "No Branch Daily Input rows are ready for review yet. Enter at least one field on one item. Fully blank rows are ignored.",
           confirmLabel: "Got it"
         });
         return;
