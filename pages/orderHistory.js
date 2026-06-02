@@ -650,15 +650,18 @@ function renderSelectedOrderHistoryDetail() {
       </div>
 
       <div class="branch-order-section">
-        <div class="panel-header compact-panel-header">
+        <div class="order-lines-filter-header">
           <div>
             <h4>Order Lines</h4>
             <p>Filter long orders by department.</p>
           </div>
 
-          <select id="order-history-line-department-filter">
-            ${renderOrderHistoryLineDepartmentOptions(order)}
-          </select>
+          <label>
+            Department
+            <select id="order-history-line-department-filter">
+              ${renderOrderHistoryLineDepartmentOptions(order)}
+            </select>
+          </label>
         </div>
 
         ${renderOrderHistoryLines(order)}
@@ -714,12 +717,17 @@ function getOrderHistoryContent() {
             </p>
           </div>
 
-          <select id="order-history-status-filter">
-            ${renderOrderHistoryStatusOptions()}
-          </select>
+          <span class="badge">Order Filters</span>
         </div>
 
         <div class="filter-bar branch-order-search-bar order-history-filter-bar">
+          <label>
+            Status
+            <select id="order-history-status-filter">
+              ${renderOrderHistoryStatusOptions()}
+            </select>
+          </label>
+
           <label>
             Start Date
             <input
