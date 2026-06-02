@@ -239,6 +239,58 @@ function calculateBranchMovementTotals(item) {
   );
 }
 
+function getCurrentBranchStockMonthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function entryIsInCurrentBranchStockMonth(entry) {
+  const currentMonth = getCurrentBranchStockMonthKey();
+  const entryMonth = String(entry.date || entry.submittedAt || "").slice(0, 7);
+
+  return entryMonth === currentMonth;
+}
+
+function calculateBranchMonthlyMovementTotals(itemId) {
+  return getBranchLedgerEntriesForItem(itemId)
+    .filter(entryIsInCurrentBranchStockMonth)
+    .reduce(
+      (totals, entry) => {
+        const quantity = Number(entry.quantity || 0);
+
+        if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+          totals.transferIn += quantity;
+        }
+
+        if (entry.movementType === "Usage") {
+          totals.usage += quantity;
+        }
+
+        if (entry.movementType === "Waste") {
+          totals.waste += quantity;
+        }
+
+        if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+          totals.remainingCounts += 1;
+        }
+
+        return totals;
+      },
+      {
+        transferIn: 0,
+        usage: 0,
+        waste: 0,
+        remainingCounts: 0
+      }
+    );
+}
+
+function getBranchStockCurrentMonthLabel() {
+  return new Date().toLocaleString("en-US", {
+    month: "long",
+    year: "numeric"
+  });
+}
+
 function getBranchTransferInAfterLastCount(item) {
   const entries = getBranchLedgerEntriesForItem(item.itemId);
   const latestRemainingCount = getLatestRemainingCountForItem(item.itemId);
@@ -450,11 +502,9 @@ function renderBranchStockLevel(item) {
   const statusClass = getBranchStatusBadgeClass(status);
 
   return `
-    <div class="stock-current-card compact ${statusClass}">
-      <div class="stock-current-bubble">
-        <strong>${currentStock}</strong>
-        <em>${item.unit || ""}</em>
-      </div>
+    <div class="stock-current-bubble-only ${statusClass}">
+      <strong>${currentStock}</strong>
+      <em>${item.unit || ""}</em>
     </div>
   `;
 }
@@ -676,12 +726,8 @@ function setupBranchStockEvents() {
       }
 
       const status = getBranchStockStatus(item);
-      const totals = item.movementTotals || {
-        transferIn: 0,
-        usage: 0,
-        waste: 0,
-        remainingCount: 0
-      };
+      const monthlyTotals = calculateBranchMonthlyMovementTotals(item.itemId);
+      const monthLabel = getBranchStockCurrentMonthLabel();
 
       if (typeof window.DMC_SHOW_MODAL === "function") {
         window.DMC_SHOW_MODAL({
@@ -692,13 +738,11 @@ function setupBranchStockEvents() {
             `Minimum Stock: ${item.minimumStock} ${item.unit}`,
             `Status: ${status}`,
             "",
-            "Shift Reference:",
-            "Current Stock is the starting stock/reference for the next shift.",
-            "",
-            "Recent / Reported Activity:",
-            `Transfer In: ${totals.transferIn}`,
-            `Usage Reported: ${totals.usage}`,
-            `Waste Reported: ${totals.waste}`,
+            `Monthly Summary: ${monthLabel}`,
+            `Transfer In: ${monthlyTotals.transferIn} ${item.unit}`,
+            `Usage Reported: ${monthlyTotals.usage} ${item.unit}`,
+            `Waste Reported: ${monthlyTotals.waste} ${item.unit}`,
+            `Closing Counts Submitted: ${monthlyTotals.remainingCounts}`,
             "",
             `Last Movement: ${item.lastMovement}`
           ].join("\n"),
