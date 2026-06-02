@@ -6837,3 +6837,40 @@ input[type="date"]:disabled {
     min-width: 100%;
   }
 }
+
+
+/* =========================================================
+   ORDER HISTORY LEFT PANEL FILTER CLEANUP
+========================================================= */
+
+.order-history-left-filter-clean {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.order-history-left-filter-clean label {
+  min-width: 0;
+}
+
+.order-history-shortcuts {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.order-history-shortcuts .ghost-button {
+  min-width: 92px;
+}
+
+@media (max-width: 900px) {
+  .order-history-left-filter-clean {
+    grid-template-columns: 1fr;
+  }
+
+  .order-history-shortcuts {
+    grid-column: auto;
+  }
+}
