@@ -6602,3 +6602,38 @@ input[type="date"]:disabled {
     font-size: 21px;
   }
 }
+
+/* =========================================================
+   STOCK LEVEL SEPARATE COLUMN
+========================================================= */
+
+.stock-current-card.compact {
+  min-width: 98px;
+  max-width: 120px;
+  padding: 8px;
+  justify-items: center;
+}
+
+.stock-current-card.compact .stock-current-bubble {
+  justify-self: center;
+  min-width: 78px;
+  padding: 8px 11px;
+}
+
+.stock-level-only {
+  display: grid;
+  gap: 7px;
+  min-width: 150px;
+}
+
+.stock-level-only .stock-level-track {
+  min-width: 130px;
+}
+
+.stock-level-only .stock-current-min {
+  font-size: 10px;
+}
+
+.stock-level-only .stock-current-min strong {
+  font-size: 10px;
+}
