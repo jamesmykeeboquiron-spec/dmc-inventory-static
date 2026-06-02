@@ -6637,3 +6637,81 @@ input[type="date"]:disabled {
 .stock-level-only .stock-current-min strong {
   font-size: 10px;
 }
+
+/* =========================================================
+   STOCK CURRENT BUBBLE ONLY
+========================================================= */
+
+.stock-current-bubble-only {
+  display: inline-flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 78px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.04)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 7px 14px rgba(0, 0, 0, 0.18);
+}
+
+.stock-current-bubble-only.success {
+  background:
+    radial-gradient(circle at top left, rgba(78, 255, 140, 0.18), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.stock-current-bubble-only.warning {
+  background:
+    radial-gradient(circle at top left, rgba(255, 192, 65, 0.22), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.stock-current-bubble-only.danger {
+  background:
+    radial-gradient(circle at top left, rgba(255, 82, 82, 0.22), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.stock-current-bubble-only strong {
+  font-size: 24px;
+  line-height: 0.95;
+  color: var(--text);
+  letter-spacing: -0.035em;
+}
+
+.stock-current-bubble-only em {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+/* =========================================================
+   STOCK LEVEL SEPARATE COLUMN
+========================================================= */
+
+.stock-level-only {
+  display: grid;
+  gap: 7px;
+  min-width: 150px;
+}
+
+.stock-level-only .stock-level-track {
+  min-width: 130px;
+}
+
+.stock-level-only .stock-current-min {
+  font-size: 10px;
+}
+
+.stock-level-only .stock-current-min strong {
+  font-size: 10px;
+}
