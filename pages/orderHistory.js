@@ -3,7 +3,10 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_ORDER_HISTORY_STORAGE_KEY = "dmc_branch_orders";
 
 window.DMC_ORDER_HISTORY_SELECTED_STATUS =
-  window.DMC_ORDER_HISTORY_SELECTED_STATUS || "all";
+  window.DMC_ORDER_HISTORY_SELECTED_STATUS || "open";
+
+window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT =
+  window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT || "all";
 
 window.DMC_ORDER_HISTORY_SEARCH = window.DMC_ORDER_HISTORY_SEARCH || "";
 
@@ -95,6 +98,16 @@ function getSortedOrderHistoryOrders() {
   );
 }
 
+function isOpenOrderHistoryStatus(status) {
+  return [
+    "Submitted",
+    "Accepted",
+    "Being Fulfilled",
+    "On the Way",
+    "Variance"
+  ].includes(status || "Submitted");
+}
+
 function getFilteredOrderHistoryOrders() {
   const status = window.DMC_ORDER_HISTORY_SELECTED_STATUS;
   const searchValue = String(window.DMC_ORDER_HISTORY_SEARCH || "")
@@ -103,8 +116,12 @@ function getFilteredOrderHistoryOrders() {
 
   return getSortedOrderHistoryOrders().filter((order) => {
     const orderDate = String(order.orderDate || "");
+    const orderStatus = order.status || "Submitted";
 
-    const matchesStatus = status === "all" || order.status === status;
+    const matchesStatus =
+      status === "all" ||
+      (status === "open" && isOpenOrderHistoryStatus(orderStatus)) ||
+      orderStatus === status;
 
     const matchesStartDate =
       !window.DMC_ORDER_HISTORY_START_DATE ||
@@ -132,7 +149,8 @@ function getFilteredOrderHistoryOrders() {
         (line) =>
           String(line.itemId || "").toLowerCase().includes(searchValue) ||
           String(line.itemName || "").toLowerCase().includes(searchValue) ||
-          String(line.section || "").toLowerCase().includes(searchValue)
+          String(line.section || "").toLowerCase().includes(searchValue) ||
+          String(line.department || "").toLowerCase().includes(searchValue)
       );
 
     return matchesStatus && matchesStartDate && matchesEndDate && matchesSearch;
@@ -160,6 +178,7 @@ function getOrderHistorySummary() {
 
   return {
     total: orders.length,
+    open: orders.filter((order) => isOpenOrderHistoryStatus(order.status)).length,
     submitted: orders.filter((order) => order.status === "Submitted").length,
     accepted: orders.filter((order) => order.status === "Accepted").length,
     fulfilling: orders.filter((order) => order.status === "Being Fulfilled")
@@ -195,6 +214,9 @@ function renderOrderHistoryStatusOptions() {
   ];
 
   return `
+    <option value="open" ${selectedStatus === "open" ? "selected" : ""}>
+      Open Orders
+    </option>
     <option value="all" ${selectedStatus === "all" ? "selected" : ""}>
       All Orders
     </option>
@@ -218,13 +240,13 @@ function renderOrderHistoryList() {
     return `
       <div class="order-list-empty">
         <p>No orders found.</p>
-        <span>Submitted orders will appear here after Place Order.</span>
+        <span>Open branch orders will appear here. Use filters to view completed history.</span>
       </div>
     `;
   }
 
   return `
-    <div class="branch-order-list">
+    <div class="branch-order-list order-history-scroll-list">
       ${orders
         .map((order) => {
           const latestStatus =
@@ -296,6 +318,53 @@ function renderOrderStatusTracker(order) {
         .join("")}
     </div>
   `;
+}
+
+function getOrderHistoryLineDepartment(line, order) {
+  return line.department || order.department || "Unassigned";
+}
+
+function getOrderHistoryLineDepartments(order) {
+  return [
+    ...new Set(
+      (order.lines || [])
+        .map((line) => getOrderHistoryLineDepartment(line, order))
+        .filter(Boolean)
+    )
+  ].sort();
+}
+
+function renderOrderHistoryLineDepartmentOptions(order) {
+  const selectedDepartment =
+    window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT || "all";
+
+  return `
+    <option value="all" ${selectedDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${getOrderHistoryLineDepartments(order)
+      .map(
+        (department) => `
+          <option value="${department}" ${
+          selectedDepartment === department ? "selected" : ""
+        }>
+            ${department}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function getFilteredOrderHistoryLines(order) {
+  const selectedDepartment =
+    window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT || "all";
+
+  return (order.lines || []).filter((line) => {
+    const lineDepartment = getOrderHistoryLineDepartment(line, order);
+
+    return selectedDepartment === "all" || lineDepartment === selectedDepartment;
+  });
 }
 
 function getOrderHistorySentQty(order, line) {
@@ -378,11 +447,22 @@ function renderOrderHistoryLines(order) {
     `;
   }
 
+  const filteredLines = getFilteredOrderHistoryLines(order);
+
+  if (filteredLines.length === 0) {
+    return `
+      <p class="submit-preview-empty">
+        No order lines match the selected department.
+      </p>
+    `;
+  }
+
   return `
-    <div class="table-wrap">
+    <div class="table-wrap order-history-lines-scroll">
       <table>
         <thead>
           <tr>
+            <th>Department</th>
             <th>Section</th>
             <th>Item ID</th>
             <th>Item Name</th>
@@ -396,7 +476,7 @@ function renderOrderHistoryLines(order) {
         </thead>
 
         <tbody>
-          ${order.lines
+          ${filteredLines
             .map((line) => {
               const requestedQty = Number(line.requestedQty || 0);
               const sentQty = getOrderHistorySentQty(order, line);
@@ -407,6 +487,7 @@ function renderOrderHistoryLines(order) {
 
               return `
                 <tr>
+                  <td>${getOrderHistoryLineDepartment(line, order)}</td>
                   <td>${line.section || "-"}</td>
                   <td>${line.itemId || "-"}</td>
                   <td>${line.itemName || "-"}</td>
@@ -446,7 +527,7 @@ function renderOrderHistoryStatusHistory(order) {
   }
 
   return `
-    <div class="status-history-list">
+    <div class="status-history-list order-history-status-scroll">
       ${order.statusHistory
         .map(
           (event) => `
@@ -498,7 +579,7 @@ function renderSelectedOrderHistoryDetail() {
 
   if (!order) {
     return `
-      <section class="panel branch-order-detail">
+      <section class="panel branch-order-detail order-history-detail-scroll">
         <div class="order-list-empty">
           <p>No order selected.</p>
           <span>Select an order from the left panel.</span>
@@ -510,7 +591,7 @@ function renderSelectedOrderHistoryDetail() {
   const latestStatus = order.statusHistory?.[order.statusHistory.length - 1];
 
   return `
-    <section class="panel branch-order-detail">
+    <section class="panel branch-order-detail order-history-detail-scroll">
       <div class="panel-header">
         <div>
           <h3>${order.orderId}</h3>
@@ -569,7 +650,17 @@ function renderSelectedOrderHistoryDetail() {
       </div>
 
       <div class="branch-order-section">
-        <h4>Order Lines</h4>
+        <div class="panel-header compact-panel-header">
+          <div>
+            <h4>Order Lines</h4>
+            <p>Filter long orders by department.</p>
+          </div>
+
+          <select id="order-history-line-department-filter">
+            ${renderOrderHistoryLineDepartmentOptions(order)}
+          </select>
+        </div>
+
         ${renderOrderHistoryLines(order)}
       </div>
 
@@ -589,32 +680,38 @@ function getOrderHistoryContent() {
   return `
     <section class="grid">
       <div class="card">
-        <p>Total Orders</p>
-        <strong>${summary.total}</strong>
-      </div>
-
-      <div class="card">
-        <p>Submitted</p>
-        <strong>${summary.submitted}</strong>
+        <p>Open Orders</p>
+        <strong>${summary.open}</strong>
+        <span>default view</span>
       </div>
 
       <div class="card">
         <p>On the Way</p>
         <strong>${summary.onTheWay}</strong>
+        <span>waiting for receipt</span>
+      </div>
+
+      <div class="card">
+        <p>Variance</p>
+        <strong>${summary.variance}</strong>
+        <span>needs review</span>
       </div>
 
       <div class="card">
         <p>Completed</p>
         <strong>${summary.completed}</strong>
+        <span>hidden by default</span>
       </div>
     </section>
 
-    <section class="branch-orders-layout">
-      <section class="panel branch-order-list-panel">
+    <section class="branch-orders-layout order-history-layout">
+      <section class="panel branch-order-list-panel order-history-list-panel">
         <div class="panel-header">
           <div>
             <h3>Order History</h3>
-            <p>Track branch requests and warehouse fulfillment status updates.</p>
+            <p>
+              Default view shows open orders only. Use filters to view completed history.
+            </p>
           </div>
 
           <select id="order-history-status-filter">
@@ -673,6 +770,9 @@ function refreshOrderHistoryPage() {
 
 function setupOrderHistoryEvents() {
   const statusFilter = document.getElementById("order-history-status-filter");
+  const lineDepartmentFilter = document.getElementById(
+    "order-history-line-department-filter"
+  );
   const searchInput = document.getElementById("order-history-search");
   const startDateInput = document.getElementById("order-history-start-date");
   const endDateInput = document.getElementById("order-history-end-date");
@@ -684,6 +784,15 @@ function setupOrderHistoryEvents() {
     statusFilter.addEventListener("change", () => {
       window.DMC_ORDER_HISTORY_SELECTED_STATUS = statusFilter.value;
       window.DMC_ORDER_HISTORY_SELECTED_ID = "";
+      refreshOrderHistoryPage();
+    });
+  }
+
+  if (lineDepartmentFilter) {
+    lineDepartmentFilter.addEventListener("change", () => {
+      window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT =
+        lineDepartmentFilter.value;
+
       refreshOrderHistoryPage();
     });
   }
@@ -736,7 +845,8 @@ function setupOrderHistoryEvents() {
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      window.DMC_ORDER_HISTORY_SELECTED_STATUS = "all";
+      window.DMC_ORDER_HISTORY_SELECTED_STATUS = "open";
+      window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT = "all";
       window.DMC_ORDER_HISTORY_SEARCH = "";
       window.DMC_ORDER_HISTORY_START_DATE = "";
       window.DMC_ORDER_HISTORY_END_DATE = "";
@@ -750,6 +860,7 @@ function setupOrderHistoryEvents() {
     button.addEventListener("click", () => {
       window.DMC_ORDER_HISTORY_SELECTED_ID =
         button.dataset.selectOrderHistory;
+      window.DMC_ORDER_HISTORY_SELECTED_LINE_DEPARTMENT = "all";
 
       refreshOrderHistoryPage();
     });
