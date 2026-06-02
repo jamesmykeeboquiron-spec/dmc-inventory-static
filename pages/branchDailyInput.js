@@ -439,8 +439,19 @@ function getBranchDailyReviewStatus(item, rowData) {
     return "CHECK";
   }
 
-  if (String(rowData?.remaining || "").trim() === "") {
+  const hasRemaining =
+    String(rowData?.remaining || "").trim() !== "";
+
+  const hasCountMovement =
+    String(rowData?.transferIn || "").trim() !== "" ||
+    String(rowData?.waste || "").trim() !== "";
+
+  if (!hasRemaining && hasCountMovement) {
     return "CHECK";
+  }
+
+  if (!hasRemaining) {
+    return "READY";
   }
 
   const inputData = getBranchDailyInputStoredRows();
