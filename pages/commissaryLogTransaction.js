@@ -1,51 +1,51 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_COMMISSARY_LOG_MASTER_LIST_KEY = "dmc_master_list_items";
-const DMC_COMMISSARY_LOG_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_COMMISSARY_LOG_STORAGE_KEY_FOR_LOG_PAGE =
+  "dmc_inventory_ledger_entries";
 
-window.DMC_COMMISSARY_LOG_SEARCH = window.DMC_COMMISSARY_LOG_SEARCH || "";
-window.DMC_COMMISSARY_LOG_DRAFT = window.DMC_COMMISSARY_LOG_DRAFT || {};
+window.DMC_COMMISSARY_LOG_FILTERS = window.DMC_COMMISSARY_LOG_FILTERS || {
+  startDate: "",
+  endDate: "",
+  section: "all",
+  movementType: "all",
+  search: "",
+  selectedBatchId: ""
+};
 
-function getCommissaryLogMasterListItems() {
-  const storedItems = localStorage.getItem(DMC_COMMISSARY_LOG_MASTER_LIST_KEY);
-
-  if (storedItems) {
-    try {
-      return JSON.parse(storedItems);
-    } catch {
-      return window.DMC_DATA?.masterList?.items || [];
-    }
-  }
-
-  return window.DMC_DATA?.masterList?.items || [];
-}
-
-function getCommissaryLogLedgerEntries() {
-  const storedEntries = localStorage.getItem(DMC_COMMISSARY_LOG_LEDGER_KEY);
+function getStoredCommissaryLogEntriesForLogPage() {
+  const storedEntries = localStorage.getItem(
+    DMC_COMMISSARY_LOG_STORAGE_KEY_FOR_LOG_PAGE
+  );
 
   if (!storedEntries) {
-    return window.DMC_DATA?.ledger || [];
+    return [];
   }
 
   try {
-    return JSON.parse(storedEntries);
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return [];
+    }
+
+    return parsedEntries;
   } catch {
-    return window.DMC_DATA?.ledger || [];
+    return [];
   }
 }
 
-function saveCommissaryLogLedgerEntries(entries) {
-  localStorage.setItem(DMC_COMMISSARY_LOG_LEDGER_KEY, JSON.stringify(entries));
-}
+function formatCommissaryLogDateTime(value) {
+  if (!value) {
+    return "-";
+  }
 
-function getCommissaryLogTodayDate() {
-  return new Date().toISOString().slice(0, 10);
-}
+  const date = new Date(value);
 
-function getCommissaryLogReadableTimestamp() {
-  const now = new Date();
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
-  return now.toLocaleString("en-US", {
+  return date.toLocaleString("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -54,308 +54,611 @@ function getCommissaryLogReadableTimestamp() {
   });
 }
 
-function createCommissaryLogBatchId() {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
-  const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
+function entryBelongsToCommissaryLog(entry) {
+  const location = String(entry.location || "").toLowerCase();
+  const department = String(entry.department || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
 
-  return `COM-${datePart}-${timePart}`;
+  return (
+    location.includes("commissary") ||
+    department.includes("commissary") ||
+    source.includes("commissary daily input") ||
+    source.includes("commissary daily input closing count") ||
+    source.includes("commissary") ||
+    destination.includes("commissary")
+  );
 }
 
-function getCommissaryLogItems() {
-  const searchValue = String(window.DMC_COMMISSARY_LOG_SEARCH || "")
-    .toLowerCase()
-    .trim();
+function getCommissaryLogEntriesOnly() {
+  return getStoredCommissaryLogEntriesForLogPage().filter(
+    entryBelongsToCommissaryLog
+  );
+}
 
-  return getCommissaryLogMasterListItems().filter((item) => {
-    const isActive = item.active !== false;
+function getCommissaryLogSections() {
+  return [
+    ...new Set(
+      getCommissaryLogEntriesOnly()
+        .map((entry) => entry.section || "")
+        .filter(Boolean)
+    )
+  ].sort();
+}
+
+function getCommissaryLogMovementTypes() {
+  const preferredOrder = [
+    "Transfer In",
+    "Transfer Out",
+    "Remaining Count",
+    "Usage",
+    "Waste",
+    "Daily Note",
+    "Adjustment"
+  ];
+
+  const movementTypes = [
+    ...new Set(
+      getCommissaryLogEntriesOnly()
+        .map((entry) => entry.movementType || "")
+        .filter(Boolean)
+    )
+  ];
+
+  return movementTypes.sort((a, b) => {
+    const aIndex = preferredOrder.indexOf(a);
+    const bIndex = preferredOrder.indexOf(b);
+
+    if (aIndex === -1 && bIndex === -1) {
+      return a.localeCompare(b);
+    }
+
+    if (aIndex === -1) {
+      return 1;
+    }
+
+    if (bIndex === -1) {
+      return -1;
+    }
+
+    return aIndex - bIndex;
+  });
+}
+
+function getFilteredCommissaryLogEntries() {
+  const filters = window.DMC_COMMISSARY_LOG_FILTERS;
+  const searchValue = String(filters.search || "").toLowerCase().trim();
+  const selectedSection = String(filters.section || "all");
+  const selectedMovementType = String(filters.movementType || "all");
+  const startDate = String(filters.startDate || "");
+  const endDate = String(filters.endDate || "");
+
+  return getCommissaryLogEntriesOnly().filter((entry) => {
+    const entryDate = String(entry.date || "");
+
+    const matchesStartDate = !startDate || entryDate >= startDate;
+    const matchesEndDate = !endDate || entryDate <= endDate;
+
+    const matchesSection =
+      selectedSection === "all" ||
+      String(entry.section || "") === selectedSection;
+
+    const matchesMovementType =
+      selectedMovementType === "all" ||
+      String(entry.movementType || "") === selectedMovementType;
 
     const matchesSearch =
       !searchValue ||
-      String(item.itemId || "").toLowerCase().includes(searchValue) ||
-      String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
-      String(item.section || "").toLowerCase().includes(searchValue) ||
-      String(item.unit || "").toLowerCase().includes(searchValue);
+      String(entry.batchId || "").toLowerCase().includes(searchValue) ||
+      String(entry.itemId || "").toLowerCase().includes(searchValue) ||
+      String(entry.itemName || "").toLowerCase().includes(searchValue) ||
+      String(entry.department || "").toLowerCase().includes(searchValue) ||
+      String(entry.section || "").toLowerCase().includes(searchValue) ||
+      String(entry.source || "").toLowerCase().includes(searchValue) ||
+      String(entry.destination || "").toLowerCase().includes(searchValue) ||
+      String(entry.notes || "").toLowerCase().includes(searchValue) ||
+      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue);
 
-    return isActive && matchesSearch;
+    return (
+      matchesStartDate &&
+      matchesEndDate &&
+      matchesSection &&
+      matchesMovementType &&
+      matchesSearch
+    );
   });
 }
 
-function getCommissaryLogDraftLine(itemId) {
-  window.DMC_COMMISSARY_LOG_DRAFT[itemId] =
-    window.DMC_COMMISSARY_LOG_DRAFT[itemId] || {
-      received: "",
-      waste: "",
-      adjustment: "",
-      notes: ""
-    };
+function groupCommissaryLogEntriesByBatch(entries) {
+  return entries.reduce((groups, entry) => {
+    const batchId = entry.batchId || "No Batch ID";
 
-  return window.DMC_COMMISSARY_LOG_DRAFT[itemId];
+    groups[batchId] = groups[batchId] || [];
+    groups[batchId].push(entry);
+
+    return groups;
+  }, {});
 }
 
-function getCommissaryLogPreparedEntries() {
-  const items = getCommissaryLogItems();
-  const entries = [];
+function getCommissaryLogBatches() {
+  const filteredEntries = getFilteredCommissaryLogEntries();
+  const groupedEntries = groupCommissaryLogEntriesByBatch(filteredEntries);
 
-  items.forEach((item) => {
-    const draft = getCommissaryLogDraftLine(item.itemId);
+  return Object.entries(groupedEntries)
+    .map(([batchId, entries]) => ({
+      batchId,
+      entries
+    }))
+    .sort((a, b) => {
+      const aSubmitted = a.entries[0]?.submittedAt || a.entries[0]?.date || "";
+      const bSubmitted = b.entries[0]?.submittedAt || b.entries[0]?.date || "";
 
-    const movements = [
-      {
-        movementType: "Received",
-        quantity: Number(draft.received || 0)
-      },
-      {
-        movementType: "Waste",
-        quantity: Number(draft.waste || 0)
-      },
-      {
-        movementType: "Adjustment",
-        quantity: Number(draft.adjustment || 0)
-      }
-    ];
-
-    movements.forEach((movement) => {
-      if (Number.isNaN(movement.quantity) || movement.quantity === 0) {
-        return;
-      }
-
-      entries.push({
-        item,
-        movementType: movement.movementType,
-        quantity: movement.quantity,
-        notes: draft.notes || ""
-      });
+      return String(bSubmitted).localeCompare(String(aSubmitted));
     });
-  });
-
-  return entries;
 }
 
-function getCommissaryLogSummary() {
-  const items = getCommissaryLogItems();
-  const preparedEntries = getCommissaryLogPreparedEntries();
+function getSelectedCommissaryLogBatch() {
+  const batches = getCommissaryLogBatches();
 
-  return {
-    showingItems: items.length,
-    preparedEntries: preparedEntries.length,
-    receivedTotal: preparedEntries
-      .filter((entry) => entry.movementType === "Received")
-      .reduce((total, entry) => total + Number(entry.quantity || 0), 0),
-    wasteTotal: preparedEntries
-      .filter((entry) => entry.movementType === "Waste")
-      .reduce((total, entry) => total + Number(entry.quantity || 0), 0)
-  };
-}
-
-function renderCommissaryLogPreview() {
-  const preparedEntries = getCommissaryLogPreparedEntries();
-
-  if (preparedEntries.length === 0) {
-    return `
-      <p class="submit-preview-empty">
-        No commissary movements ready yet. Enter Received, Waste, or Adjustment quantities.
-      </p>
-    `;
+  if (batches.length === 0) {
+    return null;
   }
 
+  const selectedBatchId = window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId;
+
+  const selectedBatch = batches.find(
+    (batch) => batch.batchId === selectedBatchId
+  );
+
+  return selectedBatch || batches[0] || null;
+}
+
+function renderCommissaryLogSectionOptions() {
+  const currentSection = window.DMC_COMMISSARY_LOG_FILTERS.section;
+
   return `
-    <ul class="submit-preview-list">
-      ${preparedEntries
-        .map(
-          (entry) => `
-            <li>
-              <strong>${entry.item.officialItemName}</strong>
-              <span>${entry.movementType}: ${entry.quantity} ${entry.item.unit}</span>
-            </li>
-          `
-        )
-        .join("")}
-    </ul>
+    <option value="all" ${currentSection === "all" ? "selected" : ""}>
+      All Sections
+    </option>
+    ${getCommissaryLogSections()
+      .map(
+        (section) => `
+          <option value="${section}" ${
+          currentSection === section ? "selected" : ""
+        }>
+            ${section}
+          </option>
+        `
+      )
+      .join("")}
   `;
 }
 
-function renderCommissaryLogRows() {
-  const items = getCommissaryLogItems();
+function renderCommissaryLogMovementOptions() {
+  const currentMovementType = window.DMC_COMMISSARY_LOG_FILTERS.movementType;
 
-  if (items.length === 0) {
+  return `
+    <option value="all" ${currentMovementType === "all" ? "selected" : ""}>
+      All Movements
+    </option>
+    ${getCommissaryLogMovementTypes()
+      .map(
+        (movementType) => `
+          <option value="${movementType}" ${
+          currentMovementType === movementType ? "selected" : ""
+        }>
+            ${movementType}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function getCommissaryBatchSourceLabel(batch) {
+  const firstEntry = batch.entries[0] || {};
+  const source = String(firstEntry.source || "");
+
+  if (source.includes("Closing Count")) {
+    return "Commissary Daily Closing Batch";
+  }
+
+  if (source.includes("Commissary Daily Input")) {
+    return "Commissary Daily Input Batch";
+  }
+
+  if (source.includes("Transfer Out")) {
+    return "Commissary Transfer Out Batch";
+  }
+
+  return "Commissary Movement Batch";
+}
+
+function getCommissaryBatchEffectCounts(batch) {
+  return batch.entries.reduce(
+    (counts, entry) => {
+      const effect = entry.stockEffect || "report";
+
+      if (effect === "add") {
+        counts.add += 1;
+      } else if (effect === "deduct") {
+        counts.deduct += 1;
+      } else if (effect === "set") {
+        counts.set += 1;
+      } else {
+        counts.report += 1;
+      }
+
+      return counts;
+    },
+    {
+      add: 0,
+      deduct: 0,
+      set: 0,
+      report: 0
+    }
+  );
+}
+
+function getCommissaryLogNumber(value) {
+  const numberValue = Number(value || 0);
+
+  return Number.isNaN(numberValue) ? 0 : numberValue;
+}
+
+function getCommissaryLogGroupedItemRows(batch) {
+  const groupedRows = {};
+
+  batch.entries.forEach((entry) => {
+    const itemId = entry.itemId || "NO-ID";
+
+    groupedRows[itemId] = groupedRows[itemId] || {
+      section: entry.section || "-",
+      itemId: entry.itemId || "-",
+      itemName: entry.itemName || "-",
+      unit: entry.unit || "-",
+      transferIn: 0,
+      transferOut: 0,
+      remaining: "",
+      usage: 0,
+      waste: 0,
+      notes: []
+    };
+
+    const row = groupedRows[itemId];
+    const quantity = getCommissaryLogNumber(entry.quantity);
+
+    if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+      row.transferIn += quantity;
+    }
+
+    if (
+      entry.movementType === "Transfer Out" ||
+      entry.stockEffect === "deduct"
+    ) {
+      row.transferOut += quantity;
+    }
+
+    if (
+      entry.movementType === "Remaining Count" ||
+      entry.stockEffect === "set"
+    ) {
+      row.remaining = quantity;
+    }
+
+    if (entry.movementType === "Usage") {
+      row.usage += quantity;
+    }
+
+    if (entry.movementType === "Waste") {
+      row.waste += quantity;
+    }
+
+    if (String(entry.notes || "").trim() !== "") {
+      row.notes.push(entry.notes);
+    }
+  });
+
+  return Object.values(groupedRows).sort((a, b) => {
+    return String(a.itemName).localeCompare(String(b.itemName));
+  });
+}
+
+function renderCommissaryBatchList() {
+  const batches = getCommissaryLogBatches();
+
+  if (batches.length === 0) {
     return `
-      <tr>
-        <td colspan="9">No active items found. Add active items in Master List first.</td>
-      </tr>
+      <div class="warehouse-log-empty-card">
+        No submitted Commissary batches match the current filters.
+      </div>
     `;
   }
 
-  return items
-    .map((item) => {
-      const draft = getCommissaryLogDraftLine(item.itemId);
+  return batches
+    .map((batch) => {
+      const firstEntry = batch.entries[0] || {};
+      const counts = getCommissaryBatchEffectCounts(batch);
+      const isActive =
+        window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId === batch.batchId ||
+        (!window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId &&
+          getSelectedCommissaryLogBatch()?.batchId === batch.batchId);
 
       return `
-        <tr>
-          <td>${item.section || "-"}</td>
-          <td>${item.itemId || "-"}</td>
-          <td>${item.officialItemName || "-"}</td>
-          <td>${item.unit || "-"}</td>
+        <button
+          class="warehouse-log-batch-card ${isActive ? "active" : ""}"
+          data-commissary-batch-id="${batch.batchId}"
+        >
+          <div class="warehouse-log-batch-card-top">
+            <div>
+              <strong>${getCommissaryBatchSourceLabel(batch)}</strong>
+              <span>${batch.batchId}</span>
+            </div>
 
-          <td>
-            <input
-              class="commissary-log-input"
-              data-commissary-log-field="received"
-              data-commissary-log-item="${item.itemId}"
-              type="number"
-              step="any"
-              placeholder="0"
-              value="${draft.received || ""}"
-            />
-          </td>
+            <em>${batch.entries.length} rows</em>
+          </div>
 
-          <td>
-            <input
-              class="commissary-log-input"
-              data-commissary-log-field="waste"
-              data-commissary-log-item="${item.itemId}"
-              type="number"
-              step="any"
-              placeholder="0"
-              value="${draft.waste || ""}"
-            />
-          </td>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Date</span>
+            <strong>${firstEntry.date || "-"}</strong>
+          </div>
 
-          <td>
-            <input
-              class="commissary-log-input"
-              data-commissary-log-field="adjustment"
-              data-commissary-log-item="${item.itemId}"
-              type="number"
-              step="any"
-              placeholder="0"
-              value="${draft.adjustment || ""}"
-            />
-          </td>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Section</span>
+            <strong>${firstEntry.section || "-"}</strong>
+          </div>
 
-          <td>
-            <input
-              class="commissary-log-notes"
-              data-commissary-log-field="notes"
-              data-commissary-log-item="${item.itemId}"
-              type="text"
-              placeholder="Optional"
-              value="${draft.notes || ""}"
-            />
-          </td>
-
-          <td>
-            ${
-              Number(draft.received || 0) ||
-              Number(draft.waste || 0) ||
-              Number(draft.adjustment || 0)
-                ? `<span class="badge">Ready</span>`
-                : `<span class="badge muted-badge">No Input</span>`
-            }
-          </td>
-        </tr>
+          <div class="warehouse-log-batch-card-meta">
+            <span>Effect</span>
+            <strong>
+              <span class="positive-text">+${counts.add}</span>
+              /
+              <span>${counts.deduct} out</span>
+              /
+              <span>${counts.set} set</span>
+              /
+              <span>${counts.report} report</span>
+            </strong>
+          </div>
+        </button>
       `;
     })
     .join("");
 }
 
+function renderCommissaryBatchLineTable(batch) {
+  const rows = getCommissaryLogGroupedItemRows(batch);
+
+  if (rows.length === 0) {
+    return `
+      <p class="submit-preview-empty">No commissary movement lines found.</p>
+    `;
+  }
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Trans In</th>
+            <th>Trans Out</th>
+            <th>Remaining</th>
+            <th>Usage</th>
+            <th>Waste</th>
+            <th>Unit</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${rows
+            .map((row) => {
+              const uniqueNotes = [...new Set(row.notes)].filter(Boolean);
+
+              return `
+                <tr>
+                  <td>${row.section || "-"}</td>
+                  <td>${row.itemId || "-"}</td>
+                  <td>${row.itemName || "-"}</td>
+                  <td>${row.transferIn || "-"}</td>
+                  <td>${row.transferOut || "-"}</td>
+                  <td>${row.remaining === "" ? "-" : row.remaining}</td>
+                  <td>${row.usage || "-"}</td>
+                  <td>${row.waste || "-"}</td>
+                  <td>${row.unit || "-"}</td>
+                  <td>${uniqueNotes.length ? uniqueNotes.join(" | ") : "-"}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSelectedCommissaryBatchDetails() {
+  const selectedBatch = getSelectedCommissaryLogBatch();
+
+  if (!selectedBatch) {
+    return `
+      <section class="panel delivery-log-detail">
+        <div class="order-list-empty">
+          <p>No batch selected.</p>
+          <span>Select a submitted batch from the left panel.</span>
+        </div>
+      </section>
+    `;
+  }
+
+  const firstEntry = selectedBatch.entries[0] || {};
+  const reviewedBy =
+    firstEntry.managerReviewedBy ||
+    firstEntry.receivedBy ||
+    firstEntry.preparedBy ||
+    "-";
+
+  return `
+    <section class="panel delivery-log-detail branch-log-detail">
+      <div class="panel-header">
+        <div>
+          <h3>${selectedBatch.batchId}</h3>
+          <p>
+            Commissary • ${firstEntry.section || "-"}
+          </p>
+        </div>
+
+        <div class="branch-order-list-meta">
+          <span class="badge success">Posted</span>
+        </div>
+      </div>
+
+      <div class="delivery-log-info-grid">
+        <div>
+          <p class="eyebrow">Submitted At</p>
+          <strong>${formatCommissaryLogDateTime(
+            firstEntry.submittedAt || firstEntry.date
+          )}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Reviewed By</p>
+          <strong>${reviewedBy}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Section</p>
+          <strong>${firstEntry.section || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Source</p>
+          <strong>${firstEntry.source || "-"}</strong>
+        </div>
+      </div>
+
+      <div class="branch-order-section">
+        <h4>Commissary Movement Lines</h4>
+        ${renderCommissaryBatchLineTable(selectedBatch)}
+      </div>
+
+      <div class="instruction-box">
+        <strong>Stock Rule:</strong>
+        <span>
+          Commissary Stock uses Remaining Count as the latest stock truth.
+          Trans In adds stock, Trans Out deducts stock, and Usage/Waste are kept for reports.
+        </span>
+      </div>
+    </section>
+  `;
+}
+
 function getCommissaryLogTransactionContent() {
-  const summary = getCommissaryLogSummary();
+  const filters = window.DMC_COMMISSARY_LOG_FILTERS;
+  const batches = getCommissaryLogBatches();
 
   return `
     <section class="grid">
       <div class="card">
-        <p>Showing Items</p>
-        <strong>${summary.showingItems}</strong>
+        <p>Total Batches</p>
+        <strong>${batches.length}</strong>
       </div>
 
       <div class="card">
-        <p>Ready Entries</p>
-        <strong>${summary.preparedEntries}</strong>
+        <p>Sections</p>
+        <strong>${getCommissaryLogSections().length}</strong>
       </div>
 
       <div class="card">
-        <p>Received Total</p>
-        <strong>${summary.receivedTotal}</strong>
-      </div>
-
-      <div class="card">
-        <p>Waste Total</p>
-        <strong>${summary.wasteTotal}</strong>
+        <p>Movement Types</p>
+        <strong>${getCommissaryLogMovementTypes().length}</strong>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h3>Commissary Log Transaction</h3>
-          <p>
-            Add received supplier stock, commissary waste, or stock adjustments.
-            Submitted entries go directly to the Ledger.
-          </p>
+    <section class="delivery-log-layout branch-log-layout">
+      <section class="panel delivery-log-list-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Commissary Log Transaction</h3>
+            <p>
+              Read-only history of Commissary Daily Input, transfer in,
+              transfer out, remaining counts, usage, waste, and notes.
+            </p>
+          </div>
+
+          <span class="badge">Movement History</span>
         </div>
 
-        <div class="form-actions">
-          <button class="primary-button" id="submit-commissary-log">
-            Submit to Ledger
-          </button>
+        <div class="warehouse-log-filters">
+          <div class="warehouse-log-date-grid">
+            <label>
+              Start Date
+              <input
+                id="commissary-log-start-date"
+                type="date"
+                value="${filters.startDate}"
+              />
+            </label>
 
-          <button class="ghost-button" id="clear-commissary-log">
-            Clear Draft
-          </button>
+            <label>
+              End Date
+              <input
+                id="commissary-log-end-date"
+                type="date"
+                value="${filters.endDate}"
+              />
+            </label>
+          </div>
+
+          <label>
+            Section
+            <select id="commissary-log-section-filter">
+              ${renderCommissaryLogSectionOptions()}
+            </select>
+          </label>
+
+          <label>
+            Movement Type
+            <select id="commissary-log-movement-filter">
+              ${renderCommissaryLogMovementOptions()}
+            </select>
+          </label>
+
+          <label class="filter-search">
+            Search
+            <input
+              id="commissary-log-search"
+              type="text"
+              placeholder="Search item, batch, source, notes..."
+              value="${filters.search}"
+            />
+          </label>
+
+          <div class="warehouse-log-filter-actions">
+            <button class="ghost-button" id="clear-commissary-log-filters">
+              Clear
+            </button>
+
+            <button class="primary-button" id="export-commissary-log">
+              Export
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div class="filter-bar">
-        <label class="filter-search">
-          Search
-          <input
-            id="commissary-log-search"
-            type="text"
-            placeholder="Search item name, ID, section, unit..."
-            value="${window.DMC_COMMISSARY_LOG_SEARCH}"
-          />
-        </label>
-      </div>
-
-      <div class="instruction-box">
-        <strong>Commissary Stock Rule:</strong>
-        <span>
-          Received increases Commissary Stock. Waste decreases Commissary Stock.
-          Adjustment can increase or decrease depending on the number entered.
-        </span>
-      </div>
-
-      <div class="submit-preview-box">
-        <div>
-          <h4>Submit Preview</h4>
-          <p>Only filled movement quantities will be submitted to the Ledger.</p>
+        <div class="warehouse-log-list-header">
+          <p>Submitted Batches</p>
+          <span>${batches.length} found</span>
         </div>
 
-        ${renderCommissaryLogPreview()}
-      </div>
+        <div class="warehouse-log-batch-list">
+          ${renderCommissaryBatchList()}
+        </div>
+      </section>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Section</th>
-              <th>Item ID</th>
-              <th>Item Name</th>
-              <th>Unit</th>
-              <th>Received</th>
-              <th>Waste</th>
-              <th>Adjustment</th>
-              <th>Notes</th>
-              <th>Review</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${renderCommissaryLogRows()}
-          </tbody>
-        </table>
-      </div>
+      ${renderSelectedCommissaryBatchDetails()}
     </section>
   `;
 }
@@ -367,128 +670,99 @@ function refreshCommissaryLogTransactionPage() {
   renderPage("commissary-log-transaction");
 }
 
-function saveCommissaryLogDraftFromInputs() {
-  document.querySelectorAll("[data-commissary-log-item]").forEach((input) => {
-    const itemId = input.dataset.commissaryLogItem;
-    const field = input.dataset.commissaryLogField;
-
-    window.DMC_COMMISSARY_LOG_DRAFT[itemId] =
-      window.DMC_COMMISSARY_LOG_DRAFT[itemId] || {
-        received: "",
-        waste: "",
-        adjustment: "",
-        notes: ""
-      };
-
-    window.DMC_COMMISSARY_LOG_DRAFT[itemId][field] = input.value;
-  });
-}
-
-function buildCommissaryLedgerEntries() {
-  const preparedEntries = getCommissaryLogPreparedEntries();
-  const batchId = createCommissaryLogBatchId();
-  const submittedAt = new Date().toISOString();
-  const submittedAtDisplay = getCommissaryLogReadableTimestamp();
-
-  return preparedEntries.map((entry) => ({
-    date: getCommissaryLogTodayDate(),
-    submittedAt,
-    submittedAtDisplay,
-    batchId,
-    department: "Commissary",
-    section: entry.item.section || "",
-    itemId: entry.item.itemId || "",
-    itemName: entry.item.officialItemName || "",
-    movementType: entry.movementType,
-    quantity: entry.quantity,
-    unit: entry.item.unit || "",
-    source: "Commissary Log Transaction",
-    notes: entry.notes || "-"
-  }));
-}
-
 function setupCommissaryLogTransactionEvents() {
+  const startDateInput = document.getElementById("commissary-log-start-date");
+  const endDateInput = document.getElementById("commissary-log-end-date");
+  const sectionFilter = document.getElementById("commissary-log-section-filter");
+  const movementFilter = document.getElementById("commissary-log-movement-filter");
   const searchInput = document.getElementById("commissary-log-search");
-  const submitButton = document.getElementById("submit-commissary-log");
-  const clearButton = document.getElementById("clear-commissary-log");
+  const clearButton = document.getElementById("clear-commissary-log-filters");
+  const exportButton = document.getElementById("export-commissary-log");
 
-  if (searchInput) {
-    searchInput.addEventListener("change", () => {
-      saveCommissaryLogDraftFromInputs();
-      window.DMC_COMMISSARY_LOG_SEARCH = searchInput.value;
+  if (startDateInput) {
+    startDateInput.addEventListener("change", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.startDate = startDateInput.value;
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId = "";
       refreshCommissaryLogTransactionPage();
     });
   }
 
-  document.querySelectorAll("[data-commissary-log-item]").forEach((input) => {
-    input.addEventListener("input", () => {
-      const itemId = input.dataset.commissaryLogItem;
-      const field = input.dataset.commissaryLogField;
-
-      window.DMC_COMMISSARY_LOG_DRAFT[itemId] =
-        window.DMC_COMMISSARY_LOG_DRAFT[itemId] || {
-          received: "",
-          waste: "",
-          adjustment: "",
-          notes: ""
-        };
-
-      window.DMC_COMMISSARY_LOG_DRAFT[itemId][field] = input.value;
+  if (endDateInput) {
+    endDateInput.addEventListener("change", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.endDate = endDateInput.value;
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId = "";
+      refreshCommissaryLogTransactionPage();
     });
-  });
+  }
+
+  if (sectionFilter) {
+    sectionFilter.addEventListener("change", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.section = sectionFilter.value;
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId = "";
+      refreshCommissaryLogTransactionPage();
+    });
+  }
+
+  if (movementFilter) {
+    movementFilter.addEventListener("change", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.movementType = movementFilter.value;
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId = "";
+      refreshCommissaryLogTransactionPage();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.search = searchInput.value;
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId = "";
+      refreshCommissaryLogTransactionPage();
+    });
+  }
 
   if (clearButton) {
     clearButton.addEventListener("click", () => {
-      const confirmed = confirm("Clear commissary transaction draft?");
+      window.DMC_COMMISSARY_LOG_FILTERS = {
+        startDate: "",
+        endDate: "",
+        section: "all",
+        movementType: "all",
+        search: "",
+        selectedBatchId: ""
+      };
 
-      if (!confirmed) {
-        return;
-      }
-
-      window.DMC_COMMISSARY_LOG_DRAFT = {};
       refreshCommissaryLogTransactionPage();
     });
   }
 
-  if (submitButton) {
-    submitButton.addEventListener("click", () => {
-      saveCommissaryLogDraftFromInputs();
-
-      const ledgerEntries = buildCommissaryLedgerEntries();
-
-      if (ledgerEntries.length === 0) {
-        alert("No commissary entries to submit.");
-        return;
+  if (exportButton) {
+    exportButton.addEventListener("click", () => {
+      if (typeof window.DMC_SHOW_MODAL === "function") {
+        window.DMC_SHOW_MODAL({
+          type: "info",
+          title: "Export Coming Soon",
+          message:
+            "Export/print for Commissary Log Transaction will be connected after the reporting workflow is finalized.",
+          confirmLabel: "Got it"
+        });
       }
-
-      const confirmed = confirm(
-        `Submit ${ledgerEntries.length} commissary movement(s) to Ledger?`
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      const currentLedgerEntries = getCommissaryLogLedgerEntries();
-
-      saveCommissaryLogLedgerEntries([
-        ...currentLedgerEntries,
-        ...ledgerEntries
-      ]);
-
-      window.DMC_COMMISSARY_LOG_DRAFT = {};
-
-      alert("Commissary transaction submitted to Ledger.");
-      refreshCommissaryLogTransactionPage();
     });
   }
+
+  document.querySelectorAll("[data-commissary-batch-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_COMMISSARY_LOG_FILTERS.selectedBatchId =
+        button.dataset.commissaryBatchId;
+
+      refreshCommissaryLogTransactionPage();
+    });
+  });
 }
 
 window.DMC_PAGES["commissary-log-transaction"] = {
   eyebrow: "Commissary",
-  title: "Log Transaction",
+  title: "Commissary Log Transaction",
   description:
-    "Record commissary received stock, waste, and adjustments into the Ledger.",
+    "Read-only batch history of Commissary Daily Input, transfer movement, usage, waste, and closing counts.",
   getContent: getCommissaryLogTransactionContent,
   content: getCommissaryLogTransactionContent(),
   afterRender: setupCommissaryLogTransactionEvents
