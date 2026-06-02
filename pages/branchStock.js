@@ -445,42 +445,6 @@ function getBranchStatusBadgeClass(status) {
 }
 
 function renderBranchStockLevel(item) {
-  const currentStock = Number(item.currentStock || 0);
-  const minimumStock = Number(item.minimumStock || 0);
-
-  const percent = Math.min(
-    100,
-    Math.max(0, Math.round((currentStock / Math.max(minimumStock, 1)) * 100))
-  );
-
-  const status = getBranchStockStatus(item);
-  const statusClass = getBranchStatusBadgeClass(status);
-
-  return `
-    <div class="stock-current-card ${statusClass}">
-      <div class="stock-current-top">
-        <div>
-          <span class="stock-current-label">Current Stock</span>
-          <strong>${currentStock}</strong>
-          <em>${item.unit || ""}</em>
-        </div>
-
-        <small>Start stock for next shift</small>
-      </div>
-
-      <div class="stock-current-meter">
-        <div class="stock-level-track">
-          <div class="stock-level-fill" style="width: ${percent}%"></div>
-        </div>
-
-        <div class="stock-current-min">
-          <span>Minimum</span>
-          <strong>${minimumStock} ${item.unit || ""}</strong>
-        </div>
-      </div>
-    </div>
-  `;
-}
 
 function renderBranchMovementSummary(item) {
   const totals = item.movementTotals || {
