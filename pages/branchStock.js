@@ -63,10 +63,6 @@ function itemBelongsToBranchStock(item) {
   return item.active !== false;
 }
 
-function getBranchStockBaseItems() {
-  return getStoredBranchMasterListItems().filter(itemBelongsToBranchStock);
-}
-
 function entryBelongsToBranchStock(entry) {
   const location = String(entry.location || entry.branch || "").toLowerCase();
   const source = String(entry.source || "").toLowerCase();
@@ -90,12 +86,91 @@ function entryBelongsToBranchStock(entry) {
   );
 }
 
+function getBranchLedgerEntriesOnly() {
+  return getStoredBranchLedgerEntries().filter(entryBelongsToBranchStock);
+}
+
 function getBranchLedgerEntriesForItem(itemId) {
-  return getStoredBranchLedgerEntries().filter(
-    (entry) =>
-      entryBelongsToBranchStock(entry) &&
-      String(entry.itemId || "") === String(itemId || "")
+  return getBranchLedgerEntriesOnly().filter(
+    (entry) => String(entry.itemId || "") === String(itemId || "")
   );
+}
+
+function getBranchStockItemFromLedger(itemId) {
+  const entries = getBranchLedgerEntriesForItem(itemId);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const latestEntry = [...entries].sort((a, b) => {
+    return String(b.submittedAt || b.date || "").localeCompare(
+      String(a.submittedAt || a.date || "")
+    );
+  })[0];
+
+  return {
+    itemId: latestEntry.itemId || itemId,
+    officialItemName: latestEntry.itemName || latestEntry.name || "-",
+    department: latestEntry.department || "Branch",
+    section: latestEntry.section || "",
+    unit: latestEntry.unit || "-",
+    minimumStock: 0,
+    active: true,
+    operatingArea: "Branch"
+  };
+}
+
+function getBranchStockBaseItems() {
+  const masterListItems = getStoredBranchMasterListItems();
+  const branchMasterItems = masterListItems.filter(itemBelongsToBranchStock);
+  const branchLedgerEntries = getBranchLedgerEntriesOnly();
+
+  const combinedItemsById = {};
+
+  branchMasterItems.forEach((item) => {
+    const itemId = String(item.itemId || "").trim();
+
+    if (!itemId) {
+      return;
+    }
+
+    combinedItemsById[itemId] = item;
+  });
+
+  branchLedgerEntries.forEach((entry) => {
+    const itemId = String(entry.itemId || "").trim();
+
+    if (!itemId || combinedItemsById[itemId]) {
+      return;
+    }
+
+    const matchingMasterItem = masterListItems.find(
+      (item) => String(item.itemId || "") === itemId
+    );
+
+    combinedItemsById[itemId] = {
+      ...(matchingMasterItem || {}),
+      ...getBranchStockItemFromLedger(itemId),
+      itemId,
+      officialItemName:
+        matchingMasterItem?.officialItemName ||
+        matchingMasterItem?.name ||
+        entry.itemName ||
+        "-",
+      department:
+        entry.department ||
+        matchingMasterItem?.department ||
+        "Branch",
+      section: entry.section || matchingMasterItem?.section || "",
+      unit: entry.unit || matchingMasterItem?.unit || "-",
+      minimumStock: Number(matchingMasterItem?.minimumStock || 0),
+      active: true,
+      operatingArea: "Branch"
+    };
+  });
+
+  return Object.values(combinedItemsById);
 }
 
 function getBranchEntryTime(entry) {
