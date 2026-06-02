@@ -35,7 +35,13 @@ function getStoredOrderHistoryOrders() {
   }
 
   try {
-    return JSON.parse(storedOrders);
+    const parsedOrders = JSON.parse(storedOrders);
+
+    if (!Array.isArray(parsedOrders)) {
+      return [];
+    }
+
+    return parsedOrders;
   } catch {
     return [];
   }
@@ -66,6 +72,14 @@ function getOrderHistoryTimestamp(order) {
 
   if (latestStatus?.timestamp) {
     return new Date(latestStatus.timestamp).getTime();
+  }
+
+  if (order.receiving?.receivedAt) {
+    return new Date(order.receiving.receivedAt).getTime();
+  }
+
+  if (order.fulfillment?.sentAt) {
+    return new Date(order.fulfillment.sentAt).getTime();
   }
 
   if (order.orderDate) {
@@ -107,6 +121,13 @@ function getFilteredOrderHistoryOrders() {
       String(order.department || "").toLowerCase().includes(searchValue) ||
       String(order.status || "").toLowerCase().includes(searchValue) ||
       String(order.notes || "").toLowerCase().includes(searchValue) ||
+      String(order.requestedBy || "").toLowerCase().includes(searchValue) ||
+      String(order.fulfillment?.preparedBy || "")
+        .toLowerCase()
+        .includes(searchValue) ||
+      String(order.receiving?.receivedBy || "")
+        .toLowerCase()
+        .includes(searchValue) ||
       (order.lines || []).some(
         (line) =>
           String(line.itemId || "").toLowerCase().includes(searchValue) ||
@@ -143,7 +164,9 @@ function getOrderHistorySummary() {
     accepted: orders.filter((order) => order.status === "Accepted").length,
     fulfilling: orders.filter((order) => order.status === "Being Fulfilled")
       .length,
-    urgent: orders.filter((order) => order.urgent).length
+    onTheWay: orders.filter((order) => order.status === "On the Way").length,
+    completed: orders.filter((order) => order.status === "Completed").length,
+    variance: orders.filter((order) => order.status === "Variance").length
   };
 }
 
@@ -153,7 +176,7 @@ function getOrderHistoryStatusBadgeClass(status) {
   if (status === "Being Fulfilled") return "";
   if (status === "Rejected") return "danger-badge";
   if (status === "On the Way") return "info-badge";
-  if (status === "Completed") return "";
+  if (status === "Completed") return "success";
   if (status === "Variance") return "danger-badge";
   return "";
 }
@@ -275,6 +298,77 @@ function renderOrderStatusTracker(order) {
   `;
 }
 
+function getOrderHistorySentQty(order, line) {
+  const sentQty = Number(
+    order.fulfillment?.lines?.[line.itemId]?.sentQty ??
+      line.sentQty ??
+      line.requestedQty ??
+      0
+  );
+
+  return Number.isNaN(sentQty) ? 0 : sentQty;
+}
+
+function getOrderHistoryReceivedQty(order, line) {
+  const receivingLine = order.receiving?.lines?.[line.itemId];
+
+  if (!receivingLine) {
+    return "";
+  }
+
+  const receivedQty = Number(receivingLine.receivedQty ?? "");
+
+  return Number.isNaN(receivedQty) ? "" : receivedQty;
+}
+
+function getOrderHistoryLineCondition(order, line) {
+  return order.receiving?.lines?.[line.itemId]?.condition || "-";
+}
+
+function getOrderHistoryLineStatus(order, line) {
+  const requestedQty = Number(line.requestedQty || 0);
+  const sentQty = getOrderHistorySentQty(order, line);
+  const receivedQty = getOrderHistoryReceivedQty(order, line);
+  const condition = getOrderHistoryLineCondition(order, line);
+
+  if (order.status === "Rejected") {
+    return "Rejected";
+  }
+
+  if (receivedQty !== "") {
+    if (receivedQty !== sentQty || condition !== "Good") {
+      return "Variance";
+    }
+
+    return "Received";
+  }
+
+  if (order.status === "On the Way") {
+    return "On the Way";
+  }
+
+  if (order.status === "Being Fulfilled") {
+    return "Preparing";
+  }
+
+  if (sentQty > 0 && sentQty < requestedQty) {
+    return "Partial";
+  }
+
+  return order.status || "Submitted";
+}
+
+function getOrderHistoryLineBadgeClass(status) {
+  if (status === "Received") return "success";
+  if (status === "On the Way") return "info-badge";
+  if (status === "Preparing") return "";
+  if (status === "Partial") return "warning-badge";
+  if (status === "Variance") return "danger-badge";
+  if (status === "Rejected") return "danger-badge";
+  if (status === "Submitted") return "warning-badge";
+  return "";
+}
+
 function renderOrderHistoryLines(order) {
   if (!order || !order.lines || order.lines.length === 0) {
     return `
@@ -285,25 +379,59 @@ function renderOrderHistoryLines(order) {
   }
 
   return `
-    <div class="selected-order-lines">
-      ${order.lines
-        .map(
-          (line) => `
-            <div class="selected-order-line">
-              <div>
-                <p class="eyebrow">${line.section || "Item"}</p>
-                <strong>${line.itemName}</strong>
-                <span>${line.itemId}</span>
-              </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Requested</th>
+            <th>Sent</th>
+            <th>Received</th>
+            <th>Variance</th>
+            <th>Unit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
 
-              <div class="selected-order-line-qty">
-                <strong>${line.requestedQty}</strong>
-                <span>${line.unit}</span>
-              </div>
-            </div>
-          `
-        )
-        .join("")}
+        <tbody>
+          ${order.lines
+            .map((line) => {
+              const requestedQty = Number(line.requestedQty || 0);
+              const sentQty = getOrderHistorySentQty(order, line);
+              const receivedQty = getOrderHistoryReceivedQty(order, line);
+              const hasReceivedQty = receivedQty !== "";
+              const variance = hasReceivedQty ? receivedQty - sentQty : "-";
+              const lineStatus = getOrderHistoryLineStatus(order, line);
+
+              return `
+                <tr>
+                  <td>${line.section || "-"}</td>
+                  <td>${line.itemId || "-"}</td>
+                  <td>${line.itemName || "-"}</td>
+                  <td>${requestedQty}</td>
+                  <td>${sentQty || "-"}</td>
+                  <td>${hasReceivedQty ? receivedQty : "-"}</td>
+                  <td>
+                    <span class="${
+                      variance !== "-" && variance !== 0 ? "danger-text" : ""
+                    }">
+                      ${variance}
+                    </span>
+                  </td>
+                  <td>${line.unit || "-"}</td>
+                  <td>
+                    <span class="badge ${getOrderHistoryLineBadgeClass(lineStatus)}">
+                      ${lineStatus}
+                    </span>
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -334,6 +462,33 @@ function renderOrderHistoryStatusHistory(order) {
           `
         )
         .join("")}
+    </div>
+  `;
+}
+
+function renderOrderHistoryNotes(order) {
+  const branchNotes = order.notes || "-";
+  const warehouseNotes = order.fulfillment?.deliveryNotes || "-";
+  const receivingNotes = order.receiving?.receivingNotes || "-";
+
+  return `
+    <div class="branch-order-section">
+      <h4>Notes</h4>
+
+      <div class="instruction-box">
+        <strong>Branch Request Notes:</strong>
+        <span>${branchNotes}</span>
+      </div>
+
+      <div class="instruction-box">
+        <strong>Warehouse Fulfillment Notes:</strong>
+        <span>${warehouseNotes}</span>
+      </div>
+
+      <div class="instruction-box">
+        <strong>Branch Receiving Notes:</strong>
+        <span>${receivingNotes}</span>
+      </div>
     </div>
   `;
 }
@@ -378,6 +533,11 @@ function renderSelectedOrderHistoryDetail() {
 
       <div class="branch-order-info-grid">
         <div>
+          <p class="eyebrow">Requested By</p>
+          <strong>${order.requestedBy || "-"}</strong>
+        </div>
+
+        <div>
           <p class="eyebrow">Order Date</p>
           <strong>${order.orderDate || "-"}</strong>
         </div>
@@ -393,8 +553,13 @@ function renderSelectedOrderHistoryDetail() {
         </div>
 
         <div>
-          <p class="eyebrow">Notes</p>
-          <strong>${order.notes || "-"}</strong>
+          <p class="eyebrow">Prepared By</p>
+          <strong>${order.fulfillment?.preparedBy || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Received By</p>
+          <strong>${order.receiving?.receivedBy || "-"}</strong>
         </div>
       </div>
 
@@ -404,9 +569,11 @@ function renderSelectedOrderHistoryDetail() {
       </div>
 
       <div class="branch-order-section">
-        <h4>Requested Items</h4>
+        <h4>Order Lines</h4>
         ${renderOrderHistoryLines(order)}
       </div>
+
+      ${renderOrderHistoryNotes(order)}
 
       <div class="branch-order-section">
         <h4>Status History</h4>
@@ -432,13 +599,13 @@ function getOrderHistoryContent() {
       </div>
 
       <div class="card">
-        <p>Accepted</p>
-        <strong>${summary.accepted}</strong>
+        <p>On the Way</p>
+        <strong>${summary.onTheWay}</strong>
       </div>
 
       <div class="card">
-        <p>Being Fulfilled</p>
-        <strong>${summary.fulfilling}</strong>
+        <p>Completed</p>
+        <strong>${summary.completed}</strong>
       </div>
     </section>
 
@@ -447,7 +614,7 @@ function getOrderHistoryContent() {
         <div class="panel-header">
           <div>
             <h3>Order History</h3>
-            <p>Track branch requests and commissary status updates.</p>
+            <p>Track branch requests and warehouse fulfillment status updates.</p>
           </div>
 
           <select id="order-history-status-filter">
@@ -522,7 +689,7 @@ function setupOrderHistoryEvents() {
   }
 
   if (searchInput) {
-    searchInput.addEventListener("change", () => {
+    searchInput.addEventListener("input", () => {
       window.DMC_ORDER_HISTORY_SEARCH = searchInput.value;
       window.DMC_ORDER_HISTORY_SELECTED_ID = "";
       refreshOrderHistoryPage();
@@ -593,7 +760,7 @@ window.DMC_PAGES["order-history"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Order History",
   description:
-    "Track submitted branch orders and commissary fulfillment status updates.",
+    "Track submitted branch orders and warehouse fulfillment status updates.",
   getContent: getOrderHistoryContent,
   content: getOrderHistoryContent(),
   afterRender: setupOrderHistoryEvents
