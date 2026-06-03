@@ -482,7 +482,11 @@ function getCommissaryDailyComputedValues(item, inputData) {
       getCommissaryDailyInputValue(inputData, item.itemId, "remaining")
     ).trim() !== "";
 
-  const usageAuto = hasRemaining ? totalAvailable - transOut - remaining : "";
+  const rawUsageAuto = hasRemaining
+    ? totalAvailable - transOut - remaining
+    : "";
+
+  const usageAuto = rawUsageAuto === "" ? "" : Math.max(0, rawUsageAuto);
 
   return {
     currentStock,
@@ -491,6 +495,7 @@ function getCommissaryDailyComputedValues(item, inputData) {
     remaining,
     waste,
     totalAvailable,
+    rawUsageAuto,
     usageAuto
   };
 }
@@ -525,13 +530,6 @@ function getCommissaryDailyReviewStatus(item, rowData) {
   });
 
   if (hasInvalidNumber) {
-    return "CHECK";
-  }
-
-  const inputData = getCommissaryDailyInputStoredRows();
-  const computed = getCommissaryDailyComputedValues(item, inputData);
-
-  if (computed.usageAuto !== "" && computed.usageAuto < 0) {
     return "CHECK";
   }
 
@@ -748,6 +746,9 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
           `Remaining: ${computed.remaining}`,
           `Waste: ${computed.waste}`,
           `Usage Auto: ${computed.usageAuto}`,
+          computed.rawUsageAuto !== "" && computed.rawUsageAuto < 0
+            ? `Count correction: Remaining was higher than expected available stock.`
+            : "",
           notes ? `Notes: ${notes}` : ""
         ]
           .filter(Boolean)
@@ -941,7 +942,8 @@ function renderCommissaryDailyEditModeContent() {
       <strong>Commissary Daily Logic:</strong>
       <span>
         Blank rows are ignored. Managers can enter only the fields needed for that day.
-        Usage is auto-computed only when Remaining is entered. Waste is recorded for reports and not double-deducted.
+        Usage is auto-computed only when Remaining is entered. If Remaining is higher than expected stock,
+        Usage becomes 0 and Remaining Count becomes the stock truth.
       </span>
     </div>
 
