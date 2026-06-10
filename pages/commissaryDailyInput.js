@@ -459,39 +459,69 @@ function getCommissaryDailyNumberValue(inputData, itemId, fieldName) {
 
 function getCommissaryDailyComputedValues(item, inputData) {
   const currentStock = calculateCommissaryDailyCurrentStock(item);
-  const transIn = getCommissaryDailyNumberValue(
+
+  const inWarehouse = getCommissaryDailyNumberValue(
     inputData,
     item.itemId,
-    "transferIn"
+    "transferInWarehouse"
   );
-  const transOut = getCommissaryDailyNumberValue(
+
+  const inBranch = getCommissaryDailyNumberValue(
     inputData,
     item.itemId,
-    "transferOut"
+    "transferInBranch"
   );
+
+  const inMarket = getCommissaryDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transferInMarket"
+  );
+
+  const outWarehouse = getCommissaryDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transferOutWarehouse"
+  );
+
+  const outBranch = getCommissaryDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transferOutBranch"
+  );
+
   const remaining = getCommissaryDailyNumberValue(
     inputData,
     item.itemId,
     "remaining"
   );
+
   const waste = getCommissaryDailyNumberValue(inputData, item.itemId, "waste");
 
-  const totalAvailable = currentStock + transIn;
+  const totalIn = inWarehouse + inBranch + inMarket;
+  const totalOut = outWarehouse + outBranch;
+  const totalAvailable = currentStock + totalIn;
+
   const hasRemaining =
     String(
       getCommissaryDailyInputValue(inputData, item.itemId, "remaining")
     ).trim() !== "";
 
   const rawUsageAuto = hasRemaining
-    ? totalAvailable - transOut - remaining
+    ? totalAvailable - totalOut - remaining
     : "";
 
   const usageAuto = rawUsageAuto === "" ? "" : Math.max(0, rawUsageAuto);
 
   return {
     currentStock,
-    transIn,
-    transOut,
+    inWarehouse,
+    inBranch,
+    inMarket,
+    totalIn,
+    outWarehouse,
+    outBranch,
+    totalOut,
     remaining,
     waste,
     totalAvailable,
@@ -502,8 +532,11 @@ function getCommissaryDailyComputedValues(item, inputData) {
 
 function getCommissaryDailyReviewStatus(item, rowData) {
   const inputFields = [
-    "transferIn",
-    "transferOut",
+    "transferInWarehouse",
+    "transferInBranch",
+    "transferInMarket",
+    "transferOutWarehouse",
+    "transferOutBranch",
     "remaining",
     "waste",
     "notes"
@@ -517,7 +550,15 @@ function getCommissaryDailyReviewStatus(item, rowData) {
     return "";
   }
 
-  const numericFields = ["transferIn", "transferOut", "remaining", "waste"];
+  const numericFields = [
+    "transferInWarehouse",
+    "transferInBranch",
+    "transferInMarket",
+    "transferOutWarehouse",
+    "transferOutBranch",
+    "remaining",
+    "waste"
+  ];
 
   const hasInvalidNumber = numericFields.some((field) => {
     const value = String(rowData?.[field] || "").trim();
@@ -604,6 +645,33 @@ function createCommissaryDailyInputBatchId() {
   return `COM-DI-${datePart}-${timePart}`;
 }
 
+function addCommissaryTransferEntry(entries, config) {
+  if (config.quantity <= 0) {
+    return;
+  }
+
+  entries.push({
+    date: getTodayDateStringForCommissaryDailyInput(),
+    submittedAt: config.submittedAt,
+    submittedAtDisplay: config.submittedAtDisplay,
+    batchId: config.batchId,
+    location: "Commissary",
+    department: "Commissary",
+    section: config.item.section || "",
+    itemId: config.item.itemId || "",
+    itemName: config.itemName,
+    movementType: config.movementType,
+    movementField: config.movementField,
+    stockEffect: config.stockEffect,
+    quantity: config.quantity,
+    unit: config.item.unit || "",
+    managerReviewedBy: config.managerReviewedBy,
+    source: config.source,
+    destination: config.destination,
+    notes: config.notes
+  });
+}
+
 function buildCommissaryLedgerEntriesFromDailyInput() {
   const reviewRows = getCommissaryDailyReviewRows();
   const batchId = createCommissaryDailyInputBatchId();
@@ -620,51 +688,69 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
     const itemName =
       item.officialItemName || item.itemName || item.name || "";
 
-    if (computed.transIn > 0) {
-      entries.push({
-        date: getTodayDateStringForCommissaryDailyInput(),
-        submittedAt,
-        submittedAtDisplay,
-        batchId,
-        location: "Commissary",
-        department: "Commissary",
-        section: item.section || "",
-        itemId: item.itemId || "",
-        itemName,
-        movementType: "Transfer In",
-        movementField: "transferIn",
-        stockEffect: "add",
-        quantity: computed.transIn,
-        unit: item.unit || "",
-        managerReviewedBy,
-        source: "Commissary Daily Input",
-        destination: "Commissary",
-        notes: notes || "Items/products added into Commissary."
-      });
-    }
+    const sharedConfig = {
+      item,
+      itemName,
+      batchId,
+      submittedAt,
+      submittedAtDisplay,
+      managerReviewedBy
+    };
 
-    if (computed.transOut > 0) {
-      entries.push({
-        date: getTodayDateStringForCommissaryDailyInput(),
-        submittedAt,
-        submittedAtDisplay,
-        batchId,
-        location: "Commissary",
-        department: "Commissary",
-        section: item.section || "",
-        itemId: item.itemId || "",
-        itemName,
-        movementType: "Transfer Out",
-        movementField: "transferOut",
-        stockEffect: "deduct",
-        quantity: computed.transOut,
-        unit: item.unit || "",
-        managerReviewedBy,
-        source: "Commissary Daily Input",
-        destination: "Warehouse",
-        notes: notes || "Products/items sent from Commissary to Warehouse."
-      });
-    }
+    addCommissaryTransferEntry(entries, {
+      ...sharedConfig,
+      movementType: "Transfer In",
+      movementField: "transferInWarehouse",
+      stockEffect: "add",
+      quantity: computed.inWarehouse,
+      source: "Warehouse",
+      destination: "Commissary",
+      notes: notes || "Items received from Warehouse into Commissary."
+    });
+
+    addCommissaryTransferEntry(entries, {
+      ...sharedConfig,
+      movementType: "Transfer In",
+      movementField: "transferInBranch",
+      stockEffect: "add",
+      quantity: computed.inBranch,
+      source: "Branch",
+      destination: "Commissary",
+      notes: notes || "Items returned/transferred from Branch into Commissary."
+    });
+
+    addCommissaryTransferEntry(entries, {
+      ...sharedConfig,
+      movementType: "Transfer In",
+      movementField: "transferInMarket",
+      stockEffect: "add",
+      quantity: computed.inMarket,
+      source: "Market / Other",
+      destination: "Commissary",
+      notes: notes || "Items bought from market or added from other source."
+    });
+
+    addCommissaryTransferEntry(entries, {
+      ...sharedConfig,
+      movementType: "Transfer Out",
+      movementField: "transferOutWarehouse",
+      stockEffect: "deduct",
+      quantity: computed.outWarehouse,
+      source: "Commissary",
+      destination: "Warehouse",
+      notes: notes || "Products/items sent from Commissary to Warehouse."
+    });
+
+    addCommissaryTransferEntry(entries, {
+      ...sharedConfig,
+      movementType: "Transfer Out",
+      movementField: "transferOutBranch",
+      stockEffect: "deduct",
+      quantity: computed.outBranch,
+      source: "Commissary",
+      destination: "Branch",
+      notes: notes || "Products/items sent from Commissary to Branch."
+    });
 
     if (hasRemaining && computed.usageAuto > 0) {
       entries.push({
@@ -687,7 +773,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
         destination: "Usage Report",
         notes:
           notes ||
-          "Auto-computed from Current + Trans In - Trans Out - Remaining."
+          "Auto-computed from Current + Total In - Total Out - Remaining."
       });
     }
 
@@ -740,9 +826,14 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
             managerReviewedBy || "commissary manager"
           }.`,
           `Current: ${computed.currentStock}`,
-          `Trans In: ${computed.transIn}`,
+          `In Warehouse: ${computed.inWarehouse}`,
+          `In Branch: ${computed.inBranch}`,
+          `In Market: ${computed.inMarket}`,
+          `Total In: ${computed.totalIn}`,
           `Total Available: ${computed.totalAvailable}`,
-          `Trans Out: ${computed.transOut}`,
+          `Out Warehouse: ${computed.outWarehouse}`,
+          `Out Branch: ${computed.outBranch}`,
+          `Total Out: ${computed.totalOut}`,
           `Remaining: ${computed.remaining}`,
           `Waste: ${computed.waste}`,
           `Usage Auto: ${computed.usageAuto}`,
@@ -759,8 +850,8 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
     if (
       !hasRemaining &&
       notes &&
-      computed.transIn <= 0 &&
-      computed.transOut <= 0 &&
+      computed.totalIn <= 0 &&
+      computed.totalOut <= 0 &&
       computed.waste <= 0
     ) {
       entries.push({
@@ -797,7 +888,7 @@ function renderCommissaryDailyInputRows() {
   if (allCommissaryItems.length === 0) {
     return `
       <tr>
-        <td colspan="12">
+        <td colspan="15">
           No Commissary items found. Add commissary items in the Master List first.
         </td>
       </tr>
@@ -807,7 +898,7 @@ function renderCommissaryDailyInputRows() {
   if (commissaryItems.length === 0) {
     return `
       <tr>
-        <td colspan="12">
+        <td colspan="15">
           No Commissary items found for the selected filter.
         </td>
       </tr>
@@ -833,14 +924,46 @@ function renderCommissaryDailyInputRows() {
             <input
               class="daily-input-cell commissary-daily-input-cell"
               data-item-id="${item.itemId}"
-              data-field="transferIn"
+              data-field="transferInWarehouse"
               type="number"
               min="0"
               step="any"
               value="${getCommissaryDailyInputValue(
                 inputData,
                 item.itemId,
-                "transferIn"
+                "transferInWarehouse"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell commissary-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transferInBranch"
+              type="number"
+              min="0"
+              step="any"
+              value="${getCommissaryDailyInputValue(
+                inputData,
+                item.itemId,
+                "transferInBranch"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell commissary-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transferInMarket"
+              type="number"
+              min="0"
+              step="any"
+              value="${getCommissaryDailyInputValue(
+                inputData,
+                item.itemId,
+                "transferInMarket"
               )}"
             />
           </td>
@@ -851,14 +974,30 @@ function renderCommissaryDailyInputRows() {
             <input
               class="daily-input-cell commissary-daily-input-cell"
               data-item-id="${item.itemId}"
-              data-field="transferOut"
+              data-field="transferOutWarehouse"
               type="number"
               min="0"
               step="any"
               value="${getCommissaryDailyInputValue(
                 inputData,
                 item.itemId,
-                "transferOut"
+                "transferOutWarehouse"
+              )}"
+            />
+          </td>
+
+          <td>
+            <input
+              class="daily-input-cell commissary-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transferOutBranch"
+              type="number"
+              min="0"
+              step="any"
+              value="${getCommissaryDailyInputValue(
+                inputData,
+                item.itemId,
+                "transferOutBranch"
               )}"
             />
           </td>
@@ -935,15 +1074,15 @@ function renderCommissaryDailyInputRows() {
 function renderCommissaryDailyEditModeContent() {
   return `
     <div class="keyboard-hint">
-      Press Tab to move across Trans In → Trans Out → Remaining → Waste → Notes, then continue to the next row.
+      Press Tab to move across In Warehouse → In Branch → In Market → Out Warehouse → Out Branch → Remaining → Waste → Notes.
     </div>
 
     <div class="instruction-box">
       <strong>Commissary Daily Logic:</strong>
       <span>
-        Blank rows are ignored. Managers can enter only the fields needed for that day.
-        Usage is auto-computed only when Remaining is entered. If Remaining is higher than expected stock,
-        Usage becomes 0 and Remaining Count becomes the stock truth.
+        Blank rows are ignored. In Warehouse, In Branch, and In Market add to Commissary Stock.
+        Out Warehouse and Out Branch deduct from Commissary Stock. Remaining Count becomes the stock truth.
+        Usage is auto-computed only when Remaining is entered.
       </span>
     </div>
 
@@ -955,9 +1094,12 @@ function renderCommissaryDailyEditModeContent() {
             <th>Item Name</th>
             <th>Unit</th>
             <th>Current</th>
-            <th>Trans In</th>
+            <th>In Warehouse</th>
+            <th>In Branch</th>
+            <th>In Market</th>
             <th>Total Available</th>
-            <th>Trans Out</th>
+            <th>Out Warehouse</th>
+            <th>Out Branch</th>
             <th>Remaining</th>
             <th>Waste</th>
             <th>Usage Auto</th>
@@ -1023,9 +1165,12 @@ function renderCommissaryDailyReviewModeContent() {
               <th>Item Name</th>
               <th>Unit</th>
               <th>Current</th>
-              <th>Trans In</th>
+              <th>In Warehouse</th>
+              <th>In Branch</th>
+              <th>In Market</th>
               <th>Total Available</th>
-              <th>Trans Out</th>
+              <th>Out Warehouse</th>
+              <th>Out Branch</th>
               <th>Remaining</th>
               <th>Waste</th>
               <th>Usage Auto</th>
@@ -1046,9 +1191,12 @@ function renderCommissaryDailyReviewModeContent() {
                     <td>${itemName}</td>
                     <td>${item.unit || "-"}</td>
                     <td>${computed.currentStock}</td>
-                    <td>${computed.transIn || "-"}</td>
+                    <td>${computed.inWarehouse || "-"}</td>
+                    <td>${computed.inBranch || "-"}</td>
+                    <td>${computed.inMarket || "-"}</td>
                     <td>${computed.totalAvailable}</td>
-                    <td>${computed.transOut || "-"}</td>
+                    <td>${computed.outWarehouse || "-"}</td>
+                    <td>${computed.outBranch || "-"}</td>
                     <td>${
                       String(rowData.remaining || "").trim() === ""
                         ? "-"
@@ -1114,7 +1262,7 @@ function getCommissaryDailyInputContent() {
         <div>
           <h3>Commissary Daily Input — Today Only</h3>
           <p>
-            Enter commissary transfer movement, remaining count, waste, and notes only for items that had activity.
+            Enter commissary transfers, remaining count, waste, and notes only for items that had activity.
           </p>
         </div>
 
@@ -1469,7 +1617,7 @@ window.DMC_PAGES["commissary-daily-input"] = {
   eyebrow: "Commissary",
   title: "Commissary Daily Input",
   description:
-    "Daily commissary sheet with transfer in, transfer out, remaining count, and auto-computed usage.",
+    "Daily commissary sheet with warehouse/branch/market transfer inputs, remaining count, and auto-computed usage.",
   getContent: getCommissaryDailyInputContent,
   content: getCommissaryDailyInputContent(),
   afterRender: setupCommissaryDailyInputEvents
