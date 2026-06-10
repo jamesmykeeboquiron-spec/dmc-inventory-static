@@ -6930,3 +6930,40 @@ input[type="date"]:disabled {
     max-width: none;
   }
 }
+/* =========================================================
+   GLOBAL DAILY INPUT TOOLBAR SPACING
+   Applies to warehouse/branch/commissary daily input toolbars
+========================================================= */
+
+.warehouse-daily-input-toolbar {
+  display: grid;
+  grid-template-columns: 220px 220px 1fr 220px;
+  gap: 14px;
+  align-items: end;
+}
+
+.warehouse-daily-input-toolbar label {
+  min-width: 0;
+}
+
+.warehouse-daily-input-toolbar select,
+.warehouse-daily-input-toolbar input {
+  width: 100%;
+  max-width: 100%;
+}
+
+.warehouse-daily-input-toolbar .filter-search {
+  justify-self: stretch;
+}
+
+@media (max-width: 1100px) {
+  .warehouse-daily-input-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .warehouse-daily-input-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
