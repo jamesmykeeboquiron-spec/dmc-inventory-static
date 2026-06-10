@@ -8,6 +8,9 @@ const DMC_COMMISSARY_DAILY_INPUT_TODAY_KEY = "dmc_commissary_daily_input_today";
 window.DMC_COMMISSARY_DAILY_INPUT_MODE =
   window.DMC_COMMISSARY_DAILY_INPUT_MODE || "edit";
 
+window.DMC_COMMISSARY_DAILY_INPUT_DEPARTMENT =
+  window.DMC_COMMISSARY_DAILY_INPUT_DEPARTMENT || "all";
+
 window.DMC_COMMISSARY_DAILY_INPUT_SECTION =
   window.DMC_COMMISSARY_DAILY_INPUT_SECTION || "all";
 
@@ -246,6 +249,16 @@ function getAllCommissaryDailyInputItems() {
   return Object.values(combinedItemsById);
 }
 
+function getCommissaryDailyInputDepartments() {
+  return [
+    ...new Set(
+      getAllCommissaryDailyInputItems()
+        .map((item) => item.department || "Unassigned")
+        .filter(Boolean)
+    )
+  ].sort();
+}
+
 function getCommissaryDailyInputSections() {
   return [
     ...new Set(
@@ -254,6 +267,27 @@ function getCommissaryDailyInputSections() {
         .filter(Boolean)
     )
   ].sort();
+}
+
+function renderCommissaryDailyInputDepartmentOptions() {
+  const currentDepartment = window.DMC_COMMISSARY_DAILY_INPUT_DEPARTMENT;
+
+  return `
+    <option value="all" ${currentDepartment === "all" ? "selected" : ""}>
+      All Departments
+    </option>
+    ${getCommissaryDailyInputDepartments()
+      .map(
+        (department) => `
+          <option value="${department}" ${
+          currentDepartment === department ? "selected" : ""
+        }>
+            ${department}
+          </option>
+        `
+      )
+      .join("")}
+  `;
 }
 
 function renderCommissaryDailyInputSectionOptions() {
@@ -278,6 +312,10 @@ function renderCommissaryDailyInputSectionOptions() {
 }
 
 function getCommissaryDailyInputItems() {
+  const selectedDepartment = String(
+    window.DMC_COMMISSARY_DAILY_INPUT_DEPARTMENT || "all"
+  ).toLowerCase();
+
   const selectedSection = String(
     window.DMC_COMMISSARY_DAILY_INPUT_SECTION || "all"
   ).toLowerCase();
@@ -287,21 +325,25 @@ function getCommissaryDailyInputItems() {
     .trim();
 
   return getAllCommissaryDailyInputItems().filter((item) => {
+    const itemDepartment = String(item.department || "Unassigned").toLowerCase();
     const itemSection = String(item.section || "Unassigned").toLowerCase();
+    const itemName = item.officialItemName || item.itemName || item.name || "";
+
+    const matchesDepartment =
+      selectedDepartment === "all" || itemDepartment === selectedDepartment;
 
     const matchesSection =
       selectedSection === "all" || itemSection === selectedSection;
-
-    const itemName = item.officialItemName || item.itemName || item.name || "";
 
     const matchesSearch =
       !searchValue ||
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
       String(itemName || "").toLowerCase().includes(searchValue) ||
+      String(item.department || "").toLowerCase().includes(searchValue) ||
       String(item.section || "").toLowerCase().includes(searchValue) ||
       String(item.unit || "").toLowerCase().includes(searchValue);
 
-    return matchesSection && matchesSearch;
+    return matchesDepartment && matchesSection && matchesSearch;
   });
 }
 
@@ -472,10 +514,10 @@ function getCommissaryDailyComputedValues(item, inputData) {
     "transferInBranch"
   );
 
-  const inMarket = getCommissaryDailyNumberValue(
+  const inProduction = getCommissaryDailyNumberValue(
     inputData,
     item.itemId,
-    "transferInMarket"
+    "transferInProduction"
   );
 
   const outWarehouse = getCommissaryDailyNumberValue(
@@ -498,7 +540,7 @@ function getCommissaryDailyComputedValues(item, inputData) {
 
   const waste = getCommissaryDailyNumberValue(inputData, item.itemId, "waste");
 
-  const totalIn = inWarehouse + inBranch + inMarket;
+  const totalIn = inWarehouse + inBranch + inProduction;
   const totalOut = outWarehouse + outBranch;
   const totalAvailable = currentStock + totalIn;
 
@@ -517,7 +559,7 @@ function getCommissaryDailyComputedValues(item, inputData) {
     currentStock,
     inWarehouse,
     inBranch,
-    inMarket,
+    inProduction,
     totalIn,
     outWarehouse,
     outBranch,
@@ -534,7 +576,7 @@ function getCommissaryDailyReviewStatus(item, rowData) {
   const inputFields = [
     "transferInWarehouse",
     "transferInBranch",
-    "transferInMarket",
+    "transferInProduction",
     "transferOutWarehouse",
     "transferOutBranch",
     "remaining",
@@ -553,7 +595,7 @@ function getCommissaryDailyReviewStatus(item, rowData) {
   const numericFields = [
     "transferInWarehouse",
     "transferInBranch",
-    "transferInMarket",
+    "transferInProduction",
     "transferOutWarehouse",
     "transferOutBranch",
     "remaining",
@@ -656,7 +698,7 @@ function addCommissaryTransferEntry(entries, config) {
     submittedAtDisplay: config.submittedAtDisplay,
     batchId: config.batchId,
     location: "Commissary",
-    department: "Commissary",
+    department: config.item.department || "Commissary",
     section: config.item.section || "",
     itemId: config.item.itemId || "",
     itemName: config.itemName,
@@ -722,12 +764,12 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
     addCommissaryTransferEntry(entries, {
       ...sharedConfig,
       movementType: "Transfer In",
-      movementField: "transferInMarket",
+      movementField: "transferInProduction",
       stockEffect: "add",
-      quantity: computed.inMarket,
-      source: "Market / Other",
+      quantity: computed.inProduction,
+      source: "Production",
       destination: "Commissary",
-      notes: notes || "Items bought from market or added from other source."
+      notes: notes || "Finished products made by Commissary production."
     });
 
     addCommissaryTransferEntry(entries, {
@@ -759,7 +801,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
         submittedAtDisplay,
         batchId,
         location: "Commissary",
-        department: "Commissary",
+        department: item.department || "Commissary",
         section: item.section || "",
         itemId: item.itemId || "",
         itemName,
@@ -784,7 +826,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
         submittedAtDisplay,
         batchId,
         location: "Commissary",
-        department: "Commissary",
+        department: item.department || "Commissary",
         section: item.section || "",
         itemId: item.itemId || "",
         itemName,
@@ -809,7 +851,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
         submittedAtDisplay,
         batchId,
         location: "Commissary",
-        department: "Commissary",
+        department: item.department || "Commissary",
         section: item.section || "",
         itemId: item.itemId || "",
         itemName,
@@ -828,7 +870,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
           `Current: ${computed.currentStock}`,
           `In Warehouse: ${computed.inWarehouse}`,
           `In Branch: ${computed.inBranch}`,
-          `In Market: ${computed.inMarket}`,
+          `In Production: ${computed.inProduction}`,
           `Total In: ${computed.totalIn}`,
           `Total Available: ${computed.totalAvailable}`,
           `Out Warehouse: ${computed.outWarehouse}`,
@@ -860,7 +902,7 @@ function buildCommissaryLedgerEntriesFromDailyInput() {
         submittedAtDisplay,
         batchId,
         location: "Commissary",
-        department: "Commissary",
+        department: item.department || "Commissary",
         section: item.section || "",
         itemId: item.itemId || "",
         itemName,
@@ -914,9 +956,14 @@ function renderCommissaryDailyInputRows() {
         item.officialItemName || item.itemName || item.name || "-";
 
       return `
-        <tr>
+        <tr data-commissary-row="${item.itemId}" data-current-stock="${computed.currentStock}">
           <td>${item.itemId || "-"}</td>
-          <td>${itemName}</td>
+          <td>
+            ${itemName}
+            <small class="table-subtext">
+              ${item.department || "Unassigned"} • ${item.section || "Unassigned"}
+            </small>
+          </td>
           <td>${item.unit || "-"}</td>
           <td>${computed.currentStock} ${item.unit || ""}</td>
 
@@ -956,19 +1003,23 @@ function renderCommissaryDailyInputRows() {
             <input
               class="daily-input-cell commissary-daily-input-cell"
               data-item-id="${item.itemId}"
-              data-field="transferInMarket"
+              data-field="transferInProduction"
               type="number"
               min="0"
               step="any"
               value="${getCommissaryDailyInputValue(
                 inputData,
                 item.itemId,
-                "transferInMarket"
+                "transferInProduction"
               )}"
             />
           </td>
 
-          <td>${computed.totalAvailable} ${item.unit || ""}</td>
+          <td>
+            <strong data-total-available="${item.itemId}">
+              ${computed.totalAvailable} ${item.unit || ""}
+            </strong>
+          </td>
 
           <td>
             <input
@@ -1035,11 +1086,13 @@ function renderCommissaryDailyInputRows() {
           </td>
 
           <td>
-            ${
-              computed.usageAuto === ""
-                ? "-"
-                : `${computed.usageAuto} ${item.unit || ""}`
-            }
+            <strong data-usage-auto="${item.itemId}">
+              ${
+                computed.usageAuto === ""
+                  ? "-"
+                  : `${computed.usageAuto} ${item.unit || ""}`
+              }
+            </strong>
           </td>
 
           <td>
@@ -1056,7 +1109,7 @@ function renderCommissaryDailyInputRows() {
             />
           </td>
 
-          <td>
+          <td data-review-status="${item.itemId}">
             ${
               reviewStatus
                 ? `<span class="badge ${
@@ -1074,15 +1127,14 @@ function renderCommissaryDailyInputRows() {
 function renderCommissaryDailyEditModeContent() {
   return `
     <div class="keyboard-hint">
-      Press Tab to move across In Warehouse → In Branch → In Market → Out Warehouse → Out Branch → Remaining → Waste → Notes.
+      Press Tab to move across In Warehouse → In Branch → In Production → Out Warehouse → Out Branch → Remaining → Waste → Notes.
     </div>
 
     <div class="instruction-box">
       <strong>Commissary Daily Logic:</strong>
       <span>
-        Blank rows are ignored. In Warehouse, In Branch, and In Market add to Commissary Stock.
-        Out Warehouse and Out Branch deduct from Commissary Stock. Remaining Count becomes the stock truth.
-        Usage is auto-computed only when Remaining is entered.
+        In Production auto-fills Out Warehouse by default, but Out Warehouse stays editable if some finished products need to remain in Commissary.
+        Total Available and Usage Auto update while typing. Remaining Count becomes the stock truth.
       </span>
     </div>
 
@@ -1096,7 +1148,7 @@ function renderCommissaryDailyEditModeContent() {
             <th>Current</th>
             <th>In Warehouse</th>
             <th>In Branch</th>
-            <th>In Market</th>
+            <th>In Production</th>
             <th>Total Available</th>
             <th>Out Warehouse</th>
             <th>Out Branch</th>
@@ -1167,7 +1219,7 @@ function renderCommissaryDailyReviewModeContent() {
               <th>Current</th>
               <th>In Warehouse</th>
               <th>In Branch</th>
-              <th>In Market</th>
+              <th>In Production</th>
               <th>Total Available</th>
               <th>Out Warehouse</th>
               <th>Out Branch</th>
@@ -1193,7 +1245,7 @@ function renderCommissaryDailyReviewModeContent() {
                     <td>${computed.currentStock}</td>
                     <td>${computed.inWarehouse || "-"}</td>
                     <td>${computed.inBranch || "-"}</td>
-                    <td>${computed.inMarket || "-"}</td>
+                    <td>${computed.inProduction || "-"}</td>
                     <td>${computed.totalAvailable}</td>
                     <td>${computed.outWarehouse || "-"}</td>
                     <td>${computed.outBranch || "-"}</td>
@@ -1262,7 +1314,7 @@ function getCommissaryDailyInputContent() {
         <div>
           <h3>Commissary Daily Input — Today Only</h3>
           <p>
-            Enter commissary transfers, remaining count, waste, and notes only for items that had activity.
+            Enter commissary transfers, production output, remaining count, waste, and notes only for items that had activity.
           </p>
         </div>
 
@@ -1280,6 +1332,15 @@ function getCommissaryDailyInputContent() {
       </div>
 
       <div class="warehouse-daily-input-toolbar">
+        <label>
+          Department
+          <select id="commissary-daily-input-department" ${
+            isReviewMode ? "disabled" : ""
+          }>
+            ${renderCommissaryDailyInputDepartmentOptions()}
+          </select>
+        </label>
+
         <label>
           Section
           <select id="commissary-daily-input-section" ${
@@ -1400,6 +1461,161 @@ function saveAllVisibleCommissaryDailyInputs() {
   saveCommissaryDailyInputRows(inputData);
 }
 
+function getCommissaryLiveNumber(input) {
+  if (!input) {
+    return 0;
+  }
+
+  const value = String(input.value || "").trim();
+
+  if (value === "") {
+    return 0;
+  }
+
+  const parsedValue = Number(value);
+
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+}
+
+function getCommissaryLiveInput(row, fieldName) {
+  return row.querySelector(`[data-field="${fieldName}"]`);
+}
+
+function updateCommissaryDailyLiveRow(itemId) {
+  const row = document.querySelector(`[data-commissary-row="${itemId}"]`);
+
+  if (!row) {
+    return;
+  }
+
+  const currentStock = Number(row.dataset.currentStock || 0);
+
+  const inWarehouse = getCommissaryLiveNumber(
+    getCommissaryLiveInput(row, "transferInWarehouse")
+  );
+  const inBranch = getCommissaryLiveNumber(
+    getCommissaryLiveInput(row, "transferInBranch")
+  );
+  const inProduction = getCommissaryLiveNumber(
+    getCommissaryLiveInput(row, "transferInProduction")
+  );
+  const outWarehouse = getCommissaryLiveNumber(
+    getCommissaryLiveInput(row, "transferOutWarehouse")
+  );
+  const outBranch = getCommissaryLiveNumber(
+    getCommissaryLiveInput(row, "transferOutBranch")
+  );
+  const remainingInput = getCommissaryLiveInput(row, "remaining");
+  const wasteInput = getCommissaryLiveInput(row, "waste");
+  const notesInput = getCommissaryLiveInput(row, "notes");
+
+  const remainingValue = String(remainingInput?.value || "").trim();
+  const remaining = getCommissaryLiveNumber(remainingInput);
+  const waste = getCommissaryLiveNumber(wasteInput);
+
+  const totalAvailable = currentStock + inWarehouse + inBranch + inProduction;
+  const totalOut = outWarehouse + outBranch;
+
+  const rawUsageAuto =
+    remainingValue === "" ? "" : totalAvailable - totalOut - remaining;
+
+  const usageAuto = rawUsageAuto === "" ? "" : Math.max(0, rawUsageAuto);
+
+  const totalAvailableDisplay = document.querySelector(
+    `[data-total-available="${itemId}"]`
+  );
+  const usageDisplay = document.querySelector(`[data-usage-auto="${itemId}"]`);
+  const reviewDisplay = document.querySelector(`[data-review-status="${itemId}"]`);
+
+  const unit = row.children[2]?.textContent || "";
+
+  if (totalAvailableDisplay) {
+    totalAvailableDisplay.textContent = `${totalAvailable} ${unit}`;
+  }
+
+  if (usageDisplay) {
+    usageDisplay.textContent = usageAuto === "" ? "-" : `${usageAuto} ${unit}`;
+  }
+
+  const hasAnyInput =
+    inWarehouse > 0 ||
+    inBranch > 0 ||
+    inProduction > 0 ||
+    outWarehouse > 0 ||
+    outBranch > 0 ||
+    remainingValue !== "" ||
+    waste > 0 ||
+    String(notesInput?.value || "").trim() !== "";
+
+  const hasInvalidNumber = Array.from(
+    row.querySelectorAll('input[type="number"]')
+  ).some((input) => {
+    const value = String(input.value || "").trim();
+
+    if (value === "") {
+      return false;
+    }
+
+    return Number.isNaN(Number(value)) || Number(value) < 0;
+  });
+
+  if (reviewDisplay) {
+    if (!hasAnyInput) {
+      reviewDisplay.innerHTML = "-";
+    } else if (hasInvalidNumber) {
+      reviewDisplay.innerHTML = `<span class="badge danger-badge">CHECK</span>`;
+    } else {
+      reviewDisplay.innerHTML = `<span class="badge">READY</span>`;
+    }
+  }
+}
+
+function handleCommissaryProductionAutoFill(input) {
+  if (input.dataset.field !== "transferInProduction") {
+    return;
+  }
+
+  const inputData = getCommissaryDailyInputStoredRows();
+  const itemId = input.dataset.itemId;
+  const rowData = inputData[itemId] || {};
+  const row = document.querySelector(`[data-commissary-row="${itemId}"]`);
+  const outWarehouseInput = row?.querySelector(
+    '[data-field="transferOutWarehouse"]'
+  );
+
+  if (!outWarehouseInput) {
+    return;
+  }
+
+  const currentOutValue = String(outWarehouseInput.value || "").trim();
+  const wasAutoSynced = rowData.outWarehouseAutoSynced === true;
+
+  if (currentOutValue === "" || wasAutoSynced) {
+    outWarehouseInput.value = input.value;
+
+    rowData.transferOutWarehouse = input.value;
+    rowData.outWarehouseAutoSynced = true;
+    inputData[itemId] = rowData;
+
+    saveCommissaryDailyInputRows(inputData);
+  }
+}
+
+function handleCommissaryOutWarehouseManualEdit(input) {
+  if (input.dataset.field !== "transferOutWarehouse") {
+    return;
+  }
+
+  const inputData = getCommissaryDailyInputStoredRows();
+  const itemId = input.dataset.itemId;
+
+  inputData[itemId] = inputData[itemId] || {};
+  inputData[itemId].outWarehouseAutoSynced = false;
+  inputData[itemId].transferOutWarehouse = input.value;
+
+  saveCommissaryDailyInputRows(inputData);
+}
+
 function focusNextCommissaryDailyInput(currentInput, direction = 1) {
   const inputs = Array.from(
     document.querySelectorAll(".commissary-daily-input-cell")
@@ -1420,6 +1636,18 @@ function focusNextCommissaryDailyInput(currentInput, direction = 1) {
 }
 
 function setupCommissaryDailyInputEvents() {
+  const departmentSelect = document.getElementById(
+    "commissary-daily-input-department"
+  );
+
+  if (departmentSelect) {
+    departmentSelect.addEventListener("change", () => {
+      window.DMC_COMMISSARY_DAILY_INPUT_DEPARTMENT = departmentSelect.value;
+      window.DMC_COMMISSARY_DAILY_INPUT_MODE = "edit";
+      refreshCommissaryDailyInputPage();
+    });
+  }
+
   const sectionSelect = document.getElementById(
     "commissary-daily-input-section"
   );
@@ -1453,7 +1681,14 @@ function setupCommissaryDailyInputEvents() {
 
   document.querySelectorAll(".commissary-daily-input-cell").forEach((input) => {
     input.addEventListener("input", () => {
-      saveCommissaryDailyCellValue(input);
+      if (input.dataset.field === "transferOutWarehouse") {
+        handleCommissaryOutWarehouseManualEdit(input);
+      } else {
+        saveCommissaryDailyCellValue(input);
+      }
+
+      handleCommissaryProductionAutoFill(input);
+      updateCommissaryDailyLiveRow(input.dataset.itemId);
     });
 
     input.addEventListener("keydown", (event) => {
@@ -1462,8 +1697,15 @@ function setupCommissaryDailyInputEvents() {
       }
 
       event.preventDefault();
-      saveCommissaryDailyCellValue(input);
 
+      if (input.dataset.field === "transferOutWarehouse") {
+        handleCommissaryOutWarehouseManualEdit(input);
+      } else {
+        saveCommissaryDailyCellValue(input);
+      }
+
+      handleCommissaryProductionAutoFill(input);
+      updateCommissaryDailyLiveRow(input.dataset.itemId);
       focusNextCommissaryDailyInput(input, event.shiftKey ? -1 : 1);
     });
   });
@@ -1617,7 +1859,7 @@ window.DMC_PAGES["commissary-daily-input"] = {
   eyebrow: "Commissary",
   title: "Commissary Daily Input",
   description:
-    "Daily commissary sheet with warehouse/branch/market transfer inputs, remaining count, and auto-computed usage.",
+    "Daily commissary sheet with warehouse, branch, production, remaining count, and auto-computed usage.",
   getContent: getCommissaryDailyInputContent,
   content: getCommissaryDailyInputContent(),
   afterRender: setupCommissaryDailyInputEvents
