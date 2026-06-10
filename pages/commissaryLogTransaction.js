@@ -256,22 +256,42 @@ function renderCommissaryLogMovementOptions() {
 }
 
 function getCommissaryBatchSourceLabel(batch) {
-  const firstEntry = batch.entries[0] || {};
-  const source = String(firstEntry.source || "");
+  const entries = batch.entries || [];
+  const hasProduction = entries.some(
+    (entry) => entry.movementField === "transferInProduction"
+  );
+  const hasOutWarehouse = entries.some(
+    (entry) => entry.movementField === "transferOutWarehouse"
+  );
+  const hasOutBranch = entries.some(
+    (entry) => entry.movementField === "transferOutBranch"
+  );
+  const hasRemaining = entries.some(
+    (entry) =>
+      entry.movementType === "Remaining Count" || entry.stockEffect === "set"
+  );
 
-  if (source.includes("Closing Count")) {
+  if (hasProduction && hasOutWarehouse) {
+    return "Commissary Production to Warehouse";
+  }
+
+  if (hasProduction) {
+    return "Commissary Production Batch";
+  }
+
+  if (hasOutWarehouse) {
+    return "Commissary Transfer to Warehouse";
+  }
+
+  if (hasOutBranch) {
+    return "Commissary Transfer to Branch";
+  }
+
+  if (hasRemaining) {
     return "Commissary Daily Closing Batch";
   }
 
-  if (source.includes("Commissary Daily Input")) {
-    return "Commissary Daily Input Batch";
-  }
-
-  if (source.includes("Transfer Out")) {
-    return "Commissary Transfer Out Batch";
-  }
-
-  return "Commissary Movement Batch";
+  return "Commissary Daily Input Batch";
 }
 
 function getCommissaryBatchEffectCounts(batch) {
@@ -313,12 +333,16 @@ function getCommissaryLogGroupedItemRows(batch) {
     const itemId = entry.itemId || "NO-ID";
 
     groupedRows[itemId] = groupedRows[itemId] || {
+      department: entry.department || "-",
       section: entry.section || "-",
       itemId: entry.itemId || "-",
       itemName: entry.itemName || "-",
       unit: entry.unit || "-",
-      transferIn: 0,
-      transferOut: 0,
+      inWarehouse: 0,
+      inBranch: 0,
+      inProduction: 0,
+      outWarehouse: 0,
+      outBranch: 0,
       remaining: "",
       usage: 0,
       waste: 0,
@@ -327,16 +351,44 @@ function getCommissaryLogGroupedItemRows(batch) {
 
     const row = groupedRows[itemId];
     const quantity = getCommissaryLogNumber(entry.quantity);
+    const movementField = String(entry.movementField || "");
+    const source = String(entry.source || "").toLowerCase();
+    const destination = String(entry.destination || "").toLowerCase();
 
-    if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
-      row.transferIn += quantity;
+    if (
+      movementField === "transferInWarehouse" ||
+      (entry.movementType === "Transfer In" && source.includes("warehouse"))
+    ) {
+      row.inWarehouse += quantity;
     }
 
     if (
-      entry.movementType === "Transfer Out" ||
-      entry.stockEffect === "deduct"
+      movementField === "transferInBranch" ||
+      (entry.movementType === "Transfer In" && source.includes("branch"))
     ) {
-      row.transferOut += quantity;
+      row.inBranch += quantity;
+    }
+
+    if (
+      movementField === "transferInProduction" ||
+      (entry.movementType === "Transfer In" && source.includes("production"))
+    ) {
+      row.inProduction += quantity;
+    }
+
+    if (
+      movementField === "transferOutWarehouse" ||
+      (entry.movementType === "Transfer Out" &&
+        destination.includes("warehouse"))
+    ) {
+      row.outWarehouse += quantity;
+    }
+
+    if (
+      movementField === "transferOutBranch" ||
+      (entry.movementType === "Transfer Out" && destination.includes("branch"))
+    ) {
+      row.outBranch += quantity;
     }
 
     if (
@@ -440,11 +492,15 @@ function renderCommissaryBatchLineTable(batch) {
       <table>
         <thead>
           <tr>
+            <th>Department</th>
             <th>Section</th>
             <th>Item ID</th>
             <th>Item Name</th>
-            <th>Trans In</th>
-            <th>Trans Out</th>
+            <th>In Warehouse</th>
+            <th>In Branch</th>
+            <th>In Production</th>
+            <th>Out Warehouse</th>
+            <th>Out Branch</th>
             <th>Remaining</th>
             <th>Usage</th>
             <th>Waste</th>
@@ -460,11 +516,15 @@ function renderCommissaryBatchLineTable(batch) {
 
               return `
                 <tr>
+                  <td>${row.department || "-"}</td>
                   <td>${row.section || "-"}</td>
                   <td>${row.itemId || "-"}</td>
                   <td>${row.itemName || "-"}</td>
-                  <td>${row.transferIn || "-"}</td>
-                  <td>${row.transferOut || "-"}</td>
+                  <td>${row.inWarehouse || "-"}</td>
+                  <td>${row.inBranch || "-"}</td>
+                  <td>${row.inProduction || "-"}</td>
+                  <td>${row.outWarehouse || "-"}</td>
+                  <td>${row.outBranch || "-"}</td>
                   <td>${row.remaining === "" ? "-" : row.remaining}</td>
                   <td>${row.usage || "-"}</td>
                   <td>${row.waste || "-"}</td>
@@ -507,7 +567,9 @@ function renderSelectedCommissaryBatchDetails() {
         <div>
           <h3>${selectedBatch.batchId}</h3>
           <p>
-            Commissary • ${firstEntry.section || "-"}
+            Commissary • ${firstEntry.department || "-"} • ${
+    firstEntry.section || "-"
+  }
           </p>
         </div>
 
@@ -530,6 +592,11 @@ function renderSelectedCommissaryBatchDetails() {
         </div>
 
         <div>
+          <p class="eyebrow">Department</p>
+          <strong>${firstEntry.department || "-"}</strong>
+        </div>
+
+        <div>
           <p class="eyebrow">Section</p>
           <strong>${firstEntry.section || "-"}</strong>
         </div>
@@ -537,6 +604,11 @@ function renderSelectedCommissaryBatchDetails() {
         <div>
           <p class="eyebrow">Source</p>
           <strong>${firstEntry.source || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Destination</p>
+          <strong>${firstEntry.destination || "-"}</strong>
         </div>
       </div>
 
@@ -548,8 +620,9 @@ function renderSelectedCommissaryBatchDetails() {
       <div class="instruction-box">
         <strong>Stock Rule:</strong>
         <span>
-          Commissary Stock uses Remaining Count as the latest stock truth.
-          Trans In adds stock, Trans Out deducts stock, and Usage/Waste are kept for reports.
+          In Warehouse, In Branch, and In Production add to Commissary stock.
+          Out Warehouse and Out Branch deduct from Commissary stock.
+          Remaining Count becomes the latest stock truth, while Usage and Waste are kept for reporting.
         </span>
       </div>
     </section>
@@ -584,8 +657,8 @@ function getCommissaryLogTransactionContent() {
           <div>
             <h3>Commissary Log Transaction</h3>
             <p>
-              Read-only history of Commissary Daily Input, transfer in,
-              transfer out, remaining counts, usage, waste, and notes.
+              Read-only history of Commissary Daily Input, production, transfer movement,
+              remaining counts, usage, waste, and notes.
             </p>
           </div>
 
@@ -632,7 +705,7 @@ function getCommissaryLogTransactionContent() {
             <input
               id="commissary-log-search"
               type="text"
-              placeholder="Search item, batch, source, notes..."
+              placeholder="Search item, batch, source, destination, notes..."
               value="${filters.search}"
             />
           </label>
@@ -762,7 +835,7 @@ window.DMC_PAGES["commissary-log-transaction"] = {
   eyebrow: "Commissary",
   title: "Commissary Log Transaction",
   description:
-    "Read-only batch history of Commissary Daily Input, transfer movement, usage, waste, and closing counts.",
+    "Read-only batch history of Commissary Daily Input, production, transfer movement, usage, waste, and closing counts.",
   getContent: getCommissaryLogTransactionContent,
   content: getCommissaryLogTransactionContent(),
   afterRender: setupCommissaryLogTransactionEvents
