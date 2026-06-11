@@ -13,6 +13,8 @@ window.DMC_LEDGER_FILTERS = window.DMC_LEDGER_FILTERS || {
 window.DMC_SELECTED_LEDGER_BATCH_KEY =
   window.DMC_SELECTED_LEDGER_BATCH_KEY || "";
 
+window.DMC_LEDGER_NOTE_LOOKUP = window.DMC_LEDGER_NOTE_LOOKUP || {};
+
 function getTodayLedgerDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -36,10 +38,20 @@ function getStoredLedgerEntries() {
   }
 
   try {
-    return JSON.parse(storedEntries);
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return getDefaultLedgerEntries();
+    }
+
+    return parsedEntries;
   } catch {
     return getDefaultLedgerEntries();
   }
+}
+
+function clearStoredLedgerEntries() {
+  localStorage.setItem(DMC_LEDGER_STORAGE_KEY, JSON.stringify([]));
 }
 
 function getLedgerEntrySortValue(entry) {
@@ -84,12 +96,14 @@ function getFilteredLedgerEntries() {
       String(entry.date || "").toLowerCase().includes(searchValue) ||
       String(entry.submittedAtDisplay || "").toLowerCase().includes(searchValue) ||
       String(entry.batchId || "").toLowerCase().includes(searchValue) ||
+      String(entry.sourceBatchId || "").toLowerCase().includes(searchValue) ||
       String(entry.department || "").toLowerCase().includes(searchValue) ||
       String(entry.section || "").toLowerCase().includes(searchValue) ||
       String(entry.itemId || "").toLowerCase().includes(searchValue) ||
       String(entry.itemName || "").toLowerCase().includes(searchValue) ||
       String(entry.movementType || "").toLowerCase().includes(searchValue) ||
       String(entry.source || "").toLowerCase().includes(searchValue) ||
+      String(entry.destination || "").toLowerCase().includes(searchValue) ||
       String(entry.notes || "").toLowerCase().includes(searchValue);
 
     return (
@@ -221,6 +235,36 @@ function getSelectedLedgerBatch() {
   return batches[0] || null;
 }
 
+function createLedgerNoteKey(entry, index) {
+  return [
+    entry.batchId || "batch",
+    entry.itemId || "item",
+    entry.movementType || "movement",
+    index
+  ].join("__");
+}
+
+function renderLedgerNotes(notes, entry, index) {
+  const noteText = String(notes || "").trim();
+
+  if (!noteText) {
+    return "-";
+  }
+
+  const noteKey = createLedgerNoteKey(entry, index);
+  window.DMC_LEDGER_NOTE_LOOKUP[noteKey] = noteText;
+
+  if (noteText.length <= 55) {
+    return noteText;
+  }
+
+  return `
+    <button class="tiny-button" data-ledger-note-key="${noteKey}">
+      View Notes
+    </button>
+  `;
+}
+
 function renderLedgerBatchList() {
   const batches = groupLedgerEntriesByBatch(getFilteredLedgerEntries());
   const selectedBatch = getSelectedLedgerBatch();
@@ -273,7 +317,7 @@ function renderLedgerRows(entries) {
 
   return entries
     .map(
-      (entry) => `
+      (entry, index) => `
         <tr>
           <td>${entry.date || "-"}</td>
           <td>${entry.department || "-"}</td>
@@ -284,7 +328,7 @@ function renderLedgerRows(entries) {
           <td>${entry.quantity || "-"}</td>
           <td>${entry.unit || "-"}</td>
           <td>${entry.source || "-"}</td>
-          <td>${entry.notes || "-"}</td>
+          <td>${renderLedgerNotes(entry.notes, entry, index)}</td>
         </tr>
       `
     )
@@ -424,7 +468,7 @@ function getLedgerContent() {
         <div class="panel-header">
           <div>
             <h3>Ledger Control</h3>
-            <p>Search, filter, and select one batch to review.</p>
+            <p>Search, filter, select one batch to review, or clear local movement history for clean testing.</p>
           </div>
         </div>
 
@@ -474,8 +518,18 @@ function getLedgerContent() {
           <div class="ledger-quick-actions form-full">
             <button class="ghost-button" id="ledger-today-filter">Today</button>
             <button class="ghost-button" id="ledger-month-filter">This Month</button>
-            <button class="ghost-button" id="clear-ledger-filters">Clear</button>
+            <button class="ghost-button" id="clear-ledger-filters">Clear Filters</button>
+            <button class="ghost-button danger" id="clear-ledger-entries">
+              Clear Ledger Entries
+            </button>
           </div>
+        </div>
+
+        <div class="instruction-box">
+          <strong>Clear Ledger Warning:</strong>
+          <span>
+            Clear Ledger Entries removes local movement history only. It does not remove Master List items.
+          </span>
         </div>
 
         <div class="ledger-workbench-list-header">
@@ -503,6 +557,7 @@ function setupLedgerEvents() {
   const endDateInput = document.getElementById("ledger-end-date");
   const searchInput = document.getElementById("ledger-search");
   const clearButton = document.getElementById("clear-ledger-filters");
+  const clearLedgerEntriesButton = document.getElementById("clear-ledger-entries");
   const todayButton = document.getElementById("ledger-today-filter");
   const monthButton = document.getElementById("ledger-month-filter");
 
@@ -539,7 +594,7 @@ function setupLedgerEvents() {
   }
 
   if (searchInput) {
-    searchInput.addEventListener("change", () => {
+    searchInput.addEventListener("input", () => {
       window.DMC_LEDGER_FILTERS.search = searchInput.value;
       window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
       refreshLedgerPage();
@@ -584,11 +639,88 @@ function setupLedgerEvents() {
     });
   }
 
+  if (clearLedgerEntriesButton) {
+    clearLedgerEntriesButton.addEventListener("click", () => {
+      const totalEntries = getStoredLedgerEntries().length;
+
+      if (typeof window.DMC_CONFIRM_MODAL === "function") {
+        window.DMC_CONFIRM_MODAL({
+          type: "danger",
+          title: "Clear Ledger Entries?",
+          message: `This will permanently clear ${totalEntries} local ledger movement entr${
+            totalEntries === 1 ? "y" : "ies"
+          }. Master List items will not be removed. Continue?`,
+          confirmLabel: "Clear Ledger",
+          cancelLabel: "Cancel",
+          onConfirm: () => {
+            clearStoredLedgerEntries();
+
+            window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
+            window.DMC_LEDGER_FILTERS = {
+              department: "all",
+              movementType: "all",
+              search: "",
+              startDate: "",
+              endDate: ""
+            };
+
+            refreshLedgerPage();
+
+            if (typeof window.DMC_SHOW_MODAL === "function") {
+              window.DMC_SHOW_MODAL({
+                type: "success",
+                title: "Ledger Cleared",
+                message:
+                  "Local ledger movement entries were cleared. Master List items were not removed.",
+                confirmLabel: "Continue"
+              });
+            }
+          }
+        });
+      } else if (
+        confirm(
+          `This will permanently clear ${totalEntries} local ledger entries. Master List items will not be removed. Continue?`
+        )
+      ) {
+        clearStoredLedgerEntries();
+
+        window.DMC_SELECTED_LEDGER_BATCH_KEY = "";
+        window.DMC_LEDGER_FILTERS = {
+          department: "all",
+          movementType: "all",
+          search: "",
+          startDate: "",
+          endDate: ""
+        };
+
+        refreshLedgerPage();
+      }
+    });
+  }
+
   document.querySelectorAll("[data-select-ledger-batch]").forEach((button) => {
     button.addEventListener("click", () => {
       window.DMC_SELECTED_LEDGER_BATCH_KEY = button.dataset.selectLedgerBatch;
 
       refreshLedgerPage();
+    });
+  });
+
+  document.querySelectorAll("[data-ledger-note-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const noteKey = button.dataset.ledgerNoteKey;
+      const note = window.DMC_LEDGER_NOTE_LOOKUP[noteKey] || "";
+
+      if (typeof window.DMC_SHOW_MODAL === "function") {
+        window.DMC_SHOW_MODAL({
+          type: "info",
+          title: "Ledger Notes",
+          message: note || "No notes.",
+          confirmLabel: "Close"
+        });
+      } else {
+        alert(note || "No notes.");
+      }
     });
   });
 }
@@ -597,7 +729,7 @@ window.DMC_PAGES["ledger"] = {
   eyebrow: "System",
   title: "Ledger",
   description:
-    "Complete inventory movement history across commissary and branches.",
+    "Complete inventory movement history across warehouse, commissary, and branches.",
   getContent: getLedgerContent,
   content: getLedgerContent(),
   afterRender: setupLedgerEvents
