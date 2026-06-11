@@ -1,6 +1,5 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
-const DMC_COMMISSARY_STOCK_STORAGE_KEY = "dmc_commissary_stock_items";
 const DMC_COMMISSARY_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_COMMISSARY_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
 
@@ -9,30 +8,6 @@ window.DMC_COMMISSARY_STOCK_FILTERS = window.DMC_COMMISSARY_STOCK_FILTERS || {
   status: "all",
   search: ""
 };
-
-function getDefaultCommissaryStockItems() {
-  return window.DMC_DATA?.commissaryStock || [];
-}
-
-function getStoredCommissaryStockItems() {
-  const storedItems = localStorage.getItem(DMC_COMMISSARY_STOCK_STORAGE_KEY);
-
-  if (!storedItems) {
-    return getDefaultCommissaryStockItems();
-  }
-
-  try {
-    const parsedItems = JSON.parse(storedItems);
-
-    if (!Array.isArray(parsedItems)) {
-      return getDefaultCommissaryStockItems();
-    }
-
-    return parsedItems;
-  } catch {
-    return getDefaultCommissaryStockItems();
-  }
-}
 
 function getStoredCommissaryMasterListItems() {
   const storedItems = localStorage.getItem(DMC_COMMISSARY_MASTER_LIST_KEY);
@@ -74,20 +49,35 @@ function getStoredCommissaryLedgerEntries() {
   }
 }
 
-function itemBelongsToCommissaryStock(item) {
-  const operatingArea = String(item.operatingArea || "").toLowerCase();
-  const department = String(item.department || "").toLowerCase();
-  const section = String(item.section || "").toLowerCase();
+function getCommissaryItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
 
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function itemIsActiveInCommissaryArea(item) {
+  const areas = getCommissaryItemOperatingAreas(item).map((area) =>
+    String(area || "").toLowerCase()
+  );
+
+  return areas.some((area) => area.includes("commissary"));
+}
+
+function itemBelongsToCommissaryStock(item) {
   if (item.active === false) {
     return false;
   }
 
-  return (
-    operatingArea.includes("commissary") ||
-    department.includes("commissary") ||
-    section.includes("commissary")
-  );
+  return itemIsActiveInCommissaryArea(item);
 }
 
 function entryBelongsToCommissaryStock(entry) {
@@ -239,12 +229,13 @@ function calculateCommissaryMovementTotals(itemId) {
   return getCommissaryLedgerEntriesForItem(itemId).reduce(
     (totals, entry) => {
       const quantity = Number(entry.quantity || 0);
+      const stockEffect = getCommissaryEntryStockEffect(entry);
 
-      if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+      if (entry.movementType === "Transfer In" || stockEffect === "add") {
         totals.transferIn += quantity;
       }
 
-      if (entry.movementType === "Transfer Out" || entry.stockEffect === "deduct") {
+      if (entry.movementType === "Transfer Out" || stockEffect === "deduct") {
         totals.transferOut += quantity;
       }
 
@@ -256,7 +247,7 @@ function calculateCommissaryMovementTotals(itemId) {
         totals.waste += quantity;
       }
 
-      if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+      if (entry.movementType === "Remaining Count" || stockEffect === "set") {
         totals.remainingCount = quantity;
         totals.remainingCounts += 1;
       }
@@ -286,86 +277,17 @@ function getLatestCommissaryMovement(itemId) {
   })[0];
 }
 
-function getCommissaryStockItemFromLedger(itemId) {
-  const entries = getCommissaryLedgerEntriesForItem(itemId);
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const latestEntry = [...entries].sort((a, b) => {
-    return getCommissaryEntryTime(b).localeCompare(getCommissaryEntryTime(a));
-  })[0];
-
-  return {
-    itemId: latestEntry.itemId || itemId,
-    itemName: latestEntry.itemName || "-",
-    officialItemName: latestEntry.itemName || "-",
-    section: latestEntry.section || "Unassigned",
-    unit: latestEntry.unit || "-",
-    minimumStock: 0,
-    active: true,
-    operatingArea: "Commissary"
-  };
-}
-
 function getCommissaryStockBaseItems() {
-  const storedCommissaryItems = getStoredCommissaryStockItems();
   const masterListItems = getStoredCommissaryMasterListItems();
-  const commissaryMasterItems = masterListItems.filter(itemBelongsToCommissaryStock);
-  const commissaryLedgerEntries = getCommissaryLedgerEntriesOnly();
 
-  const combinedItemsById = {};
-
-  [...storedCommissaryItems, ...commissaryMasterItems].forEach((item) => {
-    const itemId = String(item.itemId || "").trim();
-
-    if (!itemId) {
-      return;
-    }
-
-    combinedItemsById[itemId] = {
-      ...combinedItemsById[itemId],
-      ...item
-    };
-  });
-
-  commissaryLedgerEntries.forEach((entry) => {
-    const itemId = String(entry.itemId || "").trim();
-
-    if (!itemId || combinedItemsById[itemId]) {
-      return;
-    }
-
-    const matchingMasterItem = masterListItems.find(
-      (item) => String(item.itemId || "") === itemId
-    );
-
-    combinedItemsById[itemId] = {
-      ...(matchingMasterItem || {}),
-      ...getCommissaryStockItemFromLedger(itemId),
-      itemId,
-      itemName:
-        matchingMasterItem?.officialItemName ||
-        matchingMasterItem?.itemName ||
-        matchingMasterItem?.name ||
-        entry.itemName ||
-        "-",
-      officialItemName:
-        matchingMasterItem?.officialItemName ||
-        matchingMasterItem?.itemName ||
-        matchingMasterItem?.name ||
-        entry.itemName ||
-        "-",
-      section: entry.section || matchingMasterItem?.section || "Unassigned",
-      unit: entry.unit || matchingMasterItem?.unit || "-",
-      minimumStock: Number(matchingMasterItem?.minimumStock || 0),
-      active: true,
-      operatingArea: "Commissary"
-    };
-  });
-
-  return Object.values(combinedItemsById);
+  return masterListItems
+    .filter(itemBelongsToCommissaryStock)
+    .map((item) => ({
+      ...item,
+      operatingArea: Array.isArray(item.operatingAreas)
+        ? item.operatingAreas.join(", ")
+        : item.operatingArea || "Commissary"
+    }));
 }
 
 function normalizeCommissaryStockItem(item) {
@@ -533,7 +455,7 @@ function renderCommissarySummaryCards() {
       <div class="card">
         <p>Total Items</p>
         <strong>${rows.length}</strong>
-        <span>commissary stock items</span>
+        <span>active commissary stock items</span>
       </div>
 
       <div class="card">
@@ -614,7 +536,7 @@ function renderCommissaryStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No commissary stock items match the current filters.</td>
+        <td colspan="8">No active Commissary stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -655,8 +577,8 @@ function getCommissaryStockContent() {
         <div>
           <h3>Commissary Stock List</h3>
           <p>
+            This page shows only items currently checked as active in Commissary from the Master List.
             Current Stock uses Remaining Count as truth, then applies later Transfer In and Transfer Out.
-            Usage and Waste are report records and are not double-deducted.
           </p>
         </div>
 
@@ -696,9 +618,17 @@ function getCommissaryStockContent() {
       </div>
 
       <div class="instruction-box">
+        <strong>Master List Rule:</strong>
+        <span>
+          If Commissary is unticked in Master List, this item no longer appears here.
+          Old ledger records remain in Ledger and Commissary Log for history.
+        </span>
+      </div>
+
+      <div class="instruction-box">
         <strong>Commissary Rule:</strong>
         <span>
-          Warehouse Transfer In adds stock. Transfer Out to Warehouse deducts stock.
+          Warehouse Transfer In and Branch returns add stock. Transfer Out to Warehouse or Branch deducts stock.
           Remaining Count becomes the latest physical stock truth. Usage and Waste are kept for reports.
         </span>
       </div>
