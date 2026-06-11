@@ -49,18 +49,37 @@ function getStoredBranchLedgerEntries() {
   }
 }
 
-function itemBelongsToBranchStock(item) {
-  const operatingArea = String(item.operatingArea || "").toLowerCase();
+function getBranchItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
 
-  if (
-    operatingArea.includes("warehouse") ||
-    operatingArea.includes("stockroom") ||
-    operatingArea.includes("commissary")
-  ) {
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function itemIsActiveInBranchArea(item) {
+  const areas = getBranchItemOperatingAreas(item).map((area) =>
+    String(area || "").toLowerCase()
+  );
+
+  return areas.some((area) => {
+    return area.includes("branch") || area.includes("dmc-iriga");
+  });
+}
+
+function itemBelongsToBranchStock(item) {
+  if (item.active === false) {
     return false;
   }
 
-  return item.active !== false;
+  return itemIsActiveInBranchArea(item);
 }
 
 function entryBelongsToBranchStock(entry) {
@@ -96,81 +115,17 @@ function getBranchLedgerEntriesForItem(itemId) {
   );
 }
 
-function getBranchStockItemFromLedger(itemId) {
-  const entries = getBranchLedgerEntriesForItem(itemId);
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const latestEntry = [...entries].sort((a, b) => {
-    return String(b.submittedAt || b.date || "").localeCompare(
-      String(a.submittedAt || a.date || "")
-    );
-  })[0];
-
-  return {
-    itemId: latestEntry.itemId || itemId,
-    officialItemName: latestEntry.itemName || latestEntry.name || "-",
-    department: latestEntry.department || "Branch",
-    section: latestEntry.section || "",
-    unit: latestEntry.unit || "-",
-    minimumStock: 0,
-    active: true,
-    operatingArea: "Branch"
-  };
-}
-
 function getBranchStockBaseItems() {
   const masterListItems = getStoredBranchMasterListItems();
-  const branchMasterItems = masterListItems.filter(itemBelongsToBranchStock);
-  const branchLedgerEntries = getBranchLedgerEntriesOnly();
 
-  const combinedItemsById = {};
-
-  branchMasterItems.forEach((item) => {
-    const itemId = String(item.itemId || "").trim();
-
-    if (!itemId) {
-      return;
-    }
-
-    combinedItemsById[itemId] = item;
-  });
-
-  branchLedgerEntries.forEach((entry) => {
-    const itemId = String(entry.itemId || "").trim();
-
-    if (!itemId || combinedItemsById[itemId]) {
-      return;
-    }
-
-    const matchingMasterItem = masterListItems.find(
-      (item) => String(item.itemId || "") === itemId
-    );
-
-    combinedItemsById[itemId] = {
-      ...(matchingMasterItem || {}),
-      ...getBranchStockItemFromLedger(itemId),
-      itemId,
-      officialItemName:
-        matchingMasterItem?.officialItemName ||
-        matchingMasterItem?.name ||
-        entry.itemName ||
-        "-",
-      department:
-        entry.department ||
-        matchingMasterItem?.department ||
-        "Branch",
-      section: entry.section || matchingMasterItem?.section || "",
-      unit: entry.unit || matchingMasterItem?.unit || "-",
-      minimumStock: Number(matchingMasterItem?.minimumStock || 0),
-      active: true,
-      operatingArea: "Branch"
-    };
-  });
-
-  return Object.values(combinedItemsById);
+  return masterListItems
+    .filter(itemBelongsToBranchStock)
+    .map((item) => ({
+      ...item,
+      operatingArea: Array.isArray(item.operatingAreas)
+        ? item.operatingAreas.join(", ")
+        : item.operatingArea || "Branch"
+    }));
 }
 
 function getBranchEntryTime(entry) {
@@ -219,6 +174,10 @@ function getBranchEntryStockEffect(entry) {
     entry.movementType === "Transfer Out"
   ) {
     return "deduct";
+  }
+
+  if (entry.movementType === "Remaining Count") {
+    return "set";
   }
 
   return "report";
@@ -286,9 +245,14 @@ function calculateBranchMovementTotals(item) {
   return entries.reduce(
     (totals, entry) => {
       const quantity = Number(entry.quantity || 0);
+      const stockEffect = getBranchEntryStockEffect(entry);
 
-      if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+      if (entry.movementType === "Transfer In" || stockEffect === "add") {
         totals.transferIn += quantity;
+      }
+
+      if (entry.movementType === "Transfer Out" || stockEffect === "deduct") {
+        totals.transferOut += quantity;
       }
 
       if (entry.movementType === "Usage") {
@@ -299,7 +263,7 @@ function calculateBranchMovementTotals(item) {
         totals.waste += quantity;
       }
 
-      if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+      if (entry.movementType === "Remaining Count" || stockEffect === "set") {
         totals.remainingCount = quantity;
       }
 
@@ -307,6 +271,7 @@ function calculateBranchMovementTotals(item) {
     },
     {
       transferIn: 0,
+      transferOut: 0,
       usage: 0,
       waste: 0,
       remainingCount: 0
@@ -331,9 +296,14 @@ function calculateBranchMonthlyMovementTotals(itemId) {
     .reduce(
       (totals, entry) => {
         const quantity = Number(entry.quantity || 0);
+        const stockEffect = getBranchEntryStockEffect(entry);
 
-        if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
+        if (entry.movementType === "Transfer In" || stockEffect === "add") {
           totals.transferIn += quantity;
+        }
+
+        if (entry.movementType === "Transfer Out" || stockEffect === "deduct") {
+          totals.transferOut += quantity;
         }
 
         if (entry.movementType === "Usage") {
@@ -344,7 +314,7 @@ function calculateBranchMonthlyMovementTotals(itemId) {
           totals.waste += quantity;
         }
 
-        if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
+        if (entry.movementType === "Remaining Count" || stockEffect === "set") {
           totals.remainingCounts += 1;
         }
 
@@ -352,6 +322,7 @@ function calculateBranchMonthlyMovementTotals(itemId) {
       },
       {
         transferIn: 0,
+        transferOut: 0,
         usage: 0,
         waste: 0,
         remainingCounts: 0
@@ -397,6 +368,7 @@ function normalizeBranchStockItem(item) {
     itemId: item.itemId || "-",
     officialItemName: item.officialItemName || item.name || "-",
     department: item.department || "Unassigned",
+    section: item.section || "Unassigned",
     unit: item.unit || "-",
     currentStock,
     minimumStock: Number(item.minimumStock || 0),
@@ -455,6 +427,7 @@ function getFilteredBranchStockRows() {
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
       String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
       String(item.department || "").toLowerCase().includes(searchValue) ||
+      String(item.section || "").toLowerCase().includes(searchValue) ||
       String(item.unit || "").toLowerCase().includes(searchValue);
 
     return matchesDepartment && matchesStatus && matchesSearch;
@@ -492,7 +465,7 @@ function renderBranchSummaryCards() {
       <div class="card">
         <p>Total Items</p>
         <strong>${rows.length}</strong>
-        <span>branch stock items</span>
+        <span>active branch stock items</span>
       </div>
 
       <div class="card">
@@ -610,6 +583,7 @@ function renderBranchStockMeter(item) {
 function renderBranchMovementSummary(item) {
   const totals = item.movementTotals || {
     transferIn: 0,
+    transferOut: 0,
     usage: 0,
     waste: 0,
     remainingCount: 0
@@ -617,7 +591,7 @@ function renderBranchMovementSummary(item) {
 
   return `
     <small class="table-subtext">
-      In: ${totals.transferIn} · Usage: ${totals.usage} · Waste: ${totals.waste}
+      In: ${totals.transferIn} · Out: ${totals.transferOut} · Usage: ${totals.usage} · Waste: ${totals.waste}
     </small>
   `;
 }
@@ -628,7 +602,7 @@ function renderBranchStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No branch stock items match the current filters.</td>
+        <td colspan="8">No active Branch stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -673,7 +647,8 @@ function renderBranchStockPanel() {
         <div>
           <h3>Branch Stock List</h3>
           <p>
-            Current Stock is the available branch stock now and the starting reference for the next shift.
+            This page shows only items currently checked as active in Branch from the Master List.
+            Current Stock is calculated from Branch ledger movements.
           </p>
         </div>
 
@@ -687,7 +662,7 @@ function renderBranchStockPanel() {
             <input
               id="branch-stock-search"
               type="text"
-              placeholder="Search item name, Item ID, or department..."
+              placeholder="Search item name, Item ID, department, section..."
               value="${window.DMC_BRANCH_STOCK_FILTERS.search}"
             />
           </label>
@@ -710,6 +685,14 @@ function renderBranchStockPanel() {
             Clear
           </button>
         </div>
+      </div>
+
+      <div class="instruction-box">
+        <strong>Master List Rule:</strong>
+        <span>
+          If Branch is unticked in Master List, this item no longer appears here.
+          Old ledger records remain in Ledger and Branch Log for history.
+        </span>
       </div>
 
       <div class="table-wrap">
@@ -815,6 +798,7 @@ function setupBranchStockEvents() {
             "",
             `Monthly Summary: ${monthLabel}`,
             `Transfer In: ${monthlyTotals.transferIn} ${item.unit}`,
+            `Transfer Out: ${monthlyTotals.transferOut} ${item.unit}`,
             `Usage Reported: ${monthlyTotals.usage} ${item.unit}`,
             `Waste Reported: ${monthlyTotals.waste} ${item.unit}`,
             `Closing Counts Submitted: ${monthlyTotals.remainingCounts}`,
