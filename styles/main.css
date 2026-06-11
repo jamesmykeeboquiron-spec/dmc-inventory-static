@@ -7041,3 +7041,82 @@ input[type="date"]:disabled {
     grid-template-columns: 1fr;
   }
 }
+/* ================================
+   MASTER LIST ACTIVE-IN CHECKBOX POLISH
+================================ */
+
+.master-list-active-in-section {
+  display: grid;
+  gap: 10px;
+}
+
+.master-list-active-in-title {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.master-list-active-in-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.checkbox-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.checkbox-card:hover {
+  border-color: var(--gold-border);
+  background: rgba(240, 192, 79, 0.07);
+  color: var(--text);
+}
+
+.checkbox-card input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+.checkbox-card span {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.checkbox-card:has(input:checked) {
+  border-color: rgba(240, 192, 79, 0.55);
+  background: rgba(240, 192, 79, 0.12);
+  box-shadow: 0 0 18px rgba(240, 192, 79, 0.1);
+}
+
+.checkbox-card:has(input:checked)::after {
+  content: "Active";
+  margin-left: auto;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 900px) {
+  .master-list-active-in-grid {
+    grid-template-columns: 1fr;
+  }
+}
