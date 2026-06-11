@@ -12,6 +12,9 @@ window.DMC_BRANCH_LOG_FILTERS = window.DMC_BRANCH_LOG_FILTERS || {
   selectedBatchId: ""
 };
 
+window.DMC_BRANCH_LOG_NOTE_LOOKUP =
+  window.DMC_BRANCH_LOG_NOTE_LOOKUP || {};
+
 function getStoredBranchLogEntriesForLogPage() {
   const storedEntries = localStorage.getItem(
     DMC_BRANCH_LOG_STORAGE_KEY_FOR_LOG_PAGE
@@ -316,6 +319,71 @@ function getBranchLogNumber(value) {
   return Number.isNaN(numberValue) ? 0 : numberValue;
 }
 
+function cleanBranchLogNotes(notes) {
+  let cleanedNotes = String(notes || "").trim();
+
+  if (!cleanedNotes) {
+    return "";
+  }
+
+  const defaultFragments = [
+    "Items received into Branch.",
+    "Items received from Warehouse.",
+    "Received from Warehouse.",
+    "Auto-computed from Current + Transfer In - Remaining.",
+    "Waste reported only. It is not double-deducted because Remaining Count sets physical stock.",
+    "Usage is auto-computed from Current + Transfer In - Remaining.",
+    "Daily note.",
+    "No notes",
+    "N/A"
+  ];
+
+  defaultFragments.forEach((fragment) => {
+    cleanedNotes = cleanedNotes.replace(fragment, "");
+  });
+
+  cleanedNotes = cleanedNotes
+    .replace(/Closing count submitted by[^.]*\./gi, "")
+    .replace(/Current:\s*[-\d.]+/gi, "")
+    .replace(/Transfer In:\s*[-\d.]+/gi, "")
+    .replace(/Trans In:\s*[-\d.]+/gi, "")
+    .replace(/Total Available:\s*[-\d.]+/gi, "")
+    .replace(/Remaining:\s*[-\d.]+/gi, "")
+    .replace(/Waste:\s*[-\d.]+/gi, "")
+    .replace(/Usage Auto:\s*[-\d.]+/gi, "")
+    .replace(/Usage:\s*[-\d.]+/gi, "")
+    .replace(/^Notes:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleanedNotes;
+}
+
+function createBranchLogNoteKey(itemId, index) {
+  return `${itemId || "item"}__${index}`;
+}
+
+function renderBranchLogNotes(notes, itemId, index) {
+  const cleanedNotes = cleanBranchLogNotes(notes);
+
+  if (!cleanedNotes) {
+    return "-";
+  }
+
+  const noteKey = createBranchLogNoteKey(itemId, index);
+  window.DMC_BRANCH_LOG_NOTE_LOOKUP[noteKey] = cleanedNotes;
+
+  if (cleanedNotes.length <= 55) {
+    return cleanedNotes;
+  }
+
+  return `
+    <button class="tiny-button" data-branch-note-key="${noteKey}">
+      View Notes
+    </button>
+  `;
+}
+
 function getBranchLogGroupedItemRows(batch) {
   const groupedRows = {};
 
@@ -451,8 +519,9 @@ function renderBranchBatchLineTable(batch) {
 
         <tbody>
           ${rows
-            .map((row) => {
+            .map((row, index) => {
               const uniqueNotes = [...new Set(row.notes)].filter(Boolean);
+              const joinedNotes = uniqueNotes.join(" | ");
 
               return `
                 <tr>
@@ -464,7 +533,11 @@ function renderBranchBatchLineTable(batch) {
                   <td>${row.usage || "-"}</td>
                   <td>${row.waste || "-"}</td>
                   <td>${row.unit || "-"}</td>
-                  <td>${uniqueNotes.length ? uniqueNotes.join(" | ") : "-"}</td>
+                  <td>${renderBranchLogNotes(
+                    joinedNotes,
+                    row.itemId,
+                    index
+                  )}</td>
                 </tr>
               `;
             })
@@ -749,6 +822,24 @@ function setupBranchLogTransactionEvents() {
         button.dataset.branchBatchId;
 
       refreshBranchLogTransactionPage();
+    });
+  });
+
+  document.querySelectorAll("[data-branch-note-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const noteKey = button.dataset.branchNoteKey;
+      const note = window.DMC_BRANCH_LOG_NOTE_LOOKUP[noteKey] || "";
+
+      if (typeof window.DMC_SHOW_MODAL === "function") {
+        window.DMC_SHOW_MODAL({
+          type: "info",
+          title: "Movement Notes",
+          message: note || "No notes.",
+          confirmLabel: "Close"
+        });
+      } else {
+        alert(note || "No notes.");
+      }
     });
   });
 }
