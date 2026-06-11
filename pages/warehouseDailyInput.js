@@ -24,7 +24,13 @@ function getWarehouseInputMasterListItems() {
 
   if (storedItems) {
     try {
-      return JSON.parse(storedItems);
+      const parsedItems = JSON.parse(storedItems);
+
+      if (!Array.isArray(parsedItems)) {
+        return window.DMC_DATA?.masterList?.items || [];
+      }
+
+      return parsedItems;
     } catch {
       return window.DMC_DATA?.masterList?.items || [];
     }
@@ -55,13 +61,37 @@ function getSettingName(option) {
   return option?.name || "";
 }
 
-function itemBelongsToWarehouseDailyInput(item) {
-  const operatingArea = String(item.operatingArea || "").toLowerCase();
+function getWarehouseDailyInputItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
 
-  return (
-    operatingArea.includes("warehouse") ||
-    operatingArea.includes("stockroom")
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function itemIsActiveInWarehouseDailyInputArea(item) {
+  const areas = getWarehouseDailyInputItemOperatingAreas(item).map((area) =>
+    String(area || "").toLowerCase()
   );
+
+  return areas.some((area) => {
+    return area.includes("warehouse") || area.includes("stockroom");
+  });
+}
+
+function itemBelongsToWarehouseDailyInput(item) {
+  if (item.active === false) {
+    return false;
+  }
+
+  return itemIsActiveInWarehouseDailyInputArea(item);
 }
 
 function getAllWarehouseDailyInputItems() {
@@ -185,7 +215,9 @@ function getWarehouseDailyReviewStatus(rowData) {
     return String(rowData?.[field] || "").trim() !== "";
   });
 
-  if (!hasAnyMovement) {
+  const hasNotes = String(rowData?.notes || "").trim() !== "";
+
+  if (!hasAnyMovement && !hasNotes) {
     return "";
   }
 
@@ -260,6 +292,8 @@ function buildWarehouseLogEntriesFromDailyInput() {
       return;
     }
 
+    let movementWasAdded = false;
+
     movementFields.forEach((movement) => {
       const rawValue = String(rowData[movement.field] || "").trim();
 
@@ -273,6 +307,8 @@ function buildWarehouseLogEntriesFromDailyInput() {
         return;
       }
 
+      movementWasAdded = true;
+
       warehouseLogEntries.push({
         date: getTodayDateStringForWarehouseInput(),
         submittedAt,
@@ -280,6 +316,7 @@ function buildWarehouseLogEntriesFromDailyInput() {
         batchId,
         location: "Warehouse",
         department: item.department || "",
+        section: item.section || "",
         itemId: item.itemId || "",
         itemName: item.officialItemName || "",
         movementType: movement.movementType,
@@ -301,6 +338,29 @@ function buildWarehouseLogEntriesFromDailyInput() {
         notes
       });
     });
+
+    if (!movementWasAdded && notes) {
+      warehouseLogEntries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Daily Note",
+        movementField: "notes",
+        stockEffect: "report",
+        quantity: 0,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Warehouse Daily Input",
+        destination: "Warehouse Notes",
+        notes
+      });
+    }
   });
 
   return warehouseLogEntries;
@@ -505,6 +565,14 @@ function renderWarehouseEditModeContent() {
       Press Tab to move across Transfer In → Transfer Out → Waste → Notes, then continue to the next row.
     </div>
 
+    <div class="instruction-box">
+      <strong>Warehouse Daily Input Rule:</strong>
+      <span>
+        This page only shows items currently checked as active in Warehouse from the Master List.
+        Unticking Warehouse removes the item from this input page, while old ledger/log records remain for history.
+      </span>
+    </div>
+
     <div class="table-wrap warehouse-daily-input-table-wrap">
       <table class="daily-input-table warehouse-daily-input-table">
         <thead>
@@ -626,8 +694,26 @@ function renderWarehouseReviewModeContent() {
 
 function getWarehouseDailyInputContent() {
   const isReviewMode = window.DMC_WAREHOUSE_DAILY_INPUT_MODE === "review";
+  const summary = getWarehouseDailyInputSummary();
 
   return `
+    <section class="grid">
+      <div class="card">
+        <p>Rows With Input</p>
+        <strong>${summary.rowsWithInput}</strong>
+      </div>
+
+      <div class="card">
+        <p>Ready</p>
+        <strong>${summary.readyRows}</strong>
+      </div>
+
+      <div class="card">
+        <p>Needs Check</p>
+        <strong>${summary.checkRows}</strong>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-header">
         <div>
@@ -752,6 +838,20 @@ function saveWarehouseCellValue(input) {
   saveWarehouseDailyInput(inputData);
 }
 
+function saveAllVisibleWarehouseInputs() {
+  const inputData = getStoredWarehouseDailyInput();
+
+  document.querySelectorAll(".warehouse-daily-input-cell").forEach((input) => {
+    const itemId = input.dataset.itemId;
+    const field = input.dataset.field;
+
+    inputData[itemId] = inputData[itemId] || {};
+    inputData[itemId][field] = input.value;
+  });
+
+  saveWarehouseDailyInput(inputData);
+}
+
 function focusNextWarehouseInput(currentInput, direction = 1) {
   const inputs = Array.from(
     document.querySelectorAll(".warehouse-daily-input-cell")
@@ -767,7 +867,12 @@ function focusNextWarehouseInput(currentInput, direction = 1) {
 
   if (nextInput) {
     nextInput.focus();
-    nextInput.select();
+
+    const valueLength = String(nextInput.value || "").length;
+
+    if (typeof nextInput.setSelectionRange === "function") {
+      nextInput.setSelectionRange(valueLength, valueLength);
+    }
   }
 }
 
@@ -806,6 +911,10 @@ function setupWarehouseDailyInputEvents() {
       saveWarehouseCellValue(input);
     });
 
+    input.addEventListener("change", () => {
+      saveWarehouseCellValue(input);
+    });
+
     input.addEventListener("keydown", (event) => {
       if (event.key !== "Tab") {
         return;
@@ -822,6 +931,8 @@ function setupWarehouseDailyInputEvents() {
 
   if (readyButton) {
     readyButton.addEventListener("click", () => {
+      saveAllVisibleWarehouseInputs();
+
       const warehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
       const summary = getWarehouseDailyInputSummary();
 
