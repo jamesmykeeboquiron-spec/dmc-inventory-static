@@ -95,12 +95,25 @@ function entryBelongsToCommissaryStock(entry) {
   const department = String(entry.department || "").toLowerCase();
   const source = String(entry.source || "").toLowerCase();
   const destination = String(entry.destination || "").toLowerCase();
+  const movementField = String(entry.movementField || "");
+  const stockEffect = String(entry.stockEffect || "").toLowerCase();
+
+  const isBranchSendingToCommissary =
+    movementField === "transOutCommissary" ||
+    (source.includes("branch daily input") &&
+      destination.includes("commissary") &&
+      stockEffect === "deduct");
+
+  if (isBranchSendingToCommissary) {
+    return false;
+  }
 
   return (
     location.includes("commissary") ||
     department.includes("commissary") ||
     source.includes("commissary") ||
-    destination.includes("commissary")
+    destination.includes("commissary") ||
+    movementField === "receivedFromBranch"
   );
 }
 
