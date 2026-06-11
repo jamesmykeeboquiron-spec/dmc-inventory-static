@@ -1155,7 +1155,12 @@ function focusNextBranchDailyInput(currentInput, direction = 1) {
 
   if (nextInput) {
     nextInput.focus();
-    nextInput.select();
+
+    const valueLength = String(nextInput.value || "").length;
+
+    if (typeof nextInput.setSelectionRange === "function") {
+      nextInput.setSelectionRange(valueLength, valueLength);
+    }
   }
 }
 
