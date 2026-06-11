@@ -175,18 +175,37 @@ function renderBranchDailyInputManagerOptions() {
   `;
 }
 
-function itemBelongsToBranchDailyInput(item) {
-  const operatingArea = String(item.operatingArea || "").toLowerCase();
+function getBranchDailyInputItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
 
-  if (
-    operatingArea.includes("warehouse") ||
-    operatingArea.includes("stockroom") ||
-    operatingArea.includes("commissary")
-  ) {
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function itemIsActiveInBranchDailyInputArea(item) {
+  const areas = getBranchDailyInputItemOperatingAreas(item).map((area) =>
+    String(area || "").toLowerCase()
+  );
+
+  return areas.some((area) => {
+    return area.includes("branch") || area.includes("dmc-iriga");
+  });
+}
+
+function itemBelongsToBranchDailyInput(item) {
+  if (item.active === false) {
     return false;
   }
 
-  return item.active !== false;
+  return itemIsActiveInBranchDailyInputArea(item);
 }
 
 function getAllBranchDailyInputItems() {
