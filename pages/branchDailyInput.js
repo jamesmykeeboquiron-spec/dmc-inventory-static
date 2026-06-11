@@ -1192,21 +1192,38 @@ function setupBranchDailyInputEvents() {
   }
 
   document.querySelectorAll(".branch-daily-input-cell").forEach((input) => {
-    input.addEventListener("input", () => {
-      saveBranchDailyCellValue(input);
-    });
+  input.addEventListener("input", () => {
+    const activeItemId = input.dataset.itemId;
+    const activeField = input.dataset.field;
+    const cursorPosition = input.selectionStart;
 
-    input.addEventListener("keydown", (event) => {
-      if (event.key !== "Tab") {
-        return;
+    saveBranchDailyCellValue(input);
+    refreshBranchDailyInputPage();
+
+    const refreshedInput = document.querySelector(
+      `.branch-daily-input-cell[data-item-id="${activeItemId}"][data-field="${activeField}"]`
+    );
+
+    if (refreshedInput) {
+      refreshedInput.focus();
+
+      if (typeof cursorPosition === "number") {
+        refreshedInput.setSelectionRange(cursorPosition, cursorPosition);
       }
-
-      event.preventDefault();
-      saveBranchDailyCellValue(input);
-
-      focusNextBranchDailyInput(input, event.shiftKey ? -1 : 1);
-    });
+    }
   });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    event.preventDefault();
+    saveBranchDailyCellValue(input);
+
+    focusNextBranchDailyInput(input, event.shiftKey ? -1 : 1);
+  });
+});
 
   const readyButton = document.getElementById("ready-for-branch-daily-review");
 
