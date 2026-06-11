@@ -27,7 +27,13 @@ function getStoredMasterListItems() {
   }
 
   try {
-    return JSON.parse(storedItems);
+    const parsedItems = JSON.parse(storedItems);
+
+    if (!Array.isArray(parsedItems)) {
+      return getMasterListDefaultItems();
+    }
+
+    return parsedItems;
   } catch {
     return getMasterListDefaultItems();
   }
@@ -101,6 +107,77 @@ function renderOptions(options, selectedValue = "") {
       `;
     })
     .join("");
+}
+
+function getItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
+
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getItemOperatingAreaDisplay(item) {
+  const areas = getItemOperatingAreas(item);
+
+  if (areas.length === 0) {
+    return "-";
+  }
+
+  return areas.join(", ");
+}
+
+function renderOperatingAreaCheckboxes(settings, editingItem) {
+  const selectedAreas = getItemOperatingAreas(editingItem || {});
+  const options = settings.operatingAreas || [];
+
+  if (options.length === 0) {
+    return `
+      <div class="checkbox-grid master-list-active-in-grid">
+        <p class="submit-preview-empty">
+          No Operating Areas found. Add Operating Areas in Settings first.
+        </p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="checkbox-grid master-list-active-in-grid">
+      ${options
+        .map((option) => {
+          const optionName = getSettingOptionName(option);
+          const isChecked = selectedAreas.includes(optionName);
+
+          return `
+            <label class="checkbox-card">
+              <input
+                type="checkbox"
+                name="operatingAreas"
+                value="${optionName}"
+                ${isChecked ? "checked" : ""}
+              />
+              <span>${optionName}</span>
+            </label>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getSelectedOperatingAreasFromForm() {
+  return Array.from(
+    document.querySelectorAll('input[name="operatingAreas"]:checked')
+  )
+    .map((input) => input.value)
+    .filter(Boolean);
 }
 
 function getEditingMasterListItem() {
@@ -219,7 +296,10 @@ function getFilteredMasterListItems() {
   const items = getStoredMasterListItems();
 
   return items.filter((item) => {
-    const itemOperatingArea = String(item.operatingArea || "").toLowerCase();
+    const itemOperatingAreas = getItemOperatingAreas(item).map((area) =>
+      String(area || "").toLowerCase()
+    );
+
     const itemDepartment = String(item.department || "").toLowerCase();
 
     const selectedOperatingArea = String(
@@ -230,7 +310,7 @@ function getFilteredMasterListItems() {
 
     const matchesOperatingArea =
       selectedOperatingArea === "all" ||
-      itemOperatingArea === selectedOperatingArea;
+      itemOperatingAreas.includes(selectedOperatingArea);
 
     const matchesDepartment =
       selectedDepartment === "all" || itemDepartment === selectedDepartment;
@@ -241,7 +321,7 @@ function getFilteredMasterListItems() {
       !searchValue ||
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
       String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
-      String(item.operatingArea || "").toLowerCase().includes(searchValue) ||
+      getItemOperatingAreaDisplay(item).toLowerCase().includes(searchValue) ||
       String(item.department || "").toLowerCase().includes(searchValue) ||
       String(item.section || "").toLowerCase().includes(searchValue) ||
       String(item.unit || "").toLowerCase().includes(searchValue) ||
@@ -312,7 +392,7 @@ function renderMasterListRows() {
     .map(
       (item) => `
         <tr>
-          <td>${item.operatingArea || "-"}</td>
+          <td>${getItemOperatingAreaDisplay(item)}</td>
           <td>${item.department || "-"}</td>
           <td>${item.itemId || "-"}</td>
           <td>${item.officialItemName || "-"}</td>
@@ -339,11 +419,6 @@ function renderMasterListRows() {
 }
 
 function renderAddEditItemPanel(settings, editingItem, isEditing) {
-  const selectedOperatingArea =
-    editingItem?.operatingArea ||
-    getSettingOptionName(settings.operatingAreas[0]) ||
-    "";
-
   const selectedDepartment =
     editingItem?.department || getSettingOptionName(settings.departments[0]) || "";
 
@@ -364,8 +439,7 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
         <div>
           <h3>Add / Edit Master List Item</h3>
           <p>
-            Use this panel to create or update an item. Dropdowns come from the
-            Settings Setup Library.
+            Create one official item record, then choose every Operating Area where that same Item ID is active.
           </p>
         </div>
 
@@ -380,20 +454,20 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
         </h4>
 
         <div class="instruction-box">
-          <strong>Setup Library Connection:</strong>
+          <strong>One Item ID, Multiple Areas:</strong>
           <span>
-            Operating Area, Department, Section, and Unit are reusable dropdown
-            options from Settings. The item path is created here when the item is saved.
+            Use Active In to make the same item available in Warehouse, Commissary, Branch, or any selected area.
+            Stock pages still calculate quantities separately by location and ledger movement.
           </span>
         </div>
 
         <form id="add-item-form" class="form-grid">
-          <label>
-            Operating Area
-            <select id="operatingArea" required>
-              ${renderOptions(settings.operatingAreas, selectedOperatingArea)}
-            </select>
-          </label>
+          <div class="form-full">
+            <label>
+              Active In
+            </label>
+            ${renderOperatingAreaCheckboxes(settings, editingItem)}
+          </div>
 
           <label>
             Department
@@ -488,7 +562,7 @@ function renderFullMasterListPanel(settings) {
         <div>
           <h3>Full Master List</h3>
           <p>
-            Review, filter, edit, or remove saved item records.
+            Review, filter, edit, or remove saved item records. One item can now be active in multiple Operating Areas.
           </p>
         </div>
 
@@ -531,7 +605,7 @@ function renderFullMasterListPanel(settings) {
         <table>
           <thead>
             <tr>
-              <th>Operating Area</th>
+              <th>Active In</th>
               <th>Department</th>
               <th>Item ID</th>
               <th>Official Item Name</th>
@@ -585,6 +659,10 @@ function clearMasterListFormFields() {
   const officialItemName = document.getElementById("officialItemName");
   const minimumStock = document.getElementById("minimumStock");
   const notes = document.getElementById("notes");
+
+  document.querySelectorAll('input[name="operatingAreas"]').forEach((input) => {
+    input.checked = false;
+  });
 
   if (officialItemName) officialItemName.value = "";
   if (minimumStock) minimumStock.value = "";
@@ -709,9 +787,11 @@ function setupMasterListEvents() {
 
       const originalItemId = window.DMC_MASTER_LIST_EDITING_ITEM_ID;
       const isEditing = Boolean(originalItemId);
+      const selectedOperatingAreas = getSelectedOperatingAreasFromForm();
 
       const savedItem = {
-        operatingArea: document.getElementById("operatingArea").value,
+        operatingAreas: selectedOperatingAreas,
+        operatingArea: selectedOperatingAreas.join(", "),
         department: document.getElementById("department").value,
         section: document.getElementById("section").value,
         itemId: document.getElementById("itemId").value.trim(),
@@ -724,12 +804,12 @@ function setupMasterListEvents() {
         notes: document.getElementById("notes").value.trim()
       };
 
-      if (!savedItem.operatingArea) {
+      if (selectedOperatingAreas.length === 0) {
         showMasterListModal({
           type: "warning",
-          title: "Operating Area Required",
+          title: "Active In Required",
           message:
-            "Please add or select an Operating Area before saving this item.",
+            "Please choose at least one Operating Area where this item is active.",
           confirmLabel: "Got it"
         });
         return;
@@ -779,7 +859,7 @@ function setupMasterListEvents() {
         showMasterListModal({
           type: "warning",
           title: "Duplicate Item ID",
-          message: `Item ID ${savedItem.itemId} already exists. Please use a unique Item ID.`,
+          message: `Item ID ${savedItem.itemId} already exists. Please edit the existing item and check another Active In area instead of creating a duplicate ID.`,
           confirmLabel: "Got it"
         });
         return;
@@ -804,7 +884,7 @@ function setupMasterListEvents() {
         type: "success",
         title: isEditing ? "Item Updated" : "Item Saved",
         message: isEditing
-          ? "The item was updated successfully. The form will stay open so you can continue adding or editing items."
+          ? "The item was updated successfully. The same Item ID can now be active in multiple Operating Areas."
           : "The item was saved successfully. The form will stay open so you can add the next item.",
         confirmLabel: "Continue"
       });
@@ -826,7 +906,7 @@ window.DMC_PAGES["master-list"] = {
   eyebrow: "System",
   title: "Master List",
   description:
-    "Manage the official item catalog. Dropdowns come from Settings.",
+    "Manage the official item catalog. One item ID can now be active in multiple Operating Areas.",
   getContent: getMasterListContent,
   content: getMasterListContent(),
   afterRender: setupMasterListEvents
