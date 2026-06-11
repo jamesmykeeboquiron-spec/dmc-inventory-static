@@ -462,12 +462,12 @@ function renderAddEditItemPanel(settings, editingItem, isEditing) {
         </div>
 
         <form id="add-item-form" class="form-grid">
-          <div class="form-full">
-            <label>
-              Active In
-            </label>
-            ${renderOperatingAreaCheckboxes(settings, editingItem)}
-          </div>
+         <div class="form-full master-list-active-in-section">
+  <div class="master-list-active-in-title">
+    Active In
+  </div>
+  ${renderOperatingAreaCheckboxes(settings, editingItem)}
+</div>
 
           <label>
             Department
