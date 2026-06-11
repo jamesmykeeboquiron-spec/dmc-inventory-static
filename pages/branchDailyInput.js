@@ -1198,24 +1198,12 @@ function setupBranchDailyInputEvents() {
 
   document.querySelectorAll(".branch-daily-input-cell").forEach((input) => {
   input.addEventListener("input", () => {
-    const activeItemId = input.dataset.itemId;
-    const activeField = input.dataset.field;
-    const cursorPosition = input.selectionStart;
+    saveBranchDailyCellValue(input);
+  });
 
+  input.addEventListener("change", () => {
     saveBranchDailyCellValue(input);
     refreshBranchDailyInputPage();
-
-    const refreshedInput = document.querySelector(
-      `.branch-daily-input-cell[data-item-id="${activeItemId}"][data-field="${activeField}"]`
-    );
-
-    if (refreshedInput) {
-      refreshedInput.focus();
-
-      if (typeof cursorPosition === "number") {
-        refreshedInput.setSelectionRange(cursorPosition, cursorPosition);
-      }
-    }
   });
 
   input.addEventListener("keydown", (event) => {
@@ -1225,8 +1213,17 @@ function setupBranchDailyInputEvents() {
 
     event.preventDefault();
     saveBranchDailyCellValue(input);
+    refreshBranchDailyInputPage();
 
-    focusNextBranchDailyInput(input, event.shiftKey ? -1 : 1);
+    setTimeout(() => {
+      const refreshedInput = document.querySelector(
+        `.branch-daily-input-cell[data-item-id="${input.dataset.itemId}"][data-field="${input.dataset.field}"]`
+      );
+
+      if (refreshedInput) {
+        focusNextBranchDailyInput(refreshedInput, event.shiftKey ? -1 : 1);
+      }
+    }, 0);
   });
 });
 
