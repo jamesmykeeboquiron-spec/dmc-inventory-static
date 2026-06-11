@@ -94,10 +94,7 @@ function entryBelongsToWarehouseLog(entry) {
     return true;
   }
 
-  if (
-    destination.includes("warehouse") ||
-    destination.includes("stockroom")
-  ) {
+  if (destination.includes("warehouse") || destination.includes("stockroom")) {
     return !location.includes("commissary");
   }
 
@@ -126,10 +123,12 @@ function getWarehouseLogMovementTypes() {
     "Received",
     "Supplier Receiving",
     "Transfer Out",
+    "Usage",
     "Waste",
     "Adjustment",
     "Stock Count",
-    "Remaining Count"
+    "Remaining Count",
+    "Daily Note"
   ];
 
   const movementTypes = [
@@ -347,47 +346,16 @@ function getWarehouseMovementBadgeClass(movementType) {
   return "info-badge";
 }
 
-function getWarehouseEffectBadgeClass(stockEffect) {
-  if (stockEffect === "add") {
-    return "success";
-  }
-
-  if (stockEffect === "deduct") {
-    return "danger";
-  }
-
-  if (stockEffect === "set") {
-    return "info-badge";
-  }
-
-  return "warning-badge";
-}
-
-function getWarehouseSignedQuantity(entry) {
-  const stockEffect = getWarehouseEntryStockEffect(entry);
-  const quantity = Number(entry.quantity || 0);
-
-  if (stockEffect === "add") {
-    return `+${quantity} ${entry.unit || ""}`;
-  }
-
-  if (stockEffect === "deduct") {
-    return `-${quantity} ${entry.unit || ""}`;
-  }
-
-  if (stockEffect === "set") {
-    return `Set ${quantity} ${entry.unit || ""}`;
-  }
-
-  return `${quantity} ${entry.unit || ""}`;
-}
-
 function getWarehouseBatchSourceLabel(batch) {
   const entries = batch.entries || [];
   const firstEntry = entries[0] || {};
   const source = String(firstEntry.source || "").toLowerCase();
 
-  if (entries.some((entry) => String(entry.source || "").toLowerCase().includes("incoming from commissary"))) {
+  if (
+    entries.some((entry) =>
+      String(entry.source || "").toLowerCase().includes("incoming from commissary")
+    )
+  ) {
     return "Received from Commissary";
   }
 
@@ -432,12 +400,23 @@ function getWarehouseBatchEffectCounts(batch) {
   );
 }
 
-function cleanWarehouseLogNotes(entry) {
-  let notes = String(entry.notes || "").trim();
+function getWarehouseLogNumber(value) {
+  const numberValue = Number(value || 0);
+
+  return Number.isNaN(numberValue) ? 0 : numberValue;
+}
+
+function cleanWarehouseLogNotes(entryOrNotes) {
+  let notes =
+    typeof entryOrNotes === "string"
+      ? String(entryOrNotes || "").trim()
+      : String(entryOrNotes?.notes || "").trim();
 
   if (!notes) {
     return "";
   }
+
+  const entry = typeof entryOrNotes === "string" ? {} : entryOrNotes || {};
 
   const defaultFragments = [
     "Warehouse received from Commissary.",
@@ -445,19 +424,37 @@ function cleanWarehouseLogNotes(entry) {
     `Sent Qty: ${entry.sentQuantity ?? ""}.`,
     `Received Qty: ${entry.quantity ?? ""}.`,
     `Variance: ${entry.variance ?? ""}.`,
-    `Condition: ${entry.condition || ""}.`
+    `Condition: ${entry.condition || ""}.`,
+    "No notes",
+    "N/A"
   ];
 
   defaultFragments.forEach((fragment) => {
-    if (fragment && fragment !== "Original Commissary Batch: ." && fragment !== "Sent Qty: ." && fragment !== "Received Qty: ." && fragment !== "Variance: ." && fragment !== "Condition: .") {
+    if (
+      fragment &&
+      fragment !== "Original Commissary Batch: ." &&
+      fragment !== "Sent Qty: ." &&
+      fragment !== "Received Qty: ." &&
+      fragment !== "Variance: ." &&
+      fragment !== "Condition: ."
+    ) {
       notes = notes.replace(fragment, "");
     }
   });
 
   notes = notes
-    .replace(/\s+/g, " ")
+    .replace(/Closing count submitted by[^.]*\./gi, "")
+    .replace(/Current:\s*[-\d.]+/gi, "")
+    .replace(/Transfer In:\s*[-\d.]+/gi, "")
+    .replace(/Total Available:\s*[-\d.]+/gi, "")
+    .replace(/Transfer Out:\s*[-\d.]+/gi, "")
+    .replace(/Remaining:\s*[-\d.]+/gi, "")
+    .replace(/Waste:\s*[-\d.]+/gi, "")
+    .replace(/Usage Auto:\s*[-\d.]+/gi, "")
     .replace(/^Receiving Notes:\s*/i, "")
     .replace(/^Commissary Notes:\s*/i, "")
+    .replace(/^Notes:\s*/i, "")
+    .replace(/\s+/g, " ")
     .trim();
 
   if (
@@ -471,23 +468,18 @@ function cleanWarehouseLogNotes(entry) {
   return notes;
 }
 
-function createWarehouseLogNoteKey(entry, index) {
-  return [
-    entry.batchId || "batch",
-    entry.itemId || "item",
-    entry.sourceLineKey || "line",
-    index
-  ].join("__");
+function createWarehouseLogNoteKey(itemId, index) {
+  return `${itemId || "item"}__${index}`;
 }
 
-function renderWarehouseLogNotes(entry, index) {
-  const cleanedNotes = cleanWarehouseLogNotes(entry);
+function renderWarehouseLogNotes(notes, itemId, index) {
+  const cleanedNotes = cleanWarehouseLogNotes(notes);
 
   if (!cleanedNotes) {
     return "-";
   }
 
-  const noteKey = createWarehouseLogNoteKey(entry, index);
+  const noteKey = createWarehouseLogNoteKey(itemId, index);
   window.DMC_WAREHOUSE_LOG_NOTE_LOOKUP[noteKey] = cleanedNotes;
 
   if (cleanedNotes.length <= 55) {
@@ -499,6 +491,92 @@ function renderWarehouseLogNotes(entry, index) {
       View Notes
     </button>
   `;
+}
+
+function getWarehouseGroupedItemRows(batch) {
+  const groupedRows = {};
+
+  batch.entries.forEach((entry) => {
+    const itemId = entry.itemId || "NO-ID";
+
+    groupedRows[itemId] = groupedRows[itemId] || {
+      department: entry.department || "-",
+      section: entry.section || "-",
+      itemId: entry.itemId || "-",
+      itemName: entry.itemName || "-",
+      unit: entry.unit || "-",
+      receivedIn: 0,
+      out: 0,
+      remaining: "",
+      usage: 0,
+      waste: 0,
+      sentQty: "",
+      variance: "",
+      condition: "",
+      notes: []
+    };
+
+    const row = groupedRows[itemId];
+    const quantity = getWarehouseLogNumber(entry.quantity);
+    const stockEffect = getWarehouseEntryStockEffect(entry);
+    const movementType = String(entry.movementType || "");
+    const movementField = String(entry.movementField || "");
+    const source = String(entry.source || "").toLowerCase();
+
+    if (
+      stockEffect === "add" ||
+      movementType === "Transfer In" ||
+      movementType === "Received" ||
+      movementType === "Supplier Receiving" ||
+      source.includes("incoming from commissary")
+    ) {
+      row.receivedIn += quantity;
+    }
+
+    if (
+      movementType === "Transfer Out" ||
+      movementField === "transferOut" ||
+      stockEffect === "deduct"
+    ) {
+      if (movementType !== "Waste" && movementType !== "Usage") {
+        row.out += quantity;
+      }
+    }
+
+    if (movementType === "Remaining Count" || movementType === "Stock Count" || stockEffect === "set") {
+      row.remaining = quantity;
+    }
+
+    if (movementType === "Usage" || movementField === "usageAuto") {
+      row.usage += quantity;
+    }
+
+    if (movementType === "Waste" || movementField === "waste") {
+      row.waste += quantity;
+    }
+
+    if (entry.sentQuantity !== undefined && entry.sentQuantity !== null) {
+      row.sentQty = entry.sentQuantity;
+    }
+
+    if (entry.variance !== undefined && entry.variance !== null) {
+      row.variance = entry.variance;
+    }
+
+    if (entry.condition) {
+      row.condition = entry.condition;
+    }
+
+    const cleanedNotes = cleanWarehouseLogNotes(entry);
+
+    if (cleanedNotes) {
+      row.notes.push(cleanedNotes);
+    }
+  });
+
+  return Object.values(groupedRows).sort((a, b) => {
+    return String(a.itemName).localeCompare(String(b.itemName));
+  });
 }
 
 function renderWarehouseBatchList() {
@@ -570,6 +648,8 @@ function renderWarehouseBatchLineTable(batch) {
     `;
   }
 
+  const rows = getWarehouseGroupedItemRows(batch);
+
   return `
     <div class="table-wrap">
       <table>
@@ -579,9 +659,11 @@ function renderWarehouseBatchLineTable(batch) {
             <th>Section</th>
             <th>Item ID</th>
             <th>Item Name</th>
-            <th>Movement</th>
             <th>Received / In</th>
             <th>Out</th>
+            <th>Remaining</th>
+            <th>Usage</th>
+            <th>Waste</th>
             <th>Sent Qty</th>
             <th>Variance</th>
             <th>Unit</th>
@@ -591,56 +673,37 @@ function renderWarehouseBatchLineTable(batch) {
         </thead>
 
         <tbody>
-          ${batch.entries
-            .map((entry, index) => {
-              const stockEffect = getWarehouseEntryStockEffect(entry);
-              const quantity = Number(entry.quantity || 0);
-              const sentQty =
-                entry.sentQuantity === undefined || entry.sentQuantity === null
-                  ? "-"
-                  : entry.sentQuantity;
-              const variance =
-                entry.variance === undefined || entry.variance === null
-                  ? "-"
-                  : entry.variance;
+          ${rows
+            .map((row, index) => {
+              const uniqueNotes = [...new Set(row.notes)].filter(Boolean);
+              const joinedNotes = uniqueNotes.join(" | ");
 
               return `
                 <tr>
-                  <td>${entry.department || "-"}</td>
-                  <td>${entry.section || "-"}</td>
-                  <td>${entry.itemId || "-"}</td>
-                  <td>${entry.itemName || "-"}</td>
-                  <td>
-                    <span class="badge ${getWarehouseMovementBadgeClass(
-                      entry.movementType
-                    )}">
-                      ${entry.movementType || "-"}
-                    </span>
-                    <small class="table-subtext">
-                      ${entry.source || "-"} → ${entry.destination || "-"}
-                    </small>
+                  <td>${row.department || "-"}</td>
+                  <td>${row.section || "-"}</td>
+                  <td>${row.itemId || "-"}</td>
+                  <td>${row.itemName || "-"}</td>
+                  <td class="${row.receivedIn ? "positive-text" : ""}">
+                    ${row.receivedIn || "-"}
                   </td>
-                  <td class="${stockEffect === "add" ? "positive-text" : ""}">
-                    ${
-                      stockEffect === "add"
-                        ? `<strong>${quantity}</strong>`
-                        : "-"
-                    }
+                  <td class="${row.out ? "negative-text" : ""}">
+                    ${row.out || "-"}
                   </td>
-                  <td class="${stockEffect === "deduct" ? "negative-text" : ""}">
-                    ${
-                      stockEffect === "deduct"
-                        ? `<strong>${quantity}</strong>`
-                        : "-"
-                    }
+                  <td>${row.remaining === "" ? "-" : row.remaining}</td>
+                  <td>${row.usage || "-"}</td>
+                  <td>${row.waste || "-"}</td>
+                  <td>${row.sentQty === "" ? "-" : row.sentQty}</td>
+                  <td class="${
+                    row.variance !== "" && Number(row.variance) !== 0
+                      ? "danger-text"
+                      : ""
+                  }">
+                    ${row.variance === "" ? "-" : row.variance}
                   </td>
-                  <td>${sentQty}</td>
-                  <td class="${variance !== "-" && Number(variance) !== 0 ? "danger-text" : ""}">
-                    ${variance}
-                  </td>
-                  <td>${entry.unit || "-"}</td>
-                  <td>${entry.condition || "-"}</td>
-                  <td>${renderWarehouseLogNotes(entry, index)}</td>
+                  <td>${row.unit || "-"}</td>
+                  <td>${row.condition || "-"}</td>
+                  <td>${renderWarehouseLogNotes(joinedNotes, row.itemId, index)}</td>
                 </tr>
               `;
             })
@@ -724,15 +787,16 @@ function renderSelectedWarehouseBatchDetails() {
       </div>
 
       <div class="branch-order-section">
-        <h4>Warehouse Movement Lines</h4>
+        <h4>Warehouse Movement Summary</h4>
         ${renderWarehouseBatchLineTable(selectedBatch)}
       </div>
 
       <div class="instruction-box">
         <strong>Stock Rule:</strong>
         <span>
-          Warehouse Stock is calculated from these posted movement rows. For Incoming from Commissary,
-          Warehouse Stock uses actual Received Qty, not Sent Qty. Variance is kept for review.
+          Warehouse Stock is calculated from posted movement rows.
+          Received / In adds stock. Out deducts stock. Remaining Count becomes the latest physical stock truth.
+          Usage and Waste are kept for reporting.
         </span>
       </div>
     </section>
@@ -768,7 +832,7 @@ function getWarehouseLogTransactionContent() {
             <h3>Warehouse Log Transaction</h3>
             <p>
               Read-only history of Warehouse receiving, supplier activity,
-              commissary receipts, transfer movement, waste, and adjustments.
+              commissary receipts, transfer movement, waste, counts, and adjustments.
             </p>
           </div>
 
@@ -965,7 +1029,7 @@ window.DMC_PAGES["warehouse-log-transaction"] = {
   eyebrow: "Warehouse",
   title: "Warehouse Log Transaction",
   description:
-    "Read-only batch history of posted Warehouse receiving, commissary receipts, transfer movement, and stock effects.",
+    "Read-only batch history of posted Warehouse receiving, commissary receipts, transfer movement, counts, usage, waste, and stock effects.",
   getContent: getWarehouseLogTransactionContent,
   content: getWarehouseLogTransactionContent(),
   afterRender: setupWarehouseLogTransactionEvents
