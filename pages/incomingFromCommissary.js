@@ -36,6 +36,13 @@ function getIncomingCommissaryLedgerEntries() {
   }
 }
 
+function saveIncomingCommissaryLedgerEntries(entries) {
+  localStorage.setItem(
+    DMC_INCOMING_COMMISSARY_LEDGER_KEY,
+    JSON.stringify(entries)
+  );
+}
+
 function formatIncomingCommissaryDateTime(value) {
   if (!value) {
     return "-";
@@ -54,6 +61,14 @@ function formatIncomingCommissaryDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function getIncomingCommissaryTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getIncomingCommissaryTimestamp() {
+  return new Date().toISOString();
 }
 
 function entryIsCommissaryTransferOutToWarehouse(entry) {
@@ -498,6 +513,97 @@ function getFilteredIncomingCommissaryLines(batch) {
   });
 }
 
+function buildIncomingCommissaryWarehouseLedgerEntries(batch, draft, receiptStatus) {
+  const receivedAt = getIncomingCommissaryTimestamp();
+  const receivedDate = getIncomingCommissaryTodayDate();
+
+  return batch.entries
+    .map((entry) => {
+      const lineKey = getIncomingCommissaryLineKey(entry);
+      const draftLine = draft.lines?.[lineKey] || {};
+      const receivedQty = Number(draftLine.receivedQty || 0);
+      const sentQty = Number(entry.quantity || 0);
+      const variance = receivedQty - sentQty;
+      const condition = draftLine.condition || "Good";
+
+      if (Number.isNaN(receivedQty) || receivedQty <= 0) {
+        return null;
+      }
+
+      return {
+        date: receivedDate,
+        submittedAt: receivedAt,
+        receivedAt,
+        batchId: `WH-RCV-${batch.batchId}`,
+        sourceBatchId: batch.batchId,
+        receiptSourceBatchId: batch.batchId,
+        receiptLineKey: lineKey,
+        location: "Warehouse",
+        department: entry.department || "Warehouse",
+        section: entry.section || "",
+        itemId: entry.itemId || "",
+        itemName: entry.itemName || "",
+        movementType: "Transfer In",
+        movementField: "incomingFromCommissaryReceived",
+        stockEffect: "add",
+        quantity: receivedQty,
+        sentQuantity: sentQty,
+        variance,
+        unit: entry.unit || "",
+        source: "Incoming from Commissary",
+        destination: "Warehouse",
+        receivedBy: draft.receivedBy,
+        managerReviewedBy: draft.receivedBy,
+        condition,
+        receiptStatus,
+        notes: [
+          `Warehouse received from Commissary batch ${batch.batchId}.`,
+          `Sent Qty: ${sentQty}.`,
+          `Received Qty: ${receivedQty}.`,
+          `Variance: ${variance}.`,
+          `Condition: ${condition}.`,
+          draft.receivingNotes ? `Receiving Notes: ${draft.receivingNotes}` : "",
+          entry.notes ? `Original Notes: ${entry.notes}` : ""
+        ]
+          .filter(Boolean)
+          .join(" ")
+      };
+    })
+    .filter(Boolean);
+}
+
+function warehouseReceiptAlreadyPosted(batchId) {
+  return getIncomingCommissaryLedgerEntries().some((entry) => {
+    return (
+      entry.movementField === "incomingFromCommissaryReceived" &&
+      entry.receiptSourceBatchId === batchId
+    );
+  });
+}
+
+function postIncomingCommissaryReceiptToWarehouseLedger(batch, draft, receiptStatus) {
+  if (warehouseReceiptAlreadyPosted(batch.batchId)) {
+    return {
+      posted: false,
+      entries: []
+    };
+  }
+
+  const currentEntries = getIncomingCommissaryLedgerEntries();
+  const warehouseEntries = buildIncomingCommissaryWarehouseLedgerEntries(
+    batch,
+    draft,
+    receiptStatus
+  );
+
+  saveIncomingCommissaryLedgerEntries([...currentEntries, ...warehouseEntries]);
+
+  return {
+    posted: true,
+    entries: warehouseEntries
+  };
+}
+
 function renderIncomingCommissaryBatchList() {
   const batches = getIncomingCommissaryBatches();
   const selectedBatch = getSelectedIncomingCommissaryBatch();
@@ -506,659 +612,4 @@ function renderIncomingCommissaryBatchList() {
     return `
       <div class="order-list-empty">
         <p>No incoming Commissary transfers found.</p>
-        <span>Commissary Out Warehouse batches will appear here.</span>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="branch-order-list incoming-commissary-list-scroll">
-      ${batches
-        .map((batch) => {
-          const firstEntry = batch.entries[0] || {};
-          const status = getIncomingCommissaryBatchStatus(batch);
-
-          return `
-            <button
-              class="branch-order-list-item ${
-                selectedBatch?.batchId === batch.batchId ? "active" : ""
-              }"
-              data-select-incoming-commissary="${batch.batchId}"
-            >
-              <div>
-                <strong>${batch.batchId}</strong>
-                <p>Commissary → Warehouse • ${(batch.entries || []).length} item(s)</p>
-                <span>
-                  Sent: ${formatIncomingCommissaryDateTime(
-                    firstEntry.submittedAt || firstEntry.date
-                  )}
-                </span>
-              </div>
-
-              <div class="branch-order-list-meta">
-                <span class="badge ${getIncomingCommissaryStatusBadgeClass(status)}">
-                  ${status}
-                </span>
-              </div>
-            </button>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
-
-function renderIncomingCommissaryLines(batch) {
-  const draft = getIncomingCommissaryDraft(batch);
-  const batchStatus = getIncomingCommissaryBatchStatus(batch);
-  const isLocked = batchStatus === "Received" || batchStatus === "Variance";
-  const filteredLines = getFilteredIncomingCommissaryLines(batch);
-
-  if (!batch || !batch.entries || batch.entries.length === 0) {
-    return `
-      <p class="submit-preview-empty">
-        No incoming lines found for this Commissary transfer.
-      </p>
-    `;
-  }
-
-  if (filteredLines.length === 0) {
-    return `
-      <p class="submit-preview-empty">
-        No lines match the selected Department/Section filters.
-      </p>
-    `;
-  }
-
-  return `
-    <div class="warehouse-order-fulfillment-table-wrap incoming-commissary-line-scroll">
-      <table class="warehouse-order-fulfillment-table">
-        <thead>
-          <tr>
-            <th>Department</th>
-            <th>Section</th>
-            <th>Item ID</th>
-            <th>Item Name</th>
-            <th>Sent Qty</th>
-            <th>Received Qty</th>
-            <th>Variance</th>
-            <th>Unit</th>
-            <th>Condition</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          ${filteredLines
-            .map((entry) => {
-              const lineKey = getIncomingCommissaryLineKey(entry);
-              const sentQty = Number(entry.quantity || 0);
-              const receivedValue =
-                draft.lines?.[lineKey]?.receivedQty ?? "";
-              const receivedQty = Number(receivedValue);
-              const hasReceivedQty =
-                String(receivedValue || "").trim() !== "" &&
-                !Number.isNaN(receivedQty);
-              const variance = hasReceivedQty ? receivedQty - sentQty : "-";
-              const condition = draft.lines?.[lineKey]?.condition || "Good";
-
-              return `
-                <tr>
-                  <td>${entry.department || "-"}</td>
-                  <td>${entry.section || "-"}</td>
-                  <td>${entry.itemId || "-"}</td>
-                  <td>${entry.itemName || "-"}</td>
-                  <td>${sentQty}</td>
-                  <td>
-                    <input
-                      class="fulfillment-input"
-                      data-incoming-commissary-received="${lineKey}"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value="${receivedValue}"
-                      ${isLocked ? "disabled" : ""}
-                    />
-                  </td>
-                  <td>
-                    <span class="${
-                      variance !== "-" && variance !== 0 ? "danger-text" : ""
-                    }">
-                      ${variance}
-                    </span>
-                  </td>
-                  <td>${entry.unit || "-"}</td>
-                  <td>
-                    <select
-                      data-incoming-commissary-condition="${lineKey}"
-                      ${isLocked ? "disabled" : ""}
-                    >
-                      <option value="Good" ${condition === "Good" ? "selected" : ""}>
-                        Good
-                      </option>
-                      <option value="Damaged" ${condition === "Damaged" ? "selected" : ""}>
-                        Damaged
-                      </option>
-                      <option value="Missing" ${condition === "Missing" ? "selected" : ""}>
-                        Missing
-                      </option>
-                      <option value="Needs Review" ${
-                        condition === "Needs Review" ? "selected" : ""
-                      }>
-                        Needs Review
-                      </option>
-                    </select>
-                  </td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSelectedIncomingCommissaryTransfer() {
-  const batch = getSelectedIncomingCommissaryBatch();
-
-  if (!batch) {
-    return `
-      <section class="panel branch-order-detail">
-        <div class="order-list-empty">
-          <p>No Commissary transfer selected.</p>
-          <span>Select a pending incoming transfer from the list.</span>
-        </div>
-      </section>
-    `;
-  }
-
-  const firstEntry = batch.entries[0] || {};
-  const draft = getIncomingCommissaryDraft(batch);
-  const batchStatus = getIncomingCommissaryBatchStatus(batch);
-  const isLocked = batchStatus === "Received" || batchStatus === "Variance";
-  const sentTotal = getIncomingCommissarySentTotal(batch);
-  const previewStatus = getIncomingCommissaryDraftStatus(batch);
-
-  return `
-    <section class="panel branch-order-detail">
-      <div class="panel-header">
-        <div>
-          <h3>${batch.batchId}</h3>
-          <p>
-            Commissary → Warehouse • ${firstEntry.date || "-"}
-          </p>
-        </div>
-
-        <div class="branch-order-list-meta">
-          <span class="badge ${getIncomingCommissaryStatusBadgeClass(batchStatus)}">
-            ${batchStatus}
-          </span>
-        </div>
-      </div>
-
-      <div class="branch-order-info-grid warehouse-order-info-grid">
-        <div>
-          <p class="eyebrow">Sent By / Reviewed By</p>
-          <strong>${firstEntry.managerReviewedBy || "-"}</strong>
-        </div>
-
-        <div>
-          <p class="eyebrow">Sent At</p>
-          <strong>${formatIncomingCommissaryDateTime(
-            firstEntry.submittedAt || firstEntry.date
-          )}</strong>
-        </div>
-
-        <div>
-          <p class="eyebrow">Source</p>
-          <strong>${firstEntry.source || "Commissary"}</strong>
-        </div>
-
-        <div>
-          <p class="eyebrow">Destination</p>
-          <strong>${firstEntry.destination || "Warehouse"}</strong>
-        </div>
-
-        <div>
-          <p class="eyebrow">Sent Total</p>
-          <strong>${sentTotal}</strong>
-        </div>
-      </div>
-
-      <div class="branch-order-section">
-        <div class="fulfillment-panel-header">
-          <div>
-            <h4>Warehouse Receiving Check</h4>
-            <p>Confirm the quantity Warehouse actually received from Commissary.</p>
-          </div>
-
-          <span class="badge">Draft Receive Only</span>
-        </div>
-
-        <div class="warehouse-order-filter-grid">
-          <label>
-            Department
-            <select id="incoming-commissary-detail-department">
-              ${renderIncomingCommissaryDepartmentOptions(batch)}
-            </select>
-          </label>
-
-          <label>
-            Section
-            <select id="incoming-commissary-detail-section">
-              ${renderIncomingCommissarySectionOptions(batch)}
-            </select>
-          </label>
-        </div>
-
-        ${renderIncomingCommissaryLines(batch)}
-      </div>
-
-      <div class="branch-order-section fulfillment-panel">
-        <div class="fulfillment-meta-grid warehouse-fulfillment-meta-grid">
-          <label>
-            Received By
-            <input
-              id="incoming-commissary-received-by"
-              type="text"
-              placeholder="Warehouse receiver name"
-              value="${draft.receivedBy || ""}"
-              ${isLocked ? "disabled" : ""}
-            />
-          </label>
-
-          <label class="form-full">
-            Receiving Notes
-            <textarea
-              id="incoming-commissary-receiving-notes"
-              rows="3"
-              placeholder="Receiving notes, variance explanation, handling notes..."
-              ${isLocked ? "disabled" : ""}
-            >${draft.receivingNotes || ""}</textarea>
-          </label>
-        </div>
-      </div>
-
-      <div class="instruction-box">
-        <strong>Current Version:</strong>
         <span>
-          This page is currently a Warehouse receiving workspace only. Confirming receipt saves the receipt status for this page,
-          but it does not update Warehouse Stock yet. Warehouse Stock will connect after this view is finalized.
-        </span>
-      </div>
-
-      <div class="form-actions branch-order-actions">
-        <button
-          class="primary-button"
-          id="confirm-incoming-commissary-receipt"
-          ${isLocked ? "disabled" : ""}
-        >
-          Confirm Receipt Preview
-        </button>
-
-        <button
-          class="ghost-button"
-          id="save-incoming-commissary-draft"
-          ${isLocked ? "disabled" : ""}
-        >
-          Save Draft
-        </button>
-
-        <span class="badge ${getIncomingCommissaryStatusBadgeClass(previewStatus)}">
-          Preview: ${previewStatus}
-        </span>
-      </div>
-    </section>
-  `;
-}
-
-function getIncomingFromCommissaryContent() {
-  const filters = window.DMC_INCOMING_COMMISSARY_FILTERS;
-  const summary = getIncomingCommissarySummary();
-
-  return `
-    <section class="grid">
-      <div class="card">
-        <p>Total Transfers</p>
-        <strong>${summary.total}</strong>
-      </div>
-
-      <div class="card">
-        <p>Pending</p>
-        <strong>${summary.pending}</strong>
-      </div>
-
-      <div class="card">
-        <p>Received</p>
-        <strong>${summary.received}</strong>
-      </div>
-
-      <div class="card">
-        <p>Variance</p>
-        <strong>${summary.variance}</strong>
-      </div>
-    </section>
-
-    <section class="branch-orders-layout">
-      <section class="panel branch-order-list-panel">
-        <div class="panel-header">
-          <div>
-            <h3>Incoming from Commissary</h3>
-            <p>Warehouse receiving queue for products/items sent from Commissary.</p>
-          </div>
-        </div>
-
-        <div class="warehouse-order-filter-grid">
-          <label>
-            Status
-            <select id="incoming-commissary-status-filter">
-              ${renderIncomingCommissaryStatusOptions()}
-            </select>
-          </label>
-
-          <label>
-            Start Date
-            <input
-              id="incoming-commissary-start-date"
-              type="date"
-              value="${filters.startDate}"
-            />
-          </label>
-
-          <label>
-            End Date
-            <input
-              id="incoming-commissary-end-date"
-              type="date"
-              value="${filters.endDate}"
-            />
-          </label>
-        </div>
-
-        <div class="filter-bar branch-order-search-bar">
-          <label class="filter-search">
-            Search
-            <input
-              id="incoming-commissary-search"
-              type="text"
-              placeholder="Search batch, item, sender, notes..."
-              value="${filters.search}"
-            />
-          </label>
-
-          <button class="ghost-button" id="clear-incoming-commissary-filters">
-            Clear
-          </button>
-        </div>
-
-        ${renderIncomingCommissaryBatchList()}
-      </section>
-
-      ${renderSelectedIncomingCommissaryTransfer()}
-    </section>
-  `;
-}
-
-function refreshIncomingFromCommissaryPage() {
-  window.DMC_PAGES["incoming-from-commissary"].content =
-    getIncomingFromCommissaryContent();
-
-  renderPage("incoming-from-commissary");
-}
-
-function setupIncomingFromCommissaryEvents() {
-  const statusFilter = document.getElementById(
-    "incoming-commissary-status-filter"
-  );
-  const startDateInput = document.getElementById(
-    "incoming-commissary-start-date"
-  );
-  const endDateInput = document.getElementById("incoming-commissary-end-date");
-  const searchInput = document.getElementById("incoming-commissary-search");
-  const clearButton = document.getElementById(
-    "clear-incoming-commissary-filters"
-  );
-
-  if (statusFilter) {
-    statusFilter.addEventListener("change", () => {
-      window.DMC_INCOMING_COMMISSARY_FILTERS.status = statusFilter.value;
-      window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId = "";
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  if (startDateInput) {
-    startDateInput.addEventListener("change", () => {
-      window.DMC_INCOMING_COMMISSARY_FILTERS.startDate = startDateInput.value;
-      window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId = "";
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  if (endDateInput) {
-    endDateInput.addEventListener("change", () => {
-      window.DMC_INCOMING_COMMISSARY_FILTERS.endDate = endDateInput.value;
-      window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId = "";
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      window.DMC_INCOMING_COMMISSARY_FILTERS.search = searchInput.value;
-      window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId = "";
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  if (clearButton) {
-    clearButton.addEventListener("click", () => {
-      window.DMC_INCOMING_COMMISSARY_FILTERS = {
-        status: "pending",
-        startDate: "",
-        endDate: "",
-        search: "",
-        selectedBatchId: "",
-        detailDepartment: "all",
-        detailSection: "all"
-      };
-
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  document.querySelectorAll("[data-select-incoming-commissary]").forEach(
-    (button) => {
-      button.addEventListener("click", () => {
-        window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId =
-          button.dataset.selectIncomingCommissary;
-        window.DMC_INCOMING_COMMISSARY_FILTERS.detailDepartment = "all";
-        window.DMC_INCOMING_COMMISSARY_FILTERS.detailSection = "all";
-
-        refreshIncomingFromCommissaryPage();
-      });
-    }
-  );
-
-  const detailDepartmentFilter = document.getElementById(
-    "incoming-commissary-detail-department"
-  );
-
-  if (detailDepartmentFilter) {
-    detailDepartmentFilter.addEventListener("change", () => {
-      const selectedBatch = getSelectedIncomingCommissaryBatch();
-
-      saveIncomingCommissaryDraftFromInputs(selectedBatch);
-
-      window.DMC_INCOMING_COMMISSARY_FILTERS.detailDepartment =
-        detailDepartmentFilter.value;
-      window.DMC_INCOMING_COMMISSARY_FILTERS.detailSection = "all";
-
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  const detailSectionFilter = document.getElementById(
-    "incoming-commissary-detail-section"
-  );
-
-  if (detailSectionFilter) {
-    detailSectionFilter.addEventListener("change", () => {
-      const selectedBatch = getSelectedIncomingCommissaryBatch();
-
-      saveIncomingCommissaryDraftFromInputs(selectedBatch);
-
-      window.DMC_INCOMING_COMMISSARY_FILTERS.detailSection =
-        detailSectionFilter.value;
-
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-
-  const selectedBatch = getSelectedIncomingCommissaryBatch();
-
-  document
-    .querySelectorAll(
-      "[data-incoming-commissary-received], [data-incoming-commissary-condition]"
-    )
-    .forEach((input) => {
-      input.addEventListener("input", () => {
-        saveIncomingCommissaryDraftFromInputs(selectedBatch);
-      });
-
-      input.addEventListener("change", () => {
-        saveIncomingCommissaryDraftFromInputs(selectedBatch);
-        refreshIncomingFromCommissaryPage();
-      });
-    });
-
-  const receivedByInput = document.getElementById(
-    "incoming-commissary-received-by"
-  );
-  const receivingNotesInput = document.getElementById(
-    "incoming-commissary-receiving-notes"
-  );
-
-  [receivedByInput, receivingNotesInput].forEach((input) => {
-    if (input) {
-      input.addEventListener("input", () => {
-        saveIncomingCommissaryDraftFromInputs(selectedBatch);
-      });
-    }
-  });
-
-  const saveDraftButton = document.getElementById(
-    "save-incoming-commissary-draft"
-  );
-
-  if (saveDraftButton && selectedBatch) {
-    saveDraftButton.addEventListener("click", () => {
-      saveIncomingCommissaryDraftFromInputs(selectedBatch);
-
-      if (typeof window.DMC_SHOW_MODAL === "function") {
-        window.DMC_SHOW_MODAL({
-          type: "success",
-          title: "Draft Saved",
-          message:
-            "Incoming from Commissary receiving draft was saved for this batch.",
-          confirmLabel: "Continue"
-        });
-      }
-    });
-  }
-
-  const confirmButton = document.getElementById(
-    "confirm-incoming-commissary-receipt"
-  );
-
-  if (confirmButton && selectedBatch) {
-    confirmButton.addEventListener("click", () => {
-      saveIncomingCommissaryDraftFromInputs(selectedBatch);
-
-      const draft = getIncomingCommissaryDraft(selectedBatch);
-
-      if (!String(draft.receivedBy || "").trim()) {
-        if (typeof window.DMC_SHOW_MODAL === "function") {
-          window.DMC_SHOW_MODAL({
-            type: "warning",
-            title: "Received By Required",
-            message:
-              "Please enter who received this Commissary transfer before confirming.",
-            confirmLabel: "Got it"
-          });
-        } else {
-          alert("Please enter who received this Commissary transfer.");
-        }
-
-        return;
-      }
-
-      const hasInvalidReceivedQty = selectedBatch.entries.some((entry) => {
-        const lineKey = getIncomingCommissaryLineKey(entry);
-        const value = draft.lines?.[lineKey]?.receivedQty;
-        const quantity = Number(value);
-
-        return (
-          String(value || "").trim() === "" ||
-          Number.isNaN(quantity) ||
-          quantity < 0
-        );
-      });
-
-      if (hasInvalidReceivedQty) {
-        if (typeof window.DMC_SHOW_MODAL === "function") {
-          window.DMC_SHOW_MODAL({
-            type: "warning",
-            title: "Check Received Quantity",
-            message:
-              "Please enter a valid received quantity for every line.",
-            confirmLabel: "Got it"
-          });
-        } else {
-          alert("Please enter a valid received quantity for every line.");
-        }
-
-        return;
-      }
-
-      const receiptStatus = getIncomingCommissaryDraftStatus(selectedBatch);
-
-      saveIncomingCommissaryReceipt(selectedBatch.batchId, {
-        batchId: selectedBatch.batchId,
-        status: receiptStatus,
-        receivedBy: draft.receivedBy,
-        receivingNotes: draft.receivingNotes,
-        receivedAt: new Date().toISOString(),
-        lines: draft.lines
-      });
-
-      window.DMC_INCOMING_COMMISSARY_FILTERS.selectedBatchId =
-        selectedBatch.batchId;
-
-      if (typeof window.DMC_SHOW_MODAL === "function") {
-        window.DMC_SHOW_MODAL({
-          type: receiptStatus === "Variance" ? "warning" : "success",
-          title:
-            receiptStatus === "Variance"
-              ? "Receipt Saved with Variance"
-              : "Receipt Saved",
-          message:
-            "Receipt preview was saved. Warehouse Stock is not updated yet; we will connect stock after finalizing this page.",
-          confirmLabel: "Continue"
-        });
-      }
-
-      refreshIncomingFromCommissaryPage();
-    });
-  }
-}
-
-window.DMC_PAGES["incoming-from-commissary"] = {
-  eyebrow: "Warehouse",
-  title: "Incoming from Commissary",
-  description:
-    "Warehouse receiving queue for products and items transferred out from Commissary.",
-  getContent: getIncomingFromCommissaryContent,
-  content: getIncomingFromCommissaryContent(),
-  afterRender: setupIncomingFromCommissaryEvents
-};
