@@ -12,6 +12,9 @@ window.DMC_COMMISSARY_LOG_FILTERS = window.DMC_COMMISSARY_LOG_FILTERS || {
   selectedBatchId: ""
 };
 
+window.DMC_COMMISSARY_LOG_NOTE_LOOKUP =
+  window.DMC_COMMISSARY_LOG_NOTE_LOOKUP || {};
+
 function getStoredCommissaryLogEntriesForLogPage() {
   const storedEntries = localStorage.getItem(
     DMC_COMMISSARY_LOG_STORAGE_KEY_FOR_LOG_PAGE
@@ -326,6 +329,76 @@ function getCommissaryLogNumber(value) {
   return Number.isNaN(numberValue) ? 0 : numberValue;
 }
 
+function cleanCommissaryLogNotes(notes) {
+  let cleanedNotes = String(notes || "").trim();
+
+  if (!cleanedNotes) {
+    return "";
+  }
+
+  const defaultFragments = [
+    "Items received from Warehouse into Commissary.",
+    "Items returned/transferred from Branch into Commissary.",
+    "Finished products made by Commissary production.",
+    "Products/items sent from Commissary to Warehouse.",
+    "Products/items sent from Commissary to Branch.",
+    "Auto-computed from Current + Total In - Total Out - Remaining.",
+    "Waste reported only. It is not double-deducted because Remaining Count sets physical stock.",
+    "Daily note.",
+    "No notes",
+    "N/A"
+  ];
+
+  defaultFragments.forEach((fragment) => {
+    cleanedNotes = cleanedNotes.replace(fragment, "");
+  });
+
+  cleanedNotes = cleanedNotes
+    .replace(/Closing count submitted by[^.]*\./gi, "")
+    .replace(/Current:\s*[-\d.]+/gi, "")
+    .replace(/In Warehouse:\s*[-\d.]+/gi, "")
+    .replace(/In Branch:\s*[-\d.]+/gi, "")
+    .replace(/In Production:\s*[-\d.]+/gi, "")
+    .replace(/Total In:\s*[-\d.]+/gi, "")
+    .replace(/Total Available:\s*[-\d.]+/gi, "")
+    .replace(/Out Warehouse:\s*[-\d.]+/gi, "")
+    .replace(/Out Branch:\s*[-\d.]+/gi, "")
+    .replace(/Total Out:\s*[-\d.]+/gi, "")
+    .replace(/Remaining:\s*[-\d.]+/gi, "")
+    .replace(/Waste:\s*[-\d.]+/gi, "")
+    .replace(/Usage Auto:\s*[-\d.]+/gi, "")
+    .replace(/^Notes:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleanedNotes;
+}
+
+function createCommissaryLogNoteKey(itemId, index) {
+  return `${itemId || "item"}__${index}`;
+}
+
+function renderCommissaryLogNotes(notes, itemId, index) {
+  const cleanedNotes = cleanCommissaryLogNotes(notes);
+
+  if (!cleanedNotes) {
+    return "-";
+  }
+
+  const noteKey = createCommissaryLogNoteKey(itemId, index);
+  window.DMC_COMMISSARY_LOG_NOTE_LOOKUP[noteKey] = cleanedNotes;
+
+  if (cleanedNotes.length <= 55) {
+    return cleanedNotes;
+  }
+
+  return `
+    <button class="tiny-button" data-commissary-note-key="${noteKey}">
+      View Notes
+    </button>
+  `;
+}
+
 function getCommissaryLogGroupedItemRows(batch) {
   const groupedRows = {};
 
@@ -511,8 +584,9 @@ function renderCommissaryBatchLineTable(batch) {
 
         <tbody>
           ${rows
-            .map((row) => {
+            .map((row, index) => {
               const uniqueNotes = [...new Set(row.notes)].filter(Boolean);
+              const joinedNotes = uniqueNotes.join(" | ");
 
               return `
                 <tr>
@@ -529,7 +603,11 @@ function renderCommissaryBatchLineTable(batch) {
                   <td>${row.usage || "-"}</td>
                   <td>${row.waste || "-"}</td>
                   <td>${row.unit || "-"}</td>
-                  <td>${uniqueNotes.length ? uniqueNotes.join(" | ") : "-"}</td>
+                  <td>${renderCommissaryLogNotes(
+                    joinedNotes,
+                    row.itemId,
+                    index
+                  )}</td>
                 </tr>
               `;
             })
@@ -827,6 +905,24 @@ function setupCommissaryLogTransactionEvents() {
         button.dataset.commissaryBatchId;
 
       refreshCommissaryLogTransactionPage();
+    });
+  });
+
+  document.querySelectorAll("[data-commissary-note-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const noteKey = button.dataset.commissaryNoteKey;
+      const note = window.DMC_COMMISSARY_LOG_NOTE_LOOKUP[noteKey] || "";
+
+      if (typeof window.DMC_SHOW_MODAL === "function") {
+        window.DMC_SHOW_MODAL({
+          type: "info",
+          title: "Movement Notes",
+          message: note || "No notes.",
+          confirmLabel: "Close"
+        });
+      } else {
+        alert(note || "No notes.");
+      }
     });
   });
 }
