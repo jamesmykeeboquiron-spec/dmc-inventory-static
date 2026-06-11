@@ -62,6 +62,18 @@ function entryBelongsToCommissaryLog(entry) {
   const department = String(entry.department || "").toLowerCase();
   const source = String(entry.source || "").toLowerCase();
   const destination = String(entry.destination || "").toLowerCase();
+  const movementField = String(entry.movementField || "");
+  const stockEffect = String(entry.stockEffect || "").toLowerCase();
+
+  const isBranchSendingToCommissary =
+    movementField === "transOutCommissary" ||
+    (source.includes("branch daily input") &&
+      destination.includes("commissary") &&
+      stockEffect === "deduct");
+
+  if (isBranchSendingToCommissary) {
+    return false;
+  }
 
   return (
     location.includes("commissary") ||
@@ -69,7 +81,9 @@ function entryBelongsToCommissaryLog(entry) {
     source.includes("commissary daily input") ||
     source.includes("commissary daily input closing count") ||
     source.includes("commissary") ||
-    destination.includes("commissary")
+    source.includes("incoming from branch") ||
+    destination.includes("commissary") ||
+    movementField === "receivedFromBranch"
   );
 }
 
@@ -153,6 +167,7 @@ function getFilteredCommissaryLogEntries() {
     const matchesSearch =
       !searchValue ||
       String(entry.batchId || "").toLowerCase().includes(searchValue) ||
+      String(entry.sourceBatchId || "").toLowerCase().includes(searchValue) ||
       String(entry.itemId || "").toLowerCase().includes(searchValue) ||
       String(entry.itemName || "").toLowerCase().includes(searchValue) ||
       String(entry.department || "").toLowerCase().includes(searchValue) ||
@@ -160,7 +175,8 @@ function getFilteredCommissaryLogEntries() {
       String(entry.source || "").toLowerCase().includes(searchValue) ||
       String(entry.destination || "").toLowerCase().includes(searchValue) ||
       String(entry.notes || "").toLowerCase().includes(searchValue) ||
-      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue);
+      String(entry.managerReviewedBy || "").toLowerCase().includes(searchValue) ||
+      String(entry.receivedBy || "").toLowerCase().includes(searchValue);
 
     return (
       matchesStartDate &&
@@ -260,19 +276,31 @@ function renderCommissaryLogMovementOptions() {
 
 function getCommissaryBatchSourceLabel(batch) {
   const entries = batch.entries || [];
+
   const hasProduction = entries.some(
     (entry) => entry.movementField === "transferInProduction"
   );
+
   const hasOutWarehouse = entries.some(
     (entry) => entry.movementField === "transferOutWarehouse"
   );
+
   const hasOutBranch = entries.some(
     (entry) => entry.movementField === "transferOutBranch"
   );
+
+  const hasReceivedFromBranch = entries.some(
+    (entry) => entry.movementField === "receivedFromBranch"
+  );
+
   const hasRemaining = entries.some(
     (entry) =>
       entry.movementType === "Remaining Count" || entry.stockEffect === "set"
   );
+
+  if (hasReceivedFromBranch) {
+    return "Received from Branch";
+  }
 
   if (hasProduction && hasOutWarehouse) {
     return "Commissary Production to Warehouse";
@@ -437,6 +465,8 @@ function getCommissaryLogGroupedItemRows(batch) {
 
     if (
       movementField === "transferInBranch" ||
+      movementField === "receivedFromBranch" ||
+      source.includes("incoming from branch") ||
       (entry.movementType === "Transfer In" && source.includes("branch"))
     ) {
       row.inBranch += quantity;
@@ -665,7 +695,7 @@ function renderSelectedCommissaryBatchDetails() {
         </div>
 
         <div>
-          <p class="eyebrow">Reviewed By</p>
+          <p class="eyebrow">Reviewed By / Received By</p>
           <strong>${reviewedBy}</strong>
         </div>
 
@@ -688,6 +718,17 @@ function renderSelectedCommissaryBatchDetails() {
           <p class="eyebrow">Destination</p>
           <strong>${firstEntry.destination || "-"}</strong>
         </div>
+
+        ${
+          firstEntry.sourceBatchId
+            ? `
+              <div>
+                <p class="eyebrow">Original Batch</p>
+                <strong>${firstEntry.sourceBatchId}</strong>
+              </div>
+            `
+            : ""
+        }
       </div>
 
       <div class="branch-order-section">
