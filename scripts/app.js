@@ -104,11 +104,18 @@ const fallbackPages = {
   },
 
   "incoming-from-commissary": {
-  eyebrow: "Warehouse",
-  title: "Incoming from Commissary",
-  description:
-    "Warehouse receiving queue for products and items transferred out from Commissary."
-},
+    eyebrow: "Warehouse",
+    title: "Incoming from Commissary",
+    description:
+      "Warehouse receiving queue for products and items transferred out from Commissary."
+  },
+
+  "incoming-from-branch": {
+    eyebrow: "DMC Commissary",
+    title: "Incoming from Branch",
+    description:
+      "Commissary receiving queue for items transferred out from Branch."
+  },
 
   "delivery-issues": {
     eyebrow: "Warehouse",
@@ -145,7 +152,7 @@ const fallbackPages = {
       "Overview of one branch location, including stock status, pending orders, and incoming deliveries."
   },
 
-    "branch-stock": {
+  "branch-stock": {
     eyebrow: "DMC-Iriga Branch",
     title: "Branch Stock",
     description: "Tracks current stock available at the branch level."
