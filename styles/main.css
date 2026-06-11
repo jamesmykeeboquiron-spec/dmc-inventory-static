@@ -6980,3 +6980,31 @@ input[type="date"]:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================
+   BRANCH DAILY INPUT TOOLBAR POLISH
+================================ */
+
+.warehouse-daily-input-toolbar {
+  display: grid;
+  grid-template-columns: 180px minmax(260px, 1fr) 220px;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.warehouse-daily-input-toolbar label {
+  display: grid;
+  gap: 8px;
+}
+
+.warehouse-daily-input-toolbar input,
+.warehouse-daily-input-toolbar select {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .warehouse-daily-input-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
