@@ -6468,11 +6468,24 @@ input[type="date"]:disabled {
 }
 
 /* =========================================================
-   MODAL MESSAGE LINE BREAKS
+   MODAL MESSAGE LINE BREAKS / LONG NOTES FIX
 ========================================================= */
 
+.dmc-modal-card {
+  max-width: 94vw;
+  overflow: hidden;
+}
+
+.dmc-modal-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .dmc-modal-content p {
-  white-space: pre-line;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
   line-height: 1.65;
 }
 /* =========================================================
