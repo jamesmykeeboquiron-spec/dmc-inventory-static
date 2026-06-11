@@ -3,7 +3,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 const DMC_MASTER_LIST_STORAGE_KEY_FOR_WAREHOUSE_INPUT =
   "dmc_master_list_items";
 const DMC_WAREHOUSE_DAILY_INPUT_KEY = "dmc_warehouse_daily_input_today";
-const DMC_WAREHOUSE_LOG_STORAGE_KEY = "dmc_warehouse_log_entries";
+const DMC_WAREHOUSE_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
 
 window.DMC_WAREHOUSE_DAILY_INPUT_MODE =
   window.DMC_WAREHOUSE_DAILY_INPUT_MODE || "edit";
@@ -131,6 +131,8 @@ function getWarehouseDailyInputItems() {
       !searchValue ||
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
       String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
+      String(item.department || "").toLowerCase().includes(searchValue) ||
+      String(item.section || "").toLowerCase().includes(searchValue) ||
       String(item.unit || "").toLowerCase().includes(searchValue);
 
     return matchesDepartment && matchesSearch;
@@ -158,22 +160,31 @@ function saveWarehouseDailyInput(inputData) {
   );
 }
 
-function getStoredWarehouseLogEntries() {
-  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_LOG_STORAGE_KEY);
+function getStoredWarehouseLedgerEntries() {
+  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_LEDGER_STORAGE_KEY);
 
   if (!storedEntries) {
-    return [];
+    return window.DMC_DATA?.ledger || [];
   }
 
   try {
-    return JSON.parse(storedEntries);
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return window.DMC_DATA?.ledger || [];
+    }
+
+    return parsedEntries;
   } catch {
-    return [];
+    return window.DMC_DATA?.ledger || [];
   }
 }
 
-function saveWarehouseLogEntries(entries) {
-  localStorage.setItem(DMC_WAREHOUSE_LOG_STORAGE_KEY, JSON.stringify(entries));
+function saveWarehouseLedgerEntries(entries) {
+  localStorage.setItem(
+    DMC_WAREHOUSE_LEDGER_STORAGE_KEY,
+    JSON.stringify(entries)
+  );
 }
 
 function getTodayDateStringForWarehouseInput() {
@@ -201,25 +212,231 @@ function createWarehouseDailyInputBatchId() {
   const datePart = now.toISOString().slice(0, 10).replaceAll("-", "");
   const timePart = now.toTimeString().slice(0, 8).replaceAll(":", "");
 
-  return `WH-${datePart}-${timePart}`;
+  return `WH-DI-${datePart}-${timePart}`;
+}
+
+function entryBelongsToWarehouseDailyInput(entry) {
+  const location = String(entry.location || "").toLowerCase();
+  const department = String(entry.department || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
+
+  if (
+    source.includes("branch daily input") ||
+    source.includes("commissary daily input closing count") ||
+    source.includes("commissary daily input") ||
+    location.includes("branch") ||
+    location.includes("dmc-iriga") ||
+    location.includes("commissary")
+  ) {
+    return false;
+  }
+
+  return (
+    location.includes("warehouse") ||
+    location.includes("stockroom") ||
+    department.includes("warehouse") ||
+    department.includes("stockroom") ||
+    source.includes("warehouse") ||
+    source.includes("supplier") ||
+    source.includes("incoming from commissary") ||
+    source.includes("commissary receipt") ||
+    destination.includes("warehouse") ||
+    destination.includes("stockroom")
+  );
+}
+
+function getWarehouseDailyInputLedgerEntriesForItem(itemId) {
+  return getStoredWarehouseLedgerEntries().filter(
+    (entry) =>
+      entryBelongsToWarehouseDailyInput(entry) &&
+      String(entry.itemId || "") === String(itemId || "")
+  );
+}
+
+function getWarehouseEntryTimeForDailyInput(entry) {
+  return String(entry.submittedAt || entry.receivedAt || entry.date || "");
+}
+
+function getWarehouseEntryStockEffectForDailyInput(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
+  }
+
+  if (
+    entry.movementType === "Transfer In" ||
+    entry.movementType === "Received" ||
+    entry.movementType === "Supplier Receiving"
+  ) {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Transfer Out" ||
+    entry.movementType === "Waste"
+  ) {
+    return "deduct";
+  }
+
+  if (
+    entry.movementType === "Remaining Count" ||
+    entry.movementType === "Stock Count"
+  ) {
+    return "set";
+  }
+
+  return "report";
+}
+
+function getLatestWarehouseCountEntry(itemId) {
+  const countEntries = getWarehouseDailyInputLedgerEntriesForItem(itemId).filter(
+    (entry) =>
+      entry.movementType === "Remaining Count" ||
+      entry.movementType === "Stock Count" ||
+      entry.stockEffect === "set"
+  );
+
+  if (countEntries.length === 0) {
+    return null;
+  }
+
+  return [...countEntries].sort((a, b) => {
+    return getWarehouseEntryTimeForDailyInput(b).localeCompare(
+      getWarehouseEntryTimeForDailyInput(a)
+    );
+  })[0];
+}
+
+function calculateWarehouseDailyCurrentStock(item) {
+  const entries = getWarehouseDailyInputLedgerEntriesForItem(item.itemId);
+  const latestCount = getLatestWarehouseCountEntry(item.itemId);
+
+  if (latestCount) {
+    const latestCountTime = getWarehouseEntryTimeForDailyInput(latestCount);
+    const baseStock = Number(latestCount.quantity || 0);
+
+    return entries
+      .filter((entry) => {
+        if (entry === latestCount) {
+          return false;
+        }
+
+        return getWarehouseEntryTimeForDailyInput(entry) > latestCountTime;
+      })
+      .reduce((total, entry) => {
+        const quantity = Number(entry.quantity || 0);
+        const stockEffect = getWarehouseEntryStockEffectForDailyInput(entry);
+
+        if (stockEffect === "add") {
+          return total + quantity;
+        }
+
+        if (stockEffect === "deduct") {
+          return total - quantity;
+        }
+
+        if (stockEffect === "set") {
+          return quantity;
+        }
+
+        return total;
+      }, baseStock);
+  }
+
+  return entries.reduce((total, entry) => {
+    const quantity = Number(entry.quantity || 0);
+    const stockEffect = getWarehouseEntryStockEffectForDailyInput(entry);
+
+    if (stockEffect === "add") {
+      return total + quantity;
+    }
+
+    if (stockEffect === "deduct") {
+      return total - quantity;
+    }
+
+    if (stockEffect === "set") {
+      return quantity;
+    }
+
+    return total;
+  }, 0);
 }
 
 function getWarehouseDailyInputValue(inputData, itemId, fieldName) {
   return inputData?.[itemId]?.[fieldName] || "";
 }
 
-function getWarehouseDailyReviewStatus(rowData) {
-  const numericFields = ["transferIn", "transferOut", "waste"];
+function getWarehouseDailyNumberValue(inputData, itemId, fieldName) {
+  const rawValue = String(
+    getWarehouseDailyInputValue(inputData, itemId, fieldName)
+  ).trim();
 
-  const hasAnyMovement = numericFields.some((field) => {
+  if (rawValue === "") {
+    return 0;
+  }
+
+  const parsedValue = Number(rawValue);
+
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+}
+
+function getWarehouseDailyComputedValues(item, inputData) {
+  const currentStock = calculateWarehouseDailyCurrentStock(item);
+  const transferIn = getWarehouseDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transferIn"
+  );
+  const transferOut = getWarehouseDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transferOut"
+  );
+  const remaining = getWarehouseDailyNumberValue(
+    inputData,
+    item.itemId,
+    "remaining"
+  );
+  const waste = getWarehouseDailyNumberValue(inputData, item.itemId, "waste");
+
+  const totalAvailable = currentStock + transferIn;
+  const hasRemaining =
+    String(getWarehouseDailyInputValue(inputData, item.itemId, "remaining")).trim() !== "";
+
+  const usageAuto = hasRemaining
+    ? totalAvailable - transferOut - remaining - waste
+    : "";
+
+  return {
+    currentStock,
+    transferIn,
+    totalAvailable,
+    transferOut,
+    remaining,
+    waste,
+    usageAuto
+  };
+}
+
+function getWarehouseDailyReviewStatus(item, rowData) {
+  const inputFields = [
+    "transferIn",
+    "transferOut",
+    "remaining",
+    "waste",
+    "notes"
+  ];
+
+  const hasAnyInput = inputFields.some((field) => {
     return String(rowData?.[field] || "").trim() !== "";
   });
 
-  const hasNotes = String(rowData?.notes || "").trim() !== "";
-
-  if (!hasAnyMovement && !hasNotes) {
+  if (!hasAnyInput) {
     return "";
   }
+
+  const numericFields = ["transferIn", "transferOut", "remaining", "waste"];
 
   const hasInvalidNumber = numericFields.some((field) => {
     const value = String(rowData?.[field] || "").trim();
@@ -235,6 +452,13 @@ function getWarehouseDailyReviewStatus(rowData) {
     return "CHECK";
   }
 
+  const inputData = getStoredWarehouseDailyInput();
+  const computed = getWarehouseDailyComputedValues(item, inputData);
+
+  if (computed.usageAuto !== "" && computed.usageAuto < 0) {
+    return "CHECK";
+  }
+
   return "READY";
 }
 
@@ -244,72 +468,34 @@ function getWarehouseDailyReviewRows() {
   return getAllWarehouseDailyInputItems()
     .map((item) => {
       const rowData = inputData[item.itemId] || {};
-      const reviewStatus = getWarehouseDailyReviewStatus(rowData);
+      const reviewStatus = getWarehouseDailyReviewStatus(item, rowData);
+      const computed = getWarehouseDailyComputedValues(item, inputData);
 
       return {
         item,
         rowData,
-        reviewStatus
+        reviewStatus,
+        computed
       };
     })
     .filter((row) => row.reviewStatus === "READY");
 }
 
-function buildWarehouseLogEntriesFromDailyInput() {
-  const warehouseItems = getAllWarehouseDailyInputItems();
-  const inputData = getStoredWarehouseDailyInput();
+function buildWarehouseLedgerEntriesFromDailyInput() {
+  const reviewRows = getWarehouseDailyReviewRows();
   const batchId = createWarehouseDailyInputBatchId();
   const submittedAt = getCurrentWarehouseInputTimestamp();
   const submittedAtDisplay = getReadableWarehouseInputTimestamp();
   const managerReviewedBy = window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY;
 
-  const movementFields = [
-    {
-      field: "transferIn",
-      movementType: "Transfer In",
-      stockEffect: "add"
-    },
-    {
-      field: "transferOut",
-      movementType: "Transfer Out",
-      stockEffect: "deduct"
-    },
-    {
-      field: "waste",
-      movementType: "Waste",
-      stockEffect: "deduct"
-    }
-  ];
+  const entries = [];
 
-  const warehouseLogEntries = [];
-
-  warehouseItems.forEach((item) => {
-    const rowData = inputData[item.itemId] || {};
-    const reviewStatus = getWarehouseDailyReviewStatus(rowData);
+  reviewRows.forEach(({ item, rowData, computed }) => {
     const notes = String(rowData.notes || "").trim();
+    const hasRemaining = String(rowData.remaining || "").trim() !== "";
 
-    if (reviewStatus !== "READY") {
-      return;
-    }
-
-    let movementWasAdded = false;
-
-    movementFields.forEach((movement) => {
-      const rawValue = String(rowData[movement.field] || "").trim();
-
-      if (rawValue === "") {
-        return;
-      }
-
-      const quantity = Number(rawValue);
-
-      if (Number.isNaN(quantity) || quantity <= 0) {
-        return;
-      }
-
-      movementWasAdded = true;
-
-      warehouseLogEntries.push({
+    if (computed.transferIn > 0) {
+      entries.push({
         date: getTodayDateStringForWarehouseInput(),
         submittedAt,
         submittedAtDisplay,
@@ -319,28 +505,130 @@ function buildWarehouseLogEntriesFromDailyInput() {
         section: item.section || "",
         itemId: item.itemId || "",
         itemName: item.officialItemName || "",
-        movementType: movement.movementType,
-        movementField: movement.field,
-        stockEffect: movement.stockEffect,
-        quantity,
+        movementType: "Transfer In",
+        movementField: "transferIn",
+        stockEffect: "add",
+        quantity: computed.transferIn,
         unit: item.unit || "",
         managerReviewedBy,
-        source:
-          movement.movementType === "Transfer In"
-            ? "Warehouse Daily Input"
-            : "Warehouse",
-        destination:
-          movement.movementType === "Transfer In"
-            ? "Warehouse"
-            : movement.movementType === "Waste"
-            ? "Waste"
-            : "Outgoing Transfer",
+        source: "Warehouse Daily Input",
+        destination: "Warehouse",
         notes
       });
-    });
+    }
 
-    if (!movementWasAdded && notes) {
-      warehouseLogEntries.push({
+    if (computed.transferOut > 0) {
+      entries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Transfer Out",
+        movementField: "transferOut",
+        stockEffect: "deduct",
+        quantity: computed.transferOut,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Warehouse Daily Input",
+        destination: "Outgoing Transfer",
+        notes
+      });
+    }
+
+    if (hasRemaining && computed.usageAuto > 0) {
+      entries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Usage",
+        movementField: "usageAuto",
+        stockEffect: "report",
+        quantity: computed.usageAuto,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Warehouse Daily Input",
+        destination: "Usage Report",
+        notes
+      });
+    }
+
+    if (computed.waste > 0) {
+      entries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Waste",
+        movementField: "waste",
+        stockEffect: "report",
+        quantity: computed.waste,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Warehouse Daily Input",
+        destination: "Waste Report",
+        notes
+      });
+    }
+
+    if (hasRemaining) {
+      entries.push({
+        date: getTodayDateStringForWarehouseInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "Warehouse",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Remaining Count",
+        movementField: "remaining",
+        stockEffect: "set",
+        quantity: computed.remaining,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Warehouse Daily Input Closing Count",
+        destination: "Warehouse",
+        notes: [
+          `Closing count submitted by ${managerReviewedBy || "warehouse manager"}.`,
+          `Current: ${computed.currentStock}`,
+          `Transfer In: ${computed.transferIn}`,
+          `Total Available: ${computed.totalAvailable}`,
+          `Transfer Out: ${computed.transferOut}`,
+          `Remaining: ${computed.remaining}`,
+          `Waste: ${computed.waste}`,
+          `Usage Auto: ${computed.usageAuto}`,
+          notes ? `Notes: ${notes}` : ""
+        ]
+          .filter(Boolean)
+          .join(" ")
+      });
+    }
+
+    if (
+      !hasRemaining &&
+      notes &&
+      computed.transferIn <= 0 &&
+      computed.transferOut <= 0 &&
+      computed.waste <= 0
+    ) {
+      entries.push({
         date: getTodayDateStringForWarehouseInput(),
         submittedAt,
         submittedAtDisplay,
@@ -363,7 +651,7 @@ function buildWarehouseLogEntriesFromDailyInput() {
     }
   });
 
-  return warehouseLogEntries;
+  return entries;
 }
 
 function renderWarehouseDepartmentOptions() {
@@ -425,6 +713,27 @@ function renderWarehouseManagerOptions() {
   `;
 }
 
+function getWarehouseDailyInputSummary() {
+  const inputData = getStoredWarehouseDailyInput();
+
+  const rows = getAllWarehouseDailyInputItems().map((item) => {
+    const rowData = inputData[item.itemId] || {};
+    const reviewStatus = getWarehouseDailyReviewStatus(item, rowData);
+
+    return {
+      item,
+      rowData,
+      reviewStatus
+    };
+  });
+
+  return {
+    rowsWithInput: rows.filter((row) => row.reviewStatus !== "").length,
+    readyRows: rows.filter((row) => row.reviewStatus === "READY").length,
+    checkRows: rows.filter((row) => row.reviewStatus === "CHECK").length
+  };
+}
+
 function renderWarehouseDailyInputRows() {
   const allWarehouseItems = getAllWarehouseDailyInputItems();
   const warehouseItems = getWarehouseDailyInputItems();
@@ -433,7 +742,7 @@ function renderWarehouseDailyInputRows() {
   if (allWarehouseItems.length === 0) {
     return `
       <tr>
-        <td colspan="8">
+        <td colspan="12">
           No Warehouse items found. Add Warehouse items in the Master List first.
         </td>
       </tr>
@@ -443,7 +752,7 @@ function renderWarehouseDailyInputRows() {
   if (warehouseItems.length === 0) {
     return `
       <tr>
-        <td colspan="8">
+        <td colspan="12">
           No Warehouse items found for the selected filter.
         </td>
       </tr>
@@ -453,13 +762,15 @@ function renderWarehouseDailyInputRows() {
   return warehouseItems
     .map((item) => {
       const rowData = inputData[item.itemId] || {};
-      const reviewStatus = getWarehouseDailyReviewStatus(rowData);
+      const reviewStatus = getWarehouseDailyReviewStatus(item, rowData);
+      const computed = getWarehouseDailyComputedValues(item, inputData);
 
       return `
         <tr>
           <td>${item.itemId || "-"}</td>
           <td>${item.officialItemName || "-"}</td>
           <td>${item.unit || "-"}</td>
+          <td>${computed.currentStock} ${item.unit || ""}</td>
 
           <td>
             <input
@@ -469,11 +780,21 @@ function renderWarehouseDailyInputRows() {
               type="number"
               min="0"
               step="any"
-              value="${getWarehouseDailyInputValue(
-                inputData,
-                item.itemId,
-                "transferIn"
-              )}"
+              value="${getWarehouseDailyInputValue(inputData, item.itemId, "transferIn")}"
+            />
+          </td>
+
+          <td>${computed.totalAvailable} ${item.unit || ""}</td>
+
+          <td>
+            <input
+              class="daily-input-cell warehouse-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transferOut"
+              type="number"
+              min="0"
+              step="any"
+              value="${getWarehouseDailyInputValue(inputData, item.itemId, "transferOut")}"
             />
           </td>
 
@@ -481,15 +802,11 @@ function renderWarehouseDailyInputRows() {
             <input
               class="daily-input-cell warehouse-daily-input-cell blue-input"
               data-item-id="${item.itemId}"
-              data-field="transferOut"
+              data-field="remaining"
               type="number"
               min="0"
               step="any"
-              value="${getWarehouseDailyInputValue(
-                inputData,
-                item.itemId,
-                "transferOut"
-              )}"
+              value="${getWarehouseDailyInputValue(inputData, item.itemId, "remaining")}"
             />
           </td>
 
@@ -501,12 +818,16 @@ function renderWarehouseDailyInputRows() {
               type="number"
               min="0"
               step="any"
-              value="${getWarehouseDailyInputValue(
-                inputData,
-                item.itemId,
-                "waste"
-              )}"
+              value="${getWarehouseDailyInputValue(inputData, item.itemId, "waste")}"
             />
+          </td>
+
+          <td>
+            ${
+              computed.usageAuto === ""
+                ? "-"
+                : `${computed.usageAuto} ${item.unit || ""}`
+            }
           </td>
 
           <td>
@@ -515,11 +836,7 @@ function renderWarehouseDailyInputRows() {
               data-item-id="${item.itemId}"
               data-field="notes"
               type="text"
-              value="${getWarehouseDailyInputValue(
-                inputData,
-                item.itemId,
-                "notes"
-              )}"
+              value="${getWarehouseDailyInputValue(inputData, item.itemId, "notes")}"
             />
           </td>
 
@@ -538,38 +855,18 @@ function renderWarehouseDailyInputRows() {
     .join("");
 }
 
-function getWarehouseDailyInputSummary() {
-  const inputData = getStoredWarehouseDailyInput();
-  const rows = Object.values(inputData);
-
-  const rowsWithInput = rows.filter(
-    (row) => getWarehouseDailyReviewStatus(row) !== ""
-  );
-  const readyRows = rows.filter(
-    (row) => getWarehouseDailyReviewStatus(row) === "READY"
-  );
-  const checkRows = rows.filter(
-    (row) => getWarehouseDailyReviewStatus(row) === "CHECK"
-  );
-
-  return {
-    rowsWithInput: rowsWithInput.length,
-    readyRows: readyRows.length,
-    checkRows: checkRows.length
-  };
-}
-
 function renderWarehouseEditModeContent() {
   return `
     <div class="keyboard-hint">
-      Press Tab to move across Transfer In → Transfer Out → Waste → Notes, then continue to the next row.
+      Press Tab to move across Transfer In → Transfer Out → Remaining → Waste → Notes, then continue to the next row.
     </div>
 
     <div class="instruction-box">
-      <strong>Warehouse Daily Input Rule:</strong>
+      <strong>Warehouse Daily Logic:</strong>
       <span>
-        This page only shows items currently checked as active in Warehouse from the Master List.
-        Unticking Warehouse removes the item from this input page, while old ledger/log records remain for history.
+        Blank rows are ignored. Transfer In adds warehouse stock. Transfer Out deducts warehouse stock.
+        Remaining becomes the physical stock truth. Usage is auto-computed only when Remaining is entered.
+        Waste is reported but not double-deducted because Remaining Count sets physical stock.
       </span>
     </div>
 
@@ -580,9 +877,13 @@ function renderWarehouseEditModeContent() {
             <th>Item ID</th>
             <th>Item Name</th>
             <th>Unit</th>
+            <th>Current</th>
             <th>Transfer In</th>
+            <th>Total Available</th>
             <th>Transfer Out</th>
+            <th>Remaining</th>
             <th>Waste</th>
+            <th>Usage Auto</th>
             <th>Notes</th>
             <th>Review</th>
           </tr>
@@ -603,7 +904,7 @@ function renderWarehouseReviewModeContent() {
     return `
       <div class="submit-preview-box">
         <h4>Warehouse Submit Review</h4>
-        <p>No rows are ready to post. Go back to edit mode and fill in today’s movements.</p>
+        <p>No rows are ready to post. Go back to edit mode and enter at least one field on one row.</p>
 
         <div class="form-actions review-actions">
           <button class="ghost-button" id="back-to-warehouse-edit-mode">
@@ -622,7 +923,7 @@ function renderWarehouseReviewModeContent() {
           <p>
             ${reviewRows.length} item row${
     reviewRows.length === 1 ? "" : "s"
-  } ready to post. Review the table before submitting to Warehouse Log.
+  } ready to post. Fully blank rows are ignored.
           </p>
         </div>
 
@@ -644,9 +945,13 @@ function renderWarehouseReviewModeContent() {
               <th>Item ID</th>
               <th>Item Name</th>
               <th>Unit</th>
+              <th>Current</th>
               <th>Transfer In</th>
+              <th>Total Available</th>
               <th>Transfer Out</th>
+              <th>Remaining</th>
               <th>Waste</th>
+              <th>Usage Auto</th>
               <th>Notes</th>
               <th>Action</th>
             </tr>
@@ -654,15 +959,25 @@ function renderWarehouseReviewModeContent() {
 
           <tbody>
             ${reviewRows
-              .map(({ item, rowData }) => {
+              .map(({ item, rowData, computed }) => {
                 return `
                   <tr>
                     <td>${item.itemId || "-"}</td>
                     <td>${item.officialItemName || "-"}</td>
                     <td>${item.unit || "-"}</td>
-                    <td>${rowData.transferIn || "-"}</td>
-                    <td>${rowData.transferOut || "-"}</td>
-                    <td>${rowData.waste || "-"}</td>
+                    <td>${computed.currentStock}</td>
+                    <td>${computed.transferIn || "-"}</td>
+                    <td>${computed.totalAvailable}</td>
+                    <td>${computed.transferOut || "-"}</td>
+                    <td>${
+                      String(rowData.remaining || "").trim() === ""
+                        ? "-"
+                        : computed.remaining
+                    }</td>
+                    <td>${computed.waste || "-"}</td>
+                    <td>${
+                      computed.usageAuto === "" ? "-" : computed.usageAuto
+                    }</td>
                     <td>${rowData.notes || "-"}</td>
                     <td>
                       <div class="row-actions">
@@ -719,7 +1034,7 @@ function getWarehouseDailyInputContent() {
         <div>
           <h3>Warehouse Daily Input — Today Only</h3>
           <p>
-            Enter today’s Warehouse movements, review them, then submit to Warehouse Log Transaction.
+            Enter end-of-shift warehouse counts, received/transferred in items, transfer outs, waste, and notes only for items that had activity.
           </p>
         </div>
 
@@ -913,6 +1228,7 @@ function setupWarehouseDailyInputEvents() {
 
     input.addEventListener("change", () => {
       saveWarehouseCellValue(input);
+      refreshWarehouseDailyInputPage();
     });
 
     input.addEventListener("keydown", (event) => {
@@ -922,8 +1238,17 @@ function setupWarehouseDailyInputEvents() {
 
       event.preventDefault();
       saveWarehouseCellValue(input);
+      refreshWarehouseDailyInputPage();
 
-      focusNextWarehouseInput(input, event.shiftKey ? -1 : 1);
+      setTimeout(() => {
+        const refreshedInput = document.querySelector(
+          `.warehouse-daily-input-cell[data-item-id="${input.dataset.itemId}"][data-field="${input.dataset.field}"]`
+        );
+
+        if (refreshedInput) {
+          focusNextWarehouseInput(refreshedInput, event.shiftKey ? -1 : 1);
+        }
+      }, 0);
     });
   });
 
@@ -933,7 +1258,7 @@ function setupWarehouseDailyInputEvents() {
     readyButton.addEventListener("click", () => {
       saveAllVisibleWarehouseInputs();
 
-      const warehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+      const warehouseEntries = buildWarehouseLedgerEntriesFromDailyInput();
       const summary = getWarehouseDailyInputSummary();
 
       if (!window.DMC_WAREHOUSE_MANAGER_REVIEWED_BY) {
@@ -947,12 +1272,12 @@ function setupWarehouseDailyInputEvents() {
         return;
       }
 
-      if (warehouseLogEntries.length === 0) {
+      if (warehouseEntries.length === 0) {
         showWarehouseInputModal({
           type: "warning",
-          title: "No Movements Ready",
+          title: "No Rows Ready",
           message:
-            "No Warehouse Daily Input movements are ready for review yet.",
+            "No Warehouse Daily Input rows are ready for review yet. Enter at least one field on one item. Fully blank rows are ignored.",
           confirmLabel: "Got it"
         });
         return;
@@ -1025,9 +1350,9 @@ function setupWarehouseDailyInputEvents() {
 
   if (submitButton) {
     submitButton.addEventListener("click", () => {
-      const newWarehouseLogEntries = buildWarehouseLogEntriesFromDailyInput();
+      const newWarehouseEntries = buildWarehouseLedgerEntriesFromDailyInput();
 
-      if (newWarehouseLogEntries.length === 0) {
+      if (newWarehouseEntries.length === 0) {
         showWarehouseInputModal({
           type: "warning",
           title: "No Warehouse Entries",
@@ -1040,17 +1365,17 @@ function setupWarehouseDailyInputEvents() {
       showWarehouseInputConfirm({
         type: "success",
         title: "Submit Warehouse Daily Input?",
-        message: `Submit ${newWarehouseLogEntries.length} Warehouse Log entries and clear today’s input?`,
+        message: `Submit ${newWarehouseEntries.length} Warehouse Log entries and clear today’s input?`,
         confirmLabel: "Submit Entries",
         cancelLabel: "Cancel",
         onConfirm: () => {
-          const currentWarehouseLogEntries = getStoredWarehouseLogEntries();
-          const updatedWarehouseLogEntries = [
-            ...currentWarehouseLogEntries,
-            ...newWarehouseLogEntries
+          const currentLedgerEntries = getStoredWarehouseLedgerEntries();
+          const updatedLedgerEntries = [
+            ...currentLedgerEntries,
+            ...newWarehouseEntries
           ];
 
-          saveWarehouseLogEntries(updatedWarehouseLogEntries);
+          saveWarehouseLedgerEntries(updatedLedgerEntries);
           localStorage.removeItem(DMC_WAREHOUSE_DAILY_INPUT_KEY);
 
           window.DMC_WAREHOUSE_DAILY_INPUT_MODE = "edit";
@@ -1074,7 +1399,7 @@ window.DMC_PAGES["warehouse-daily-input"] = {
   eyebrow: "Warehouse",
   title: "Warehouse Daily Input",
   description:
-    "Daily input sheet for Warehouse transfer in, transfer out, waste, and notes.",
+    "End-of-shift warehouse count sheet with auto-computed usage, transfer movement, waste, and remaining stock.",
   getContent: getWarehouseDailyInputContent,
   content: getWarehouseDailyInputContent(),
   afterRender: setupWarehouseDailyInputEvents
