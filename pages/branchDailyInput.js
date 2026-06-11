@@ -393,6 +393,11 @@ function getBranchDailyNumberValue(inputData, itemId, fieldName) {
 function getBranchDailyComputedValues(item, inputData) {
   const currentStock = calculateBranchDailyCurrentStock(item);
   const transIn = getBranchDailyNumberValue(inputData, item.itemId, "transferIn");
+  const transOutCommissary = getBranchDailyNumberValue(
+    inputData,
+    item.itemId,
+    "transOutCommissary"
+  );
   const remaining = getBranchDailyNumberValue(inputData, item.itemId, "remaining");
   const waste = getBranchDailyNumberValue(inputData, item.itemId, "waste");
 
@@ -400,11 +405,14 @@ function getBranchDailyComputedValues(item, inputData) {
   const hasRemaining =
     String(getBranchDailyInputValue(inputData, item.itemId, "remaining")).trim() !== "";
 
-  const usageAuto = hasRemaining ? totalAvailable - remaining - waste : "";
+  const usageAuto = hasRemaining
+    ? totalAvailable - transOutCommissary - remaining - waste
+    : "";
 
   return {
     currentStock,
     transIn,
+    transOutCommissary,
     remaining,
     waste,
     totalAvailable,
@@ -413,7 +421,13 @@ function getBranchDailyComputedValues(item, inputData) {
 }
 
 function getBranchDailyReviewStatus(item, rowData) {
-  const inputFields = ["transferIn", "remaining", "waste", "notes"];
+  const inputFields = [
+    "transferIn",
+    "transOutCommissary",
+    "remaining",
+    "waste",
+    "notes"
+  ];
 
   const hasAnyInput = inputFields.some((field) => {
     return String(rowData?.[field] || "").trim() !== "";
@@ -423,7 +437,12 @@ function getBranchDailyReviewStatus(item, rowData) {
     return "";
   }
 
-  const numericFields = ["transferIn", "remaining", "waste"];
+  const numericFields = [
+    "transferIn",
+    "transOutCommissary",
+    "remaining",
+    "waste"
+  ];
 
   const hasInvalidNumber = numericFields.some((field) => {
     const value = String(rowData?.[field] || "").trim();
@@ -553,6 +572,29 @@ function buildBranchLedgerEntriesFromDailyInput() {
       });
     }
 
+    if (computed.transOutCommissary > 0) {
+      entries.push({
+        date: getTodayDateStringForBranchDailyInput(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId,
+        location: "DMC-Iriga Branch",
+        department: item.department || "",
+        section: item.section || "",
+        itemId: item.itemId || "",
+        itemName: item.officialItemName || "",
+        movementType: "Transfer Out",
+        movementField: "transOutCommissary",
+        stockEffect: "deduct",
+        quantity: computed.transOutCommissary,
+        unit: item.unit || "",
+        managerReviewedBy,
+        source: "Branch Daily Input",
+        destination: "DMC Commissary",
+        notes
+      });
+    }
+
     if (hasRemaining && computed.usageAuto > 0) {
       entries.push({
         date: getTodayDateStringForBranchDailyInput(),
@@ -622,6 +664,7 @@ function buildBranchLedgerEntriesFromDailyInput() {
           `Closing count submitted by ${managerReviewedBy || "branch manager"}.`,
           `Current: ${computed.currentStock}`,
           `Trans In: ${computed.transIn}`,
+          `Trans Out Commissary: ${computed.transOutCommissary}`,
           `Total Available: ${computed.totalAvailable}`,
           `Remaining: ${computed.remaining}`,
           `Waste: ${computed.waste}`,
@@ -633,7 +676,13 @@ function buildBranchLedgerEntriesFromDailyInput() {
       });
     }
 
-    if (!hasRemaining && notes && computed.transIn <= 0 && computed.waste <= 0) {
+    if (
+      !hasRemaining &&
+      notes &&
+      computed.transIn <= 0 &&
+      computed.transOutCommissary <= 0 &&
+      computed.waste <= 0
+    ) {
       entries.push({
         date: getTodayDateStringForBranchDailyInput(),
         submittedAt,
@@ -668,7 +717,7 @@ function renderBranchDailyInputRows() {
   if (allBranchItems.length === 0) {
     return `
       <tr>
-        <td colspan="11">
+        <td colspan="12">
           No Branch items found. Add branch items in the Master List first.
         </td>
       </tr>
@@ -678,7 +727,7 @@ function renderBranchDailyInputRows() {
   if (branchItems.length === 0) {
     return `
       <tr>
-        <td colspan="11">
+        <td colspan="12">
           No Branch items found for the selected filter.
         </td>
       </tr>
@@ -711,6 +760,18 @@ function renderBranchDailyInputRows() {
           </td>
 
           <td>${computed.totalAvailable} ${item.unit || ""}</td>
+
+          <td>
+            <input
+              class="daily-input-cell branch-daily-input-cell"
+              data-item-id="${item.itemId}"
+              data-field="transOutCommissary"
+              type="number"
+              min="0"
+              step="any"
+              value="${getBranchDailyInputValue(inputData, item.itemId, "transOutCommissary")}"
+            />
+          </td>
 
           <td>
             <input
@@ -772,7 +833,7 @@ function renderBranchDailyInputRows() {
 function renderBranchDailyEditModeContent() {
   return `
     <div class="keyboard-hint">
-      Press Tab to move across Trans In → Remaining → Waste → Notes, then continue to the next row.
+      Press Tab to move across Trans In → Trans Out Commissary → Remaining → Waste → Notes, then continue to the next row.
     </div>
 
     <div class="instruction-box">
@@ -780,6 +841,7 @@ function renderBranchDailyEditModeContent() {
       <span>
         Blank rows are ignored. Managers can enter only the fields needed for that day.
         Usage is auto-computed only when Remaining is entered.
+        Trans Out Commissary deducts from Branch Stock and will be received later by Commissary.
       </span>
     </div>
 
@@ -793,6 +855,7 @@ function renderBranchDailyEditModeContent() {
             <th>Current</th>
             <th>Trans In</th>
             <th>Total Available</th>
+            <th>Trans Out Commissary</th>
             <th>Remaining</th>
             <th>Waste</th>
             <th>Usage Auto</th>
@@ -860,6 +923,7 @@ function renderBranchDailyReviewModeContent() {
               <th>Current</th>
               <th>Trans In</th>
               <th>Total Available</th>
+              <th>Trans Out Commissary</th>
               <th>Remaining</th>
               <th>Waste</th>
               <th>Usage Auto</th>
@@ -879,6 +943,7 @@ function renderBranchDailyReviewModeContent() {
                     <td>${computed.currentStock}</td>
                     <td>${computed.transIn || "-"}</td>
                     <td>${computed.totalAvailable}</td>
+                    <td>${computed.transOutCommissary || "-"}</td>
                     <td>${
                       String(rowData.remaining || "").trim() === ""
                         ? "-"
@@ -944,7 +1009,7 @@ function getBranchDailyInputContent() {
         <div>
           <h3>Branch Daily Input — Today Only</h3>
           <p>
-            Enter end-of-shift counts, waste, and notes only for items that had activity.
+            Enter end-of-shift counts, waste, branch-to-commissary transfer outs, and notes only for items that had activity.
           </p>
         </div>
 
@@ -1287,7 +1352,7 @@ window.DMC_PAGES["branch-daily-input"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Daily Input",
   description:
-    "End-of-shift branch count sheet with auto-computed usage and remaining stock.",
+    "End-of-shift branch count sheet with auto-computed usage, transfer out to commissary, and remaining stock.",
   getContent: getBranchDailyInputContent,
   content: getBranchDailyInputContent(),
   afterRender: setupBranchDailyInputEvents
