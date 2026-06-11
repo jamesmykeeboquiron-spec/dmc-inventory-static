@@ -49,23 +49,37 @@ function getStoredWarehouseLedgerEntries() {
   }
 }
 
-function itemBelongsToWarehouseStock(item) {
-  const operatingArea = String(item.operatingArea || "").toLowerCase();
-  const department = String(item.department || "").toLowerCase();
-  const section = String(item.section || "").toLowerCase();
+function getWarehouseItemOperatingAreas(item) {
+  if (Array.isArray(item?.operatingAreas)) {
+    return item.operatingAreas.filter(Boolean);
+  }
 
+  if (item?.operatingArea) {
+    return String(item.operatingArea)
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function itemIsActiveInWarehouseArea(item) {
+  const areas = getWarehouseItemOperatingAreas(item).map((area) =>
+    String(area || "").toLowerCase()
+  );
+
+  return areas.some((area) => {
+    return area.includes("warehouse") || area.includes("stockroom");
+  });
+}
+
+function itemBelongsToWarehouseStock(item) {
   if (item.active === false) {
     return false;
   }
 
-  return (
-    operatingArea.includes("warehouse") ||
-    operatingArea.includes("stockroom") ||
-    department.includes("warehouse") ||
-    department.includes("stockroom") ||
-    section.includes("warehouse") ||
-    section.includes("stockroom")
-  );
+  return itemIsActiveInWarehouseArea(item);
 }
 
 function entryBelongsToWarehouseStock(entry) {
@@ -109,81 +123,17 @@ function getWarehouseLedgerEntriesForItem(itemId) {
   );
 }
 
-function getWarehouseStockItemFromLedger(itemId) {
-  const entries = getWarehouseLedgerEntriesForItem(itemId);
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const latestEntry = [...entries].sort((a, b) => {
-    return String(b.submittedAt || b.receivedAt || b.date || "").localeCompare(
-      String(a.submittedAt || a.receivedAt || a.date || "")
-    );
-  })[0];
-
-  return {
-    itemId: latestEntry.itemId || itemId,
-    officialItemName: latestEntry.itemName || latestEntry.name || "-",
-    department: latestEntry.department || "Warehouse",
-    section: latestEntry.section || "",
-    unit: latestEntry.unit || "-",
-    minimumStock: 0,
-    active: true,
-    operatingArea: "Warehouse"
-  };
-}
-
 function getWarehouseStockBaseItems() {
   const masterListItems = getStoredWarehouseMasterListItems();
-  const warehouseMasterItems = masterListItems.filter(itemBelongsToWarehouseStock);
-  const warehouseLedgerEntries = getWarehouseLedgerEntriesOnly();
 
-  const combinedItemsById = {};
-
-  warehouseMasterItems.forEach((item) => {
-    const itemId = String(item.itemId || "").trim();
-
-    if (!itemId) {
-      return;
-    }
-
-    combinedItemsById[itemId] = item;
-  });
-
-  warehouseLedgerEntries.forEach((entry) => {
-    const itemId = String(entry.itemId || "").trim();
-
-    if (!itemId || combinedItemsById[itemId]) {
-      return;
-    }
-
-    const matchingMasterItem = masterListItems.find(
-      (item) => String(item.itemId || "") === itemId
-    );
-
-    combinedItemsById[itemId] = {
-      ...(matchingMasterItem || {}),
-      ...getWarehouseStockItemFromLedger(itemId),
-      itemId,
-      officialItemName:
-        matchingMasterItem?.officialItemName ||
-        matchingMasterItem?.name ||
-        entry.itemName ||
-        "-",
-      department:
-        entry.department ||
-        matchingMasterItem?.department ||
-        "Warehouse",
-      section: entry.section || matchingMasterItem?.section || "",
-      unit: entry.unit || matchingMasterItem?.unit || "-",
-      minimumStock: Number(matchingMasterItem?.minimumStock || 0),
-      active: true,
-      operatingArea: "Warehouse"
-    };
-  });
-
-  return Object.values(combinedItemsById);
+  return masterListItems
+    .filter(itemBelongsToWarehouseStock)
+    .map((item) => ({
+      ...item,
+      operatingArea: Array.isArray(item.operatingAreas)
+        ? item.operatingAreas.join(", ")
+        : item.operatingArea || "Warehouse"
+    }));
 }
 
 function getWarehouseEntryTime(entry) {
@@ -517,6 +467,7 @@ function getFilteredWarehouseStockRows() {
       String(item.itemId || "").toLowerCase().includes(searchValue) ||
       String(item.officialItemName || "").toLowerCase().includes(searchValue) ||
       String(item.department || "").toLowerCase().includes(searchValue) ||
+      String(item.section || "").toLowerCase().includes(searchValue) ||
       String(item.unit || "").toLowerCase().includes(searchValue);
 
     return matchesDepartment && matchesStatus && matchesSearch;
@@ -558,7 +509,7 @@ function renderWarehouseSummaryCards() {
       <div class="card">
         <p>Total Items</p>
         <strong>${rows.length}</strong>
-        <span>warehouse stock items</span>
+        <span>active warehouse stock items</span>
       </div>
 
       <div class="card">
@@ -694,7 +645,7 @@ function renderWarehouseStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No warehouse stock items match the current filters.</td>
+        <td colspan="8">No active Warehouse stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -739,7 +690,8 @@ function renderWarehouseStockPanel() {
         <div>
           <h3>Warehouse Stock List</h3>
           <p>
-            Current Stock is the available Warehouse stock now and the receiving reference for incoming supplier, commissary, and transfer activity.
+            This page shows only items currently checked as active in Warehouse from the Master List.
+            Current Stock is calculated from Warehouse ledger movements.
           </p>
         </div>
 
@@ -753,7 +705,7 @@ function renderWarehouseStockPanel() {
             <input
               id="warehouse-stock-search"
               type="text"
-              placeholder="Search item name, Item ID, or department..."
+              placeholder="Search item name, Item ID, department, section..."
               value="${window.DMC_WAREHOUSE_STOCK_FILTERS.search}"
             />
           </label>
@@ -776,6 +728,14 @@ function renderWarehouseStockPanel() {
             Clear
           </button>
         </div>
+      </div>
+
+      <div class="instruction-box">
+        <strong>Master List Rule:</strong>
+        <span>
+          If Warehouse is unticked in Master List, this item no longer appears here.
+          Old ledger records remain in Ledger and Warehouse Log for history.
+        </span>
       </div>
 
       <div class="table-wrap">
