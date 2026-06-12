@@ -347,6 +347,22 @@ function updateCommissaryMinimumStock(itemId, value) {
   saveStoredCommissaryMinimums(minimums);
 }
 
+function renderCommissaryMinimumStockInput(item) {
+  return `
+    <div class="minimum-stock-input-cell">
+      <input
+        class="commissary-minimum-stock-input"
+        data-commissary-minimum-stock="${item.itemId}"
+        type="number"
+        min="0"
+        step="any"
+        value="${item.minimumStock}"
+      />
+      <small>${item.unit || ""}</small>
+    </div>
+  `;
+}
+
 function normalizeCommissaryStockItem(item) {
   const currentStock = calculateCommissaryCurrentStock(item);
   const movementTotals = calculateCommissaryMovementTotals(item.itemId);
@@ -565,16 +581,7 @@ function renderCommissaryStockMeter(item) {
       </div>
 
       <div class="stock-current-min">
-        <span>Commissary Minimum</span>
-        <input
-          class="commissary-minimum-stock-input"
-          data-commissary-minimum-stock="${item.itemId}"
-          type="number"
-          min="0"
-          step="any"
-          value="${minimumStock}"
-        />
-        <em>${item.unit || ""}</em>
+        <span>Level vs minimum</span>
       </div>
     </div>
   `;
@@ -601,7 +608,7 @@ function renderCommissaryStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No active Commissary stock items match the current filters.</td>
+        <td colspan="9">No active Commissary stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -621,6 +628,7 @@ function renderCommissaryStockRows() {
           <td>${item.unit || "-"}</td>
           <td>${renderCommissaryStockBubble(item)}</td>
           <td>${renderCommissaryStockMeter(item)}</td>
+          <td>${renderCommissaryMinimumStockInput(item)}</td>
           <td>
             <span class="badge ${getCommissaryStatusBadgeClass(status)}">
               ${status}
@@ -708,6 +716,7 @@ function getCommissaryStockContent() {
               <th>Unit</th>
               <th>Current Stock</th>
               <th>Stock Level</th>
+              <th>Minimum Stock</th>
               <th>Status</th>
               <th>Last Movement</th>
             </tr>
