@@ -4,6 +4,7 @@ const DMC_SHOPPING_LIST_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_SHOPPING_LIST_LEDGER_KEY = "dmc_inventory_ledger_entries";
 const DMC_SHOPPING_LIST_DRAFT_KEY = "dmc_shopping_list_draft";
 const DMC_SHOPPING_LIST_PURCHASE_ORDERS_KEY = "dmc_purchase_orders";
+const DMC_SHOPPING_LIST_WAREHOUSE_MINIMUMS_KEY = "dmc_warehouse_stock_minimums";
 
 window.DMC_SHOPPING_LIST_SEARCH = window.DMC_SHOPPING_LIST_SEARCH || "";
 window.DMC_SHOPPING_LIST_DEPARTMENT =
@@ -389,9 +390,56 @@ function calculateShoppingListCurrentStock(item) {
   }, getShoppingListOpeningStock(item));
 }
 
+
+function getStoredShoppingListWarehouseMinimums() {
+  const storedMinimums = localStorage.getItem(
+    DMC_SHOPPING_LIST_WAREHOUSE_MINIMUMS_KEY
+  );
+
+  if (!storedMinimums) {
+    return {};
+  }
+
+  try {
+    const parsedMinimums = JSON.parse(storedMinimums);
+
+    if (!parsedMinimums || typeof parsedMinimums !== "object") {
+      return {};
+    }
+
+    return parsedMinimums;
+  } catch {
+    return {};
+  }
+}
+
+function getShoppingListWarehouseMinimumStock(item) {
+  const minimums = getStoredShoppingListWarehouseMinimums();
+  const itemId = String(item.itemId || "");
+
+  if (itemId && minimums[itemId] !== undefined) {
+    const warehouseMinimum = Number(minimums[itemId]);
+
+    return Number.isNaN(warehouseMinimum) ? 0 : warehouseMinimum;
+  }
+
+  const defaultMinimum = Number(item.minimumStock || 0);
+
+  return Number.isNaN(defaultMinimum) ? 0 : defaultMinimum;
+}
+
+function getShoppingListSuggestedQty(item) {
+  const currentStock = calculateShoppingListCurrentStock(item);
+  const minimumStock = getShoppingListWarehouseMinimumStock(item);
+  const targetStock = minimumStock * 2;
+  const suggestedQty = targetStock - currentStock;
+
+  return Math.max(suggestedQty, 0);
+}
+
 function getShoppingListItemStatus(item) {
   const currentStock = calculateShoppingListCurrentStock(item);
-  const minimumStock = Number(item.minimumStock || 0);
+  const minimumStock = getShoppingListWarehouseMinimumStock(item);
 
   if (currentStock <= 0) {
     return "Out of Stock";
@@ -551,6 +599,7 @@ function renderShoppingListItemList() {
             <th>Section</th>
             <th>Current</th>
             <th>Minimum</th>
+            <th>Suggested</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -560,7 +609,8 @@ function renderShoppingListItemList() {
           ${items
             .map((item) => {
               const currentStock = calculateShoppingListCurrentStock(item);
-              const minimumStock = Number(item.minimumStock || 0);
+              const minimumStock = getShoppingListWarehouseMinimumStock(item);
+              const suggestedQty = getShoppingListSuggestedQty(item);
               const status = getShoppingListItemStatus(item);
               const isSelected =
                 String(selectedItem?.itemId || "") === String(item.itemId || "");
@@ -581,6 +631,11 @@ function renderShoppingListItemList() {
 
                   <td>
                     <strong>${minimumStock}</strong>
+                    <small class="table-subtext">${item.unit || ""}</small>
+                  </td>
+
+                  <td>
+                    <strong>${suggestedQty}</strong>
                     <small class="table-subtext">${item.unit || ""}</small>
                   </td>
 
@@ -708,6 +763,8 @@ function renderSelectedShoppingListItemPanel() {
   }
 
   const currentStock = calculateShoppingListCurrentStock(selectedItem);
+  const minimumStock = getShoppingListWarehouseMinimumStock(selectedItem);
+  const suggestedQty = getShoppingListSuggestedQty(selectedItem);
   const status = getShoppingListItemStatus(selectedItem);
 
   return `
@@ -718,9 +775,8 @@ function renderSelectedShoppingListItemPanel() {
           <p>
             ${selectedItem.itemId || "-"} • ${selectedItem.section || "No section"} •
             Current: ${currentStock} ${selectedItem.unit || ""} •
-            Minimum: ${Number(selectedItem.minimumStock || 0)} ${
-    selectedItem.unit || ""
-  }
+            Minimum: ${minimumStock} ${selectedItem.unit || ""} •
+            Suggested: ${suggestedQty} ${selectedItem.unit || ""}
           </p>
         </div>
 
@@ -747,6 +803,7 @@ function renderSelectedShoppingListItemPanel() {
             min="0"
             step="any"
             placeholder="Example: 5"
+            value="${suggestedQty > 0 ? suggestedQty : ""}"
             style="width: 100%; min-height: 40px;"
           />
         </label>
@@ -1049,6 +1106,8 @@ function addSelectedItemToShoppingListDraft() {
 
   const draft = getStoredShoppingListDraft();
   const currentStock = calculateShoppingListCurrentStock(selectedItem);
+  const minimumStock = getShoppingListWarehouseMinimumStock(selectedItem);
+  const suggestedQty = getShoppingListSuggestedQty(selectedItem);
   const existingLineIndex = draft.lines.findIndex(
     (line) => String(line.itemId) === String(selectedItem.itemId)
   );
@@ -1061,7 +1120,8 @@ function addSelectedItemToShoppingListDraft() {
     section: selectedItem.section || "",
     unit: selectedItem.unit || "",
     currentStock,
-    minimumStock: Number(selectedItem.minimumStock || 0),
+    minimumStock,
+    suggestedQty,
     orderQty,
     receivedQty: 0,
     priority: priorityInput?.value || "Normal",
@@ -1077,7 +1137,8 @@ function addSelectedItemToShoppingListDraft() {
       priority: newLine.priority,
       notes: newLine.notes || existingLine.notes || "",
       currentStock,
-      minimumStock: Number(selectedItem.minimumStock || 0)
+      minimumStock,
+      suggestedQty
     };
   } else {
     draft.lines.push(newLine);
