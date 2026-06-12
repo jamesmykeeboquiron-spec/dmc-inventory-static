@@ -2,6 +2,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_WAREHOUSE_STOCK_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_WAREHOUSE_STOCK_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_WAREHOUSE_STOCK_MINIMUMS_KEY = "dmc_warehouse_stock_minimums";
 
 window.DMC_WAREHOUSE_STOCK_FILTERS = window.DMC_WAREHOUSE_STOCK_FILTERS || {
   department: "all",
@@ -399,6 +400,62 @@ function getWarehouseTransferInAfterLastCount(item) {
     .reduce((total, entry) => total + Number(entry.quantity || 0), 0);
 }
 
+
+function getStoredWarehouseMinimums() {
+  const storedMinimums = localStorage.getItem(DMC_WAREHOUSE_STOCK_MINIMUMS_KEY);
+
+  if (!storedMinimums) {
+    return {};
+  }
+
+  try {
+    const parsedMinimums = JSON.parse(storedMinimums);
+
+    if (!parsedMinimums || typeof parsedMinimums !== "object") {
+      return {};
+    }
+
+    return parsedMinimums;
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredWarehouseMinimums(minimums) {
+  localStorage.setItem(
+    DMC_WAREHOUSE_STOCK_MINIMUMS_KEY,
+    JSON.stringify(minimums)
+  );
+}
+
+function getWarehouseMinimumStock(item) {
+  const minimums = getStoredWarehouseMinimums();
+  const itemId = String(item.itemId || "");
+
+  if (itemId && minimums[itemId] !== undefined) {
+    const warehouseMinimum = Number(minimums[itemId]);
+
+    return Number.isNaN(warehouseMinimum) ? 0 : warehouseMinimum;
+  }
+
+  const defaultMinimum = Number(item.minimumStock || 0);
+
+  return Number.isNaN(defaultMinimum) ? 0 : defaultMinimum;
+}
+
+function updateWarehouseMinimumStock(itemId, value) {
+  if (!itemId) {
+    return;
+  }
+
+  const minimums = getStoredWarehouseMinimums();
+  const parsedValue = Number(value || 0);
+
+  minimums[itemId] = Number.isNaN(parsedValue) ? 0 : parsedValue;
+
+  saveStoredWarehouseMinimums(minimums);
+}
+
 function normalizeWarehouseStockItem(item) {
   const currentStock = calculateWarehouseCurrentStock(item);
   const latestMovement = getWarehouseLatestMovementForItem(item.itemId);
@@ -411,7 +468,7 @@ function normalizeWarehouseStockItem(item) {
     section: item.section || "",
     unit: item.unit || "-",
     currentStock,
-    minimumStock: Number(item.minimumStock || 0),
+    minimumStock: getWarehouseMinimumStock(item),
     lastMovement: latestMovement
       ? `${latestMovement.movementType} · ${latestMovement.date || "No date"}`
       : "No posted warehouse movement yet",
@@ -617,8 +674,16 @@ function renderWarehouseStockMeter(item) {
       </div>
 
       <div class="stock-current-min">
-        <span>Minimum</span>
-        <strong>${minimumStock} ${item.unit || ""}</strong>
+        <span>Warehouse Minimum</span>
+        <input
+          class="warehouse-minimum-stock-input"
+          data-warehouse-minimum-stock="${item.itemId}"
+          type="number"
+          min="0"
+          step="any"
+          value="${minimumStock}"
+        />
+        <em>${item.unit || ""}</em>
       </div>
     </div>
   `;
@@ -814,6 +879,18 @@ function setupWarehouseStockEvents() {
       refreshWarehouseStockPage();
     });
   }
+
+
+  document.querySelectorAll("[data-warehouse-minimum-stock]").forEach((input) => {
+    input.addEventListener("change", () => {
+      updateWarehouseMinimumStock(
+        input.dataset.warehouseMinimumStock,
+        input.value
+      );
+
+      refreshWarehouseStockPage();
+    });
+  });
 
   document.querySelectorAll("[data-view-warehouse-stock]").forEach((button) => {
     button.addEventListener("click", () => {
