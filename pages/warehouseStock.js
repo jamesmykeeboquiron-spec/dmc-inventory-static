@@ -456,6 +456,22 @@ function updateWarehouseMinimumStock(itemId, value) {
   saveStoredWarehouseMinimums(minimums);
 }
 
+function renderWarehouseMinimumStockInput(item) {
+  return `
+    <div class="minimum-stock-input-cell">
+      <input
+        class="warehouse-minimum-stock-input"
+        data-warehouse-minimum-stock="${item.itemId}"
+        type="number"
+        min="0"
+        step="any"
+        value="${item.minimumStock}"
+      />
+      <small>${item.unit || ""}</small>
+    </div>
+  `;
+}
+
 function normalizeWarehouseStockItem(item) {
   const currentStock = calculateWarehouseCurrentStock(item);
   const latestMovement = getWarehouseLatestMovementForItem(item.itemId);
@@ -674,16 +690,7 @@ function renderWarehouseStockMeter(item) {
       </div>
 
       <div class="stock-current-min">
-        <span>Warehouse Minimum</span>
-        <input
-          class="warehouse-minimum-stock-input"
-          data-warehouse-minimum-stock="${item.itemId}"
-          type="number"
-          min="0"
-          step="any"
-          value="${minimumStock}"
-        />
-        <em>${item.unit || ""}</em>
+        <span>Level vs minimum</span>
       </div>
     </div>
   `;
@@ -710,7 +717,7 @@ function renderWarehouseStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No active Warehouse stock items match the current filters.</td>
+        <td colspan="9">No active Warehouse stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -729,6 +736,7 @@ function renderWarehouseStockRows() {
           <td>${item.unit || "-"}</td>
           <td>${renderWarehouseStockLevel(item)}</td>
           <td>${renderWarehouseStockMeter(item)}</td>
+          <td>${renderWarehouseMinimumStockInput(item)}</td>
           <td>
             <span class="badge ${getWarehouseStatusBadgeClass(status)}">
               ${status}
@@ -812,6 +820,7 @@ function renderWarehouseStockPanel() {
               <th>Unit</th>
               <th>Current Stock</th>
               <th>Stock Level</th>
+              <th>Minimum Stock</th>
               <th>Status</th>
               <th>Last Movement</th>
               <th>Actions</th>
