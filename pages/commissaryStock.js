@@ -2,6 +2,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_COMMISSARY_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_COMMISSARY_LEDGER_STORAGE_KEY = "dmc_inventory_ledger_entries";
+const DMC_COMMISSARY_MINIMUMS_KEY = "dmc_commissary_stock_minimums";
 
 window.DMC_COMMISSARY_STOCK_FILTERS = window.DMC_COMMISSARY_STOCK_FILTERS || {
   section: "all",
@@ -290,6 +291,62 @@ function getCommissaryStockBaseItems() {
     }));
 }
 
+
+function getStoredCommissaryMinimums() {
+  const storedMinimums = localStorage.getItem(DMC_COMMISSARY_MINIMUMS_KEY);
+
+  if (!storedMinimums) {
+    return {};
+  }
+
+  try {
+    const parsedMinimums = JSON.parse(storedMinimums);
+
+    if (!parsedMinimums || typeof parsedMinimums !== "object") {
+      return {};
+    }
+
+    return parsedMinimums;
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredCommissaryMinimums(minimums) {
+  localStorage.setItem(
+    DMC_COMMISSARY_MINIMUMS_KEY,
+    JSON.stringify(minimums)
+  );
+}
+
+function getCommissaryMinimumStock(item) {
+  const minimums = getStoredCommissaryMinimums();
+  const itemId = String(item.itemId || "");
+
+  if (itemId && minimums[itemId] !== undefined) {
+    const commissaryMinimum = Number(minimums[itemId]);
+
+    return Number.isNaN(commissaryMinimum) ? 0 : commissaryMinimum;
+  }
+
+  const defaultMinimum = Number(item.minimumStock || 0);
+
+  return Number.isNaN(defaultMinimum) ? 0 : defaultMinimum;
+}
+
+function updateCommissaryMinimumStock(itemId, value) {
+  if (!itemId) {
+    return;
+  }
+
+  const minimums = getStoredCommissaryMinimums();
+  const parsedValue = Number(value || 0);
+
+  minimums[itemId] = Number.isNaN(parsedValue) ? 0 : parsedValue;
+
+  saveStoredCommissaryMinimums(minimums);
+}
+
 function normalizeCommissaryStockItem(item) {
   const currentStock = calculateCommissaryCurrentStock(item);
   const movementTotals = calculateCommissaryMovementTotals(item.itemId);
@@ -301,7 +358,7 @@ function normalizeCommissaryStockItem(item) {
     section: item.section || "Unassigned",
     unit: item.unit || "-",
     currentStock,
-    minimumStock: Number(item.minimumStock || 0),
+    minimumStock: getCommissaryMinimumStock(item),
     expiryDate: item.expiryDate || item.bestBefore || "",
     notes: item.notes || item.note || "",
     movementTotals,
@@ -508,8 +565,16 @@ function renderCommissaryStockMeter(item) {
       </div>
 
       <div class="stock-current-min">
-        <span>Minimum</span>
-        <strong>${minimumStock} ${item.unit || ""}</strong>
+        <span>Commissary Minimum</span>
+        <input
+          class="commissary-minimum-stock-input"
+          data-commissary-minimum-stock="${item.itemId}"
+          type="number"
+          min="0"
+          step="any"
+          value="${minimumStock}"
+        />
+        <em>${item.unit || ""}</em>
       </div>
     </div>
   `;
@@ -700,6 +765,19 @@ function setupCommissaryStockEvents() {
       refreshCommissaryStockPage();
     });
   }
+
+
+  document.querySelectorAll("[data-commissary-minimum-stock]").forEach((input) => {
+    input.addEventListener("change", () => {
+      updateCommissaryMinimumStock(
+        input.dataset.commissaryMinimumStock,
+        input.value
+      );
+
+      refreshCommissaryStockPage();
+    });
+  });
+
 }
 
 window.DMC_PAGES["commissary-stock"] = {
