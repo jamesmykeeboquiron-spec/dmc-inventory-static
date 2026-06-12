@@ -446,10 +446,6 @@ function getShoppingListReadableTimestamp() {
   });
 }
 
-function getTodayShoppingListDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function renderShoppingListDepartmentOptions() {
   const currentDepartment = window.DMC_SHOPPING_LIST_DEPARTMENT;
 
@@ -485,37 +481,70 @@ function renderShoppingListItemList() {
   }
 
   return `
-    <div class="branch-order-list">
-      ${items
-        .map((item) => {
-          const currentStock = calculateShoppingListCurrentStock(item);
-          const status = getShoppingListItemStatus(item);
+    <div
+      class="table-wrap shopping-list-item-table-wrap"
+      style="max-height: 460px; overflow-y: auto;"
+    >
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Section</th>
+            <th>Current</th>
+            <th>Minimum</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
 
-          return `
-            <button
-              class="branch-order-list-item ${
-                selectedItem?.itemId === item.itemId ? "active" : ""
-              }"
-              data-select-shopping-item="${item.itemId}"
-            >
-              <div>
-                <strong>${item.officialItemName || item.name || "-"}</strong>
-                <p>${item.itemId || "-"} • ${item.section || "No section"}</p>
-                <span>
-                  Current: ${currentStock} ${item.unit || ""} • Minimum:
-                  ${Number(item.minimumStock || 0)} ${item.unit || ""}
-                </span>
-              </div>
+        <tbody>
+          ${items
+            .map((item) => {
+              const currentStock = calculateShoppingListCurrentStock(item);
+              const minimumStock = Number(item.minimumStock || 0);
+              const status = getShoppingListItemStatus(item);
+              const isSelected =
+                String(selectedItem?.itemId || "") === String(item.itemId || "");
 
-              <div class="branch-order-list-meta">
-                <span class="badge ${getShoppingListStatusBadgeClass(status)}">
-                  ${status}
-                </span>
-              </div>
-            </button>
-          `;
-        })
-        .join("")}
+              return `
+                <tr class="${isSelected ? "selected-table-row" : ""}">
+                  <td>
+                    <strong>${item.officialItemName || item.name || "-"}</strong>
+                    <small class="table-subtext">${item.itemId || "-"}</small>
+                  </td>
+
+                  <td>${item.section || "-"}</td>
+
+                  <td>
+                    <strong>${currentStock}</strong>
+                    <small class="table-subtext">${item.unit || ""}</small>
+                  </td>
+
+                  <td>
+                    <strong>${minimumStock}</strong>
+                    <small class="table-subtext">${item.unit || ""}</small>
+                  </td>
+
+                  <td>
+                    <span class="badge ${getShoppingListStatusBadgeClass(status)}">
+                      ${status}
+                    </span>
+                  </td>
+
+                  <td>
+                    <button
+                      class="tiny-button"
+                      data-select-shopping-item="${item.itemId}"
+                    >
+                      Select
+                    </button>
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
