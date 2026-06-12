@@ -80,6 +80,65 @@ function saveShoppingListPurchaseOrders(orders) {
   );
 }
 
+function getShoppingListSettings() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (!storedSettings) {
+    return { managerNames: [], managers: [] };
+  }
+
+  try {
+    return JSON.parse(storedSettings);
+  } catch {
+    return { managerNames: [], managers: [] };
+  }
+}
+
+function getShoppingListSettingName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || "";
+}
+
+function renderShoppingListManagerOptions(currentManager) {
+  const settings = getShoppingListSettings();
+  const managers = settings.managerNames || settings.managers || [];
+
+  if (managers.length === 0) {
+    return `
+      <option value="" ${currentManager === "" ? "selected" : ""}>
+        Select manager
+      </option>
+      <option value="Manager Ana" ${
+        currentManager === "Manager Ana" ? "selected" : ""
+      }>
+        Manager Ana
+      </option>
+    `;
+  }
+
+  return `
+    <option value="" ${currentManager === "" ? "selected" : ""}>
+      Select manager
+    </option>
+    ${managers
+      .map((manager) => {
+        const managerName = getShoppingListSettingName(manager);
+
+        return `
+          <option value="${managerName}" ${
+          currentManager === managerName ? "selected" : ""
+        }>
+            ${managerName}
+          </option>
+        `;
+      })
+      .join("")}
+  `;
+}
+
 function getDefaultShoppingListDraft() {
   return {
     supplier: "",
@@ -726,43 +785,62 @@ function renderShoppingListDraftHeader() {
         <span class="badge info-badge">Draft</span>
       </div>
 
-      <div class="shopping-list-draft-grid">
-        <label>
+      <div
+        class="shopping-list-draft-grid"
+        style="
+          display: grid;
+          grid-template-columns: repeat(3, minmax(180px, 1fr));
+          gap: 14px;
+          align-items: end;
+        "
+      >
+        <label style="display: flex; flex-direction: column; gap: 6px;">
           Supplier / Store
           <input
             id="shopping-list-supplier"
             type="text"
             placeholder="Example: Local Market, Gaisano, Supplier Name"
             value="${draft.supplier || ""}"
+            style="width: 100%; min-height: 38px;"
           />
         </label>
 
-        <label>
+        <label style="display: flex; flex-direction: column; gap: 6px;">
           Prepared By
-          <input
+          <select
             id="shopping-list-prepared-by"
-            type="text"
-            placeholder="Manager name"
-            value="${draft.preparedBy || ""}"
-          />
+            style="width: 100%; min-height: 38px;"
+          >
+            ${renderShoppingListManagerOptions(draft.preparedBy || "")}
+          </select>
         </label>
 
-        <label>
+        <label style="display: flex; flex-direction: column; gap: 6px;">
           Needed Date
           <input
             id="shopping-list-needed-date"
             type="date"
             value="${draft.neededDate || ""}"
+            style="width: 100%; min-height: 38px;"
           />
         </label>
 
-        <label class="form-full">
+        <label
+          class="form-full"
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            grid-column: 1 / -1;
+          "
+        >
           Draft Notes
           <input
             id="shopping-list-draft-notes"
             type="text"
             placeholder="Overall notes for this buying list"
             value="${draft.notes || ""}"
+            style="width: 100%; min-height: 38px;"
           />
         </label>
       </div>
@@ -1178,7 +1256,7 @@ function setupShoppingListEvents() {
   }
 
   if (preparedByInput) {
-    preparedByInput.addEventListener("input", () => {
+    preparedByInput.addEventListener("change", () => {
       updateShoppingListDraftField("preparedBy", preparedByInput.value);
     });
   }
