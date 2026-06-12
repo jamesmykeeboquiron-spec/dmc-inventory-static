@@ -2,6 +2,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_BRANCH_STOCK_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_BRANCH_STOCK_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_BRANCH_STOCK_MINIMUMS_KEY = "dmc_branch_stock_minimums";
 
 window.DMC_BRANCH_STOCK_FILTERS = window.DMC_BRANCH_STOCK_FILTERS || {
   department: "all",
@@ -359,6 +360,78 @@ function getBranchTransferInAfterLastCount(item) {
     .reduce((total, entry) => total + Number(entry.quantity || 0), 0);
 }
 
+
+function getStoredBranchMinimums() {
+  const storedMinimums = localStorage.getItem(DMC_BRANCH_STOCK_MINIMUMS_KEY);
+
+  if (!storedMinimums) {
+    return {};
+  }
+
+  try {
+    const parsedMinimums = JSON.parse(storedMinimums);
+
+    if (!parsedMinimums || typeof parsedMinimums !== "object") {
+      return {};
+    }
+
+    return parsedMinimums;
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredBranchMinimums(minimums) {
+  localStorage.setItem(
+    DMC_BRANCH_STOCK_MINIMUMS_KEY,
+    JSON.stringify(minimums)
+  );
+}
+
+function getBranchMinimumStock(item) {
+  const minimums = getStoredBranchMinimums();
+  const itemId = String(item.itemId || "");
+
+  if (itemId && minimums[itemId] !== undefined) {
+    const branchMinimum = Number(minimums[itemId]);
+
+    return Number.isNaN(branchMinimum) ? 0 : branchMinimum;
+  }
+
+  const defaultMinimum = Number(item.minimumStock || 0);
+
+  return Number.isNaN(defaultMinimum) ? 0 : defaultMinimum;
+}
+
+function updateBranchMinimumStock(itemId, value) {
+  if (!itemId) {
+    return;
+  }
+
+  const minimums = getStoredBranchMinimums();
+  const parsedValue = Number(value || 0);
+
+  minimums[itemId] = Number.isNaN(parsedValue) ? 0 : parsedValue;
+
+  saveStoredBranchMinimums(minimums);
+}
+
+function renderBranchMinimumStockInput(item) {
+  return `
+    <div class="minimum-stock-input-cell">
+      <input
+        class="branch-minimum-stock-input"
+        data-branch-minimum-stock="${item.itemId}"
+        type="number"
+        min="0"
+        step="any"
+        value="${item.minimumStock}"
+      />
+      <small>${item.unit || ""}</small>
+    </div>
+  `;
+}
+
 function normalizeBranchStockItem(item) {
   const currentStock = calculateBranchCurrentStock(item);
   const latestMovement = getBranchLatestMovementForItem(item.itemId);
@@ -371,7 +444,7 @@ function normalizeBranchStockItem(item) {
     section: item.section || "Unassigned",
     unit: item.unit || "-",
     currentStock,
-    minimumStock: Number(item.minimumStock || 0),
+    minimumStock: getBranchMinimumStock(item),
     lastMovement: latestMovement
       ? `${latestMovement.movementType} · ${latestMovement.date || "No date"}`
       : "No posted branch movement yet",
@@ -573,8 +646,7 @@ function renderBranchStockMeter(item) {
       </div>
 
       <div class="stock-current-min">
-        <span>Minimum</span>
-        <strong>${minimumStock} ${item.unit || ""}</strong>
+        <span>Level vs minimum</span>
       </div>
     </div>
   `;
@@ -602,7 +674,7 @@ function renderBranchStockRows() {
   if (rows.length === 0) {
     return `
       <tr>
-        <td colspan="8">No active Branch stock items match the current filters.</td>
+        <td colspan="9">No active Branch stock items match the current filters.</td>
       </tr>
     `;
   }
@@ -621,6 +693,7 @@ function renderBranchStockRows() {
           <td>${item.unit || "-"}</td>
           <td>${renderBranchStockLevel(item)}</td>
           <td>${renderBranchStockMeter(item)}</td>
+          <td>${renderBranchMinimumStockInput(item)}</td>
           <td>
             <span class="badge ${getBranchStatusBadgeClass(status)}">
               ${status}
@@ -704,6 +777,7 @@ function renderBranchStockPanel() {
               <th>Unit</th>
               <th>Current Stock</th>
               <th>Stock Level</th>
+              <th>Minimum Stock</th>
               <th>Status</th>
               <th>Last Movement</th>
               <th>Actions</th>
@@ -771,6 +845,18 @@ function setupBranchStockEvents() {
       refreshBranchStockPage();
     });
   }
+
+
+  document.querySelectorAll("[data-branch-minimum-stock]").forEach((input) => {
+    input.addEventListener("change", () => {
+      updateBranchMinimumStock(
+        input.dataset.branchMinimumStock,
+        input.value
+      );
+
+      refreshBranchStockPage();
+    });
+  });
 
   document.querySelectorAll("[data-view-branch-stock]").forEach((button) => {
     button.addEventListener("click", () => {
