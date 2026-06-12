@@ -729,8 +729,17 @@ function renderSelectedShoppingListItemPanel() {
         </span>
       </div>
 
-      <div class="shopping-list-add-grid">
-        <label>
+      <div
+        class="shopping-list-add-grid"
+        style="
+          display: grid;
+          grid-template-columns: minmax(160px, 1fr) minmax(140px, 0.8fr);
+          gap: 14px;
+          align-items: end;
+          margin-top: 16px;
+        "
+      >
+        <label style="display: flex; flex-direction: column; gap: 6px;">
           Quantity to Buy
           <input
             id="shopping-list-add-qty"
@@ -738,28 +747,48 @@ function renderSelectedShoppingListItemPanel() {
             min="0"
             step="any"
             placeholder="Example: 5"
+            style="width: 100%; min-height: 40px;"
           />
         </label>
 
-        <label>
+        <label style="display: flex; flex-direction: column; gap: 6px;">
           Priority
-          <select id="shopping-list-add-priority">
+          <select
+            id="shopping-list-add-priority"
+            style="width: 100%; min-height: 40px;"
+          >
             <option value="Normal">Normal</option>
             <option value="High">High</option>
             <option value="Urgent">Urgent</option>
           </select>
         </label>
 
-        <label class="form-full">
+        <label
+          class="form-full"
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            grid-column: 1 / -1;
+          "
+        >
           Item Notes
           <input
             id="shopping-list-add-notes"
             type="text"
             placeholder="Example: buy if price is good, preferred brand, substitute allowed..."
+            style="width: 100%; min-height: 40px;"
           />
         </label>
 
-        <div class="form-actions form-full">
+        <div
+          class="form-actions form-full"
+          style="
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+            margin-top: 4px;
+          "
+        >
           <button class="primary-button" id="add-selected-shopping-item">
             Add to Shopping List
           </button>
