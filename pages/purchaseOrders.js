@@ -118,37 +118,8 @@ function getPurchaseOrderLineRemainingQty(line) {
   );
 }
 
-function canPurchaseOrderSubmit(order) {
-  return order?.status === "Draft";
-}
-
 function canPurchaseOrderReceive(order) {
-  return ["Submitted", "Partially Received"].includes(order?.status);
-}
-
-function getPurchaseOrdersSummary() {
-  const orders = getStoredPurchaseOrders();
-
-  return {
-    totalPOs: orders.length,
-    drafts: orders.filter((order) => order.status === "Draft").length,
-    submitted: orders.filter((order) => order.status === "Submitted").length,
-    partial: orders.filter((order) => order.status === "Partially Received")
-      .length,
-    completed: orders.filter((order) => order.status === "Completed").length,
-    pendingItems: orders
-      .filter((order) =>
-        ["Draft", "Submitted", "Partially Received"].includes(order.status)
-      )
-      .reduce((total, order) => {
-        return (
-          total +
-          (order.lines || []).filter(
-            (line) => getPurchaseOrderLineRemainingQty(line) > 0
-          ).length
-        );
-      }, 0)
-  };
+  return ["Draft", "Submitted", "Partially Received"].includes(order?.status);
 }
 
 function getFilteredPurchaseOrders() {
@@ -165,9 +136,7 @@ function getFilteredPurchaseOrders() {
       }
 
       return (
-        String(order.purchaseOrderId || "")
-          .toLowerCase()
-          .includes(searchValue) ||
+        String(order.purchaseOrderId || "").toLowerCase().includes(searchValue) ||
         String(order.supplier || "").toLowerCase().includes(searchValue) ||
         String(order.preparedBy || "").toLowerCase().includes(searchValue) ||
         String(order.status || "").toLowerCase().includes(searchValue) ||
@@ -201,23 +170,16 @@ function getSelectedPurchaseOrder() {
 }
 
 function getPurchaseOrderStatusBadgeClass(status) {
-  if (status === "Draft") return "warning-badge";
   if (status === "Submitted") return "info-badge";
   if (status === "Partially Received") return "warning-badge";
   if (status === "Completed") return "";
   if (status === "Cancelled") return "danger-badge";
-  return "";
+  return "info-badge";
 }
 
 function renderPurchaseOrderStatusOptions() {
   const current = window.DMC_PURCHASE_ORDERS_STATUS_FILTER;
-  const statuses = [
-    "Draft",
-    "Submitted",
-    "Partially Received",
-    "Completed",
-    "Cancelled"
-  ];
+  const statuses = ["Draft", "Submitted", "Partially Received", "Completed", "Cancelled"];
 
   return `
     <option value="all" ${current === "all" ? "selected" : ""}>
@@ -233,6 +195,12 @@ function renderPurchaseOrderStatusOptions() {
       )
       .join("")}
   `;
+}
+
+function getPurchaseOrderPendingLineCount(order) {
+  return (order.lines || []).filter(
+    (line) => getPurchaseOrderLineRemainingQty(line) > 0
+  ).length;
 }
 
 function renderPurchaseOrderList() {
@@ -251,8 +219,10 @@ function renderPurchaseOrderList() {
   return `
     <div class="branch-order-list">
       ${orders
-        .map(
-          (order) => `
+        .map((order) => {
+          const pendingLineCount = getPurchaseOrderPendingLineCount(order);
+
+          return `
             <button
               class="branch-order-list-item ${
                 selectedOrder?.purchaseOrderId === order.purchaseOrderId
@@ -265,24 +235,23 @@ function renderPurchaseOrderList() {
                 <strong>${order.purchaseOrderId}</strong>
                 <p>
                   ${order.supplier || "No supplier"} •
+                  ${order.preparedBy || "No manager"} •
                   ${(order.lines || []).length} item(s)
                 </p>
                 <span>
-                  Expected: ${order.expectedDate || "-"} • Updated:
-                  ${formatPurchaseOrderDateTime(order.updatedAt)}
+                  Needed: ${order.expectedDate || "-"} •
+                  Pending: ${pendingLineCount} item(s)
                 </span>
               </div>
 
               <div class="branch-order-list-meta">
-                <span class="badge ${getPurchaseOrderStatusBadgeClass(
-                  order.status
-                )}">
-                  ${order.status || "Draft"}
+                <span class="badge ${getPurchaseOrderStatusBadgeClass(order.status)}">
+                  ${order.status || "Open"}
                 </span>
               </div>
             </button>
-          `
-        )
+          `;
+        })
         .join("")}
     </div>
   `;
@@ -408,53 +377,6 @@ function buildPurchaseOrderReceivingLedgerEntries(order, receivingLines) {
   }));
 }
 
-function submitPurchaseOrder(order) {
-  if (!order || !canPurchaseOrderSubmit(order)) {
-    return;
-  }
-
-  const submitOrder = () => {
-    const now = new Date().toISOString();
-    const orders = getStoredPurchaseOrders();
-
-    const updatedOrders = orders.map((storedOrder) => {
-      if (storedOrder.purchaseOrderId !== order.purchaseOrderId) {
-        return storedOrder;
-      }
-
-      return {
-        ...storedOrder,
-        status: "Submitted",
-        updatedAt: now,
-        statusHistory: [
-          ...(storedOrder.statusHistory || []),
-          {
-            status: "Submitted",
-            timestamp: now,
-            note: "Purchase Order submitted and ready for buying/receiving."
-          }
-        ]
-      };
-    });
-
-    savePurchaseOrders(updatedOrders);
-    refreshPurchaseOrdersPage();
-  };
-
-  if (typeof window.DMC_CONFIRM_MODAL === "function") {
-    window.DMC_CONFIRM_MODAL({
-      type: "success",
-      title: "Submit Purchase Order?",
-      message: `${order.purchaseOrderId} will be marked as Submitted and ready for buying/receiving.`,
-      confirmLabel: "Submit PO",
-      cancelLabel: "Cancel",
-      onConfirm: submitOrder
-    });
-  } else if (confirm(`Submit ${order.purchaseOrderId}?`)) {
-    submitOrder();
-  }
-}
-
 function confirmPurchaseOrderReceiving(order) {
   if (!order || !canPurchaseOrderReceive(order)) {
     return;
@@ -567,21 +489,129 @@ function confirmPurchaseOrderReceiving(order) {
   }
 }
 
+function printSelectedPurchaseOrder(order) {
+  if (!order) {
+    return;
+  }
+
+  const printWindow = window.open("", "_blank");
+
+  if (!printWindow) {
+    alert("Unable to open print window. Please allow pop-ups for this site.");
+    return;
+  }
+
+  const linesHtml = (order.lines || [])
+    .map(
+      (line, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${line.itemName || "-"}</td>
+          <td>${line.section || "-"}</td>
+          <td>${getPurchaseOrderLineOrderQty(line)}</td>
+          <td>${line.unit || "-"}</td>
+          <td>${line.notes || ""}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>${order.purchaseOrderId || "Shopping List"}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 24px;
+            color: #111;
+          }
+
+          h1 {
+            margin-bottom: 4px;
+          }
+
+          .meta {
+            margin-bottom: 18px;
+            line-height: 1.6;
+          }
+
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+
+          th,
+          td {
+            border: 1px solid #999;
+            padding: 8px;
+            text-align: left;
+          }
+
+          th {
+            background: #eee;
+          }
+
+          .signature {
+            margin-top: 36px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+          }
+
+          .line {
+            border-top: 1px solid #111;
+            padding-top: 8px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>Shopping List / Purchase Order</h1>
+
+        <div class="meta">
+          <div><strong>PO:</strong> ${order.purchaseOrderId || "-"}</div>
+          <div><strong>Supplier / Store:</strong> ${order.supplier || "-"}</div>
+          <div><strong>Prepared By:</strong> ${order.preparedBy || "-"}</div>
+          <div><strong>Needed Date:</strong> ${order.expectedDate || "-"}</div>
+          <div><strong>Notes:</strong> ${order.notes || "-"}</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Item</th>
+              <th>Section</th>
+              <th>Qty to Buy</th>
+              <th>Unit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${linesHtml}
+          </tbody>
+        </table>
+
+        <div class="signature">
+          <div class="line">Prepared By</div>
+          <div class="line">Purchased By</div>
+        </div>
+
+        <script>
+          window.print();
+        </script>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+}
+
 function renderPurchaseOrderReceivingPanel(order) {
   if (!order) {
     return "";
-  }
-
-  if (order.status === "Draft") {
-    return `
-      <div class="branch-order-section purchase-order-receiving-panel">
-        <h4>Receiving</h4>
-        <div class="instruction-box">
-          <strong>Draft PO:</strong>
-          <span>Submit this Purchase Order before confirming actual purchased quantities.</span>
-        </div>
-      </div>
-    `;
   }
 
   if (order.status === "Completed") {
@@ -615,16 +645,15 @@ function renderPurchaseOrderReceivingPanel(order) {
     <div class="branch-order-section purchase-order-receiving-panel">
       <div class="panel-header">
         <div>
-          <h4>Receive Purchase Order</h4>
+          <h4>Confirm Actual Purchase</h4>
           <p>
-            Enter actual quantities bought/received. Confirming receiving creates
-            Warehouse / Received Ledger entries and increases Warehouse Stock.
+            Enter what was actually bought. Confirming will create Warehouse / Received Ledger entries.
           </p>
         </div>
 
         <div class="form-actions">
           <button class="ghost-button" id="receive-full-purchase-order">
-            Receive Remaining
+            Fill Remaining
           </button>
 
           <button class="primary-button" id="confirm-purchase-order-receiving">
@@ -645,10 +674,10 @@ function renderPurchaseOrderReceivingPanel(order) {
           <thead>
             <tr>
               <th>Item</th>
-              <th>Ordered</th>
-              <th>Received</th>
+              <th>Qty to Buy</th>
+              <th>Already Received</th>
               <th>Remaining</th>
-              <th>Actual Received Now</th>
+              <th>Actual Bought Now</th>
               <th>Unit</th>
               <th>Notes</th>
             </tr>
@@ -722,24 +751,18 @@ function renderSelectedPurchaseOrder() {
         <div>
           <h3>${order.purchaseOrderId}</h3>
           <p>
-            ${order.supplier || "No supplier"} • Expected:
+            ${order.supplier || "No supplier"} • Needed:
             ${order.expectedDate || "-"}
           </p>
         </div>
 
         <div class="form-actions">
-          ${
-            canPurchaseOrderSubmit(order)
-              ? `<button class="primary-button" id="submit-selected-purchase-order">
-                  Submit PO
-                </button>`
-              : ""
-          }
+          <button class="ghost-button" id="print-selected-purchase-order">
+            Print Shopping List
+          </button>
 
-          <span class="badge ${getPurchaseOrderStatusBadgeClass(
-            order.status
-          )}">
-            ${order.status || "Draft"}
+          <span class="badge ${getPurchaseOrderStatusBadgeClass(order.status)}">
+            ${order.status === "Draft" ? "Open" : order.status || "Open"}
           </span>
         </div>
       </div>
@@ -761,13 +784,13 @@ function renderSelectedPurchaseOrder() {
         </div>
 
         <div>
-          <p class="eyebrow">Status</p>
-          <strong>${order.status || "Draft"}</strong>
+          <p class="eyebrow">Pending Items</p>
+          <strong>${getPurchaseOrderPendingLineCount(order)}</strong>
         </div>
 
         <div>
           <p class="eyebrow">Source</p>
-          <strong>${order.source || "Purchase Order"}</strong>
+          <strong>${order.source || "Shopping List"}</strong>
         </div>
 
         <div>
@@ -777,7 +800,7 @@ function renderSelectedPurchaseOrder() {
       </div>
 
       <div class="branch-order-section">
-        <h4>Order Lines</h4>
+        <h4>Shopping List Items</h4>
 
         <div class="table-wrap">
           <table>
@@ -787,8 +810,8 @@ function renderSelectedPurchaseOrder() {
                 <th>Item</th>
                 <th>Current</th>
                 <th>Minimum</th>
-                <th>Ordered</th>
-                <th>Received</th>
+                <th>Qty to Buy</th>
+                <th>Already Received</th>
                 <th>Remaining</th>
                 <th>Unit</th>
               </tr>
@@ -829,43 +852,14 @@ function renderSelectedPurchaseOrder() {
 }
 
 function getPurchaseOrdersContent() {
-  const summary = getPurchaseOrdersSummary();
-
   return `
-    <section class="grid">
-      <div class="card">
-        <p>Total POs</p>
-        <strong>${summary.totalPOs}</strong>
-      </div>
-
-      <div class="card">
-        <p>Drafts</p>
-        <strong>${summary.drafts}</strong>
-      </div>
-
-      <div class="card">
-        <p>Submitted</p>
-        <strong>${summary.submitted}</strong>
-      </div>
-
-      <div class="card">
-        <p>Partial</p>
-        <strong>${summary.partial}</strong>
-      </div>
-
-      <div class="card">
-        <p>Pending Items</p>
-        <strong>${summary.pendingItems}</strong>
-      </div>
-    </section>
-
     <section class="branch-orders-layout">
       <section class="panel branch-order-list-panel">
         <div class="panel-header">
           <div>
             <h3>Purchase Orders</h3>
             <p>
-              Track Shopping List purchase orders, buying progress, and Warehouse receiving.
+              Open a Shopping List, print it, then enter actual quantities bought.
             </p>
           </div>
 
@@ -942,13 +936,11 @@ function setupPurchaseOrdersEvents() {
     });
   });
 
-  const submitSelectedButton = document.getElementById(
-    "submit-selected-purchase-order"
-  );
+  const printButton = document.getElementById("print-selected-purchase-order");
 
-  if (submitSelectedButton) {
-    submitSelectedButton.addEventListener("click", () => {
-      submitPurchaseOrder(selectedOrder);
+  if (printButton) {
+    printButton.addEventListener("click", () => {
+      printSelectedPurchaseOrder(selectedOrder);
     });
   }
 
@@ -976,7 +968,7 @@ window.DMC_PAGES["purchase-orders"] = {
   eyebrow: "Warehouse",
   title: "Purchase Orders",
   description:
-    "Review Shopping List purchase orders, confirm actual quantities bought, and receive items into Warehouse stock.",
+    "Print Shopping Lists, confirm actual quantities bought, and receive items into Warehouse stock.",
   getContent: getPurchaseOrdersContent,
   content: getPurchaseOrdersContent(),
   afterRender: setupPurchaseOrdersEvents
