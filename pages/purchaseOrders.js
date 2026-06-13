@@ -1,7 +1,6 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_PURCHASE_ORDERS_STORAGE_KEY = "dmc_purchase_orders";
-const DMC_PURCHASE_ORDERS_COMMISSARY_STOCK_KEY = "dmc_commissary_stock_items";
 const DMC_PURCHASE_ORDERS_LEDGER_KEY = "dmc_inventory_ledger_entries";
 
 window.DMC_PURCHASE_ORDERS_SELECTED_ID =
@@ -328,7 +327,6 @@ function getPurchaseOrderPreparedLines() {
 
 function getPurchaseOrdersSummary() {
   const orders = getStoredPurchaseOrders();
-  const suggestions = getPurchaseOrderSuggestionRows();
 
   return {
     totalPOs: orders.length,
@@ -337,7 +335,14 @@ function getPurchaseOrdersSummary() {
     partial: orders.filter((order) => order.status === "Partially Received")
       .length,
     completed: orders.filter((order) => order.status === "Completed").length,
-    suggestedItems: suggestions.length
+    pendingItems: orders
+      .filter((order) => ["Draft", "Submitted", "Partially Received"].includes(order.status))
+      .reduce((total, order) => {
+        return (
+          total +
+          (order.lines || []).filter((line) => getPurchaseOrderLineRemainingQty(line) > 0).length
+        );
+      }, 0)
   };
 }
 
@@ -452,7 +457,7 @@ function renderPurchaseOrderList() {
     return `
       <div class="order-list-empty">
         <p>No purchase orders yet.</p>
-        <span>Create a draft from low-stock suggestions.</span>
+        <span>Create a Purchase Order from the Shopping List page.</span>
       </div>
     `;
   }
@@ -772,15 +777,18 @@ function buildPurchaseOrderReceivingLedgerEntries(order, receivingLines) {
     submittedAtDisplay,
     batchId: order.purchaseOrderId,
     purchaseOrderId: order.purchaseOrderId,
-    department: "Commissary",
+    department: "Warehouse",
+    location: "Warehouse",
+    destination: "Warehouse",
     section: line.section || "",
     itemId: line.itemId || "",
     itemName: line.itemName || "",
     movementType: "Received",
+    stockEffect: "add",
     quantity: line.receivedNowQty,
     unit: line.unit || "",
     source: "Purchase Order Receiving",
-    notes: `Received from ${order.supplier || "supplier"} for PO ${
+    notes: `Received to Warehouse from ${order.supplier || "supplier"} for PO ${
       order.purchaseOrderId
     }. ${line.receivingNotes || ""}`.trim()
   }));
@@ -867,7 +875,7 @@ function confirmPurchaseOrderReceiving(order) {
 
   delete window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT[order.purchaseOrderId];
 
-  alert("Purchase Order receiving confirmed. Commissary stock was updated through the Ledger.");
+  alert("Purchase Order receiving confirmed. Warehouse stock was updated through the Ledger.");
 
   refreshPurchaseOrdersPage();
 }
@@ -883,7 +891,7 @@ function renderPurchaseOrderReceivingPanel(order) {
         <h4>Receiving</h4>
         <div class="instruction-box">
           <strong>Draft PO:</strong>
-          <span>Submit this Purchase Order before receiving supplier delivery.</span>
+          <span>Submit this Purchase Order before confirming actual purchased quantities.</span>
         </div>
       </div>
     `;
@@ -923,7 +931,7 @@ function renderPurchaseOrderReceivingPanel(order) {
           <h4>Receive Purchase Order</h4>
           <p>
             Enter received quantities from the supplier. Confirming receiving
-            creates Commissary / Received Ledger entries and increases Commissary Stock.
+            creates Warehouse / Received Ledger entries and increases Warehouse Stock.
           </p>
         </div>
 
@@ -941,7 +949,7 @@ function renderPurchaseOrderReceivingPanel(order) {
       <div class="instruction-box">
         <strong>Receiving Preview:</strong>
         <span>
-          ${receivingLines.length} line(s) ready to receive. Only entered quantities will be added to stock.
+          ${receivingLines.length} line(s) ready to receive. Only entered quantities will be added to Warehouse stock.
         </span>
       </div>
 
@@ -953,7 +961,7 @@ function renderPurchaseOrderReceivingPanel(order) {
               <th>Ordered</th>
               <th>Received</th>
               <th>Remaining</th>
-              <th>Receive Now</th>
+              <th>Actual Received Now</th>
               <th>Unit</th>
               <th>Notes</th>
             </tr>
@@ -1007,6 +1015,58 @@ function renderPurchaseOrderReceivingPanel(order) {
   `;
 }
 
+
+function canPurchaseOrderSubmit(order) {
+  return order?.status === "Draft";
+}
+
+function submitPurchaseOrder(order) {
+  if (!order || !canPurchaseOrderSubmit(order)) {
+    return;
+  }
+
+  const submitOrder = () => {
+    const now = new Date().toISOString();
+    const orders = getStoredPurchaseOrders();
+
+    const updatedOrders = orders.map((storedOrder) => {
+      if (storedOrder.purchaseOrderId !== order.purchaseOrderId) {
+        return storedOrder;
+      }
+
+      return {
+        ...storedOrder,
+        status: "Submitted",
+        updatedAt: now,
+        statusHistory: [
+          ...(storedOrder.statusHistory || []),
+          {
+            status: "Submitted",
+            timestamp: now,
+            note: "Purchase Order submitted and ready for buying/receiving."
+          }
+        ]
+      };
+    });
+
+    savePurchaseOrders(updatedOrders);
+    refreshPurchaseOrdersPage();
+  };
+
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type: "success",
+      title: "Submit Purchase Order?",
+      message: `${order.purchaseOrderId} will be marked as Submitted and ready for buying/receiving.`,
+      confirmLabel: "Submit PO",
+      cancelLabel: "Cancel",
+      onConfirm: submitOrder
+    });
+  } else if (confirm(`Submit ${order.purchaseOrderId}?`)) {
+    submitOrder();
+  }
+}
+
 function renderSelectedPurchaseOrder() {
   const order = getSelectedPurchaseOrder();
 
@@ -1031,9 +1091,19 @@ function renderSelectedPurchaseOrder() {
           </p>
         </div>
 
-        <span class="badge ${getPurchaseOrderStatusBadgeClass(order.status)}">
-          ${order.status || "Draft"}
-        </span>
+        <div class="form-actions">
+          ${
+            canPurchaseOrderSubmit(order)
+              ? `<button class="primary-button" id="submit-selected-purchase-order">
+                  Submit PO
+                </button>`
+              : ""
+          }
+
+          <span class="badge ${getPurchaseOrderStatusBadgeClass(order.status)}">
+            ${order.status || "Draft"}
+          </span>
+        </div>
       </div>
 
       <div class="branch-order-info-grid">
@@ -1056,6 +1126,16 @@ function renderSelectedPurchaseOrder() {
           <p class="eyebrow">Status</p>
           <strong>${order.status || "Draft"}</strong>
         </div>
+
+        <div>
+          <p class="eyebrow">Source</p>
+          <strong>${order.source || "Purchase Order"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Prepared By</p>
+          <strong>${order.preparedBy || "-"}</strong>
+        </div>
       </div>
 
       <div class="branch-order-section">
@@ -1069,8 +1149,6 @@ function renderSelectedPurchaseOrder() {
                 <th>Item</th>
                 <th>Current</th>
                 <th>Minimum</th>
-                <th>Target</th>
-                <th>Suggested</th>
                 <th>Ordered</th>
                 <th>Received</th>
                 <th>Remaining</th>
@@ -1086,8 +1164,6 @@ function renderSelectedPurchaseOrder() {
                       <td>${line.itemName || "-"}</td>
                       <td>${line.currentStock}</td>
                       <td>${line.minimumStock}</td>
-                      <td>${line.targetStock}</td>
-                      <td>${line.suggestedQty}</td>
                       <td>${line.orderQty}</td>
                       <td>${getPurchaseOrderLineReceivedQty(line)}</td>
                       <td>${getPurchaseOrderLineRemainingQty(line)}</td>
@@ -1140,8 +1216,8 @@ function getPurchaseOrdersContent() {
       </div>
 
       <div class="card">
-        <p>Suggested Items</p>
-        <strong>${summary.suggestedItems}</strong>
+        <p>Pending Items</p>
+        <strong>${summary.pendingItems}</strong>
       </div>
     </section>
 
@@ -1150,7 +1226,7 @@ function getPurchaseOrdersContent() {
         <div class="panel-header">
           <div>
             <h3>Purchase Orders</h3>
-            <p>Track supplier orders for commissary replenishment.</p>
+            <p>Track Shopping List purchase orders, buying progress, and Warehouse receiving.</p>
           </div>
 
           <select id="purchase-order-status-filter">
@@ -1175,8 +1251,6 @@ function getPurchaseOrdersContent() {
 
       ${renderSelectedPurchaseOrder()}
     </section>
-
-    ${renderPurchaseOrderBuilder()}
   `;
 }
 
@@ -1353,6 +1427,15 @@ function setupPurchaseOrdersEvents() {
     });
   });
 
+
+  const submitSelectedButton = document.getElementById("submit-selected-purchase-order");
+
+  if (submitSelectedButton) {
+    submitSelectedButton.addEventListener("click", () => {
+      submitPurchaseOrder(selectedOrder);
+    });
+  }
+
   const receiveFullButton = document.getElementById("receive-full-purchase-order");
   const confirmReceivingButton = document.getElementById(
     "confirm-purchase-order-receiving"
@@ -1407,10 +1490,10 @@ function setupPurchaseOrdersEvents() {
 }
 
 window.DMC_PAGES["purchase-orders"] = {
-  eyebrow: "Commissary",
+  eyebrow: "Warehouse",
   title: "Purchase Orders",
   description:
-    "Create supplier purchase orders from low-stock commissary suggestions and receive supplier deliveries.",
+    "Review Shopping List purchase orders, confirm actual quantities bought, and receive items into Warehouse stock.",
   getContent: getPurchaseOrdersContent,
   content: getPurchaseOrdersContent(),
   afterRender: setupPurchaseOrdersEvents
