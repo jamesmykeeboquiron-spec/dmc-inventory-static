@@ -554,28 +554,24 @@ function printSelectedPurchaseOrder(order) {
       const rowsHtml = lines
         .map(
           (line, index) => `
-            <tr>
-              <td class="number-cell">${index + 1}.</td>
-              <td>${line.itemName || "-"}</td>
-              <td class="qty-cell">${getPurchaseOrderLineOrderQty(line)} ${line.unit || ""}</td>
-            </tr>
+            <div class="item-row">
+              <span>${index + 1}. ${line.itemName || "-"}</span>
+              <strong>${getPurchaseOrderLineOrderQty(line)} ${line.unit || ""}</strong>
+            </div>
           `
         )
         .join("");
 
       return `
         <section class="supplier-group">
-          <table>
-            <thead>
-              <tr>
-                <th colspan="2">${supplierName}</th>
-                <th>Qty to Buy</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
+          <div class="supplier-header">
+            <strong>${supplierName}</strong>
+            <span>Qty to Buy</span>
+          </div>
+
+          <div class="item-list">
+            ${rowsHtml}
+          </div>
         </section>
       `;
     })
@@ -586,63 +582,83 @@ function printSelectedPurchaseOrder(order) {
       <head>
         <title>${order.purchaseOrderId || "Shopping List"}</title>
         <style>
+          @page {
+            margin: 0.45in;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
           body {
             font-family: Arial, sans-serif;
-            padding: 24px;
+            padding: 0;
+            margin: 0;
             color: #111;
+            font-size: 12px;
+            line-height: 1.25;
           }
 
           .print-header {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 24px;
+            gap: 12px;
+            margin-bottom: 14px;
             align-items: start;
           }
 
           h1 {
-            margin: 0 0 14px;
-            font-size: 28px;
+            margin: 0 0 8px;
+            font-size: 18px;
+            line-height: 1.1;
           }
 
           .meta-line {
-            margin: 8px 0;
-            font-size: 14px;
+            margin: 3px 0;
+            font-size: 12px;
           }
 
           .right-meta {
-            padding-top: 43px;
-          }
-
-          table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 22px;
-          }
-
-          th,
-          td {
-            border: 1px solid #999;
-            padding: 9px;
+            padding-top: 27px;
             text-align: left;
-            font-size: 14px;
-          }
-
-          th {
-            background: #eee;
-          }
-
-          .number-cell {
-            width: 42px;
-          }
-
-          .qty-cell {
-            width: 160px;
-            font-weight: bold;
           }
 
           .supplier-group {
             break-inside: avoid;
+            margin-bottom: 12px;
+          }
+
+          .supplier-header {
+            display: grid;
+            grid-template-columns: 1fr 120px;
+            gap: 10px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 3px;
+            margin-bottom: 4px;
+            font-size: 12px;
+          }
+
+          .item-list {
+            display: grid;
+            gap: 2px;
+          }
+
+          .item-row {
+            display: grid;
+            grid-template-columns: 1fr 120px;
+            gap: 10px;
+            padding: 1px 0;
+            font-size: 12px;
+          }
+
+          .item-row strong {
+            font-weight: 600;
+          }
+
+          @media print {
+            button {
+              display: none;
+            }
           }
         </style>
       </head>
