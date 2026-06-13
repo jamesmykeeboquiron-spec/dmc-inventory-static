@@ -12,6 +12,12 @@ window.DMC_PURCHASE_ORDERS_STATUS_FILTER =
 window.DMC_PURCHASE_ORDERS_SEARCH =
   window.DMC_PURCHASE_ORDERS_SEARCH || "";
 
+window.DMC_PURCHASE_ORDERS_DATE_FROM =
+  window.DMC_PURCHASE_ORDERS_DATE_FROM || getPurchaseOrderTodayDate();
+
+window.DMC_PURCHASE_ORDERS_DATE_TO =
+  window.DMC_PURCHASE_ORDERS_DATE_TO || getPurchaseOrderTodayDate();
+
 window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT =
   window.DMC_PURCHASE_ORDER_RECEIVING_DRAFT || {};
 
@@ -101,6 +107,16 @@ function getPurchaseOrderTimestamp(order) {
   return 0;
 }
 
+function getPurchaseOrderDateKey(order) {
+  const value = order.createdAt || order.updatedAt || order.expectedDate || "";
+
+  if (!value) {
+    return "";
+  }
+
+  return String(value).slice(0, 10);
+}
+
 function getPurchaseOrderLineReceivedQty(line) {
   const value = Number(line.receivedQty || 0);
   return Number.isNaN(value) ? 0 : value;
@@ -128,8 +144,28 @@ function getFilteredPurchaseOrders() {
     .toLowerCase()
     .trim();
 
+  const dateFrom = String(window.DMC_PURCHASE_ORDERS_DATE_FROM || "");
+  const dateTo = String(window.DMC_PURCHASE_ORDERS_DATE_TO || "");
+
   return getStoredPurchaseOrders()
     .filter((order) => statusFilter === "all" || order.status === statusFilter)
+    .filter((order) => {
+      const orderDate = getPurchaseOrderDateKey(order);
+
+      if (!orderDate) {
+        return true;
+      }
+
+      if (dateFrom && orderDate < dateFrom) {
+        return false;
+      }
+
+      if (dateTo && orderDate > dateTo) {
+        return false;
+      }
+
+      return true;
+    })
     .filter((order) => {
       if (!searchValue) {
         return true;
@@ -233,20 +269,16 @@ function renderPurchaseOrderList() {
             >
               <div>
                 <strong>${order.purchaseOrderId}</strong>
-                <p>
-                  ${order.supplier || "No supplier"} •
-                  ${order.preparedBy || "No manager"} •
-                  ${(order.lines || []).length} item(s)
-                </p>
+                <p>${order.supplier || "No supplier"}</p>
                 <span>
-                  Needed: ${order.expectedDate || "-"} •
+                  Date: ${getPurchaseOrderDateKey(order) || "-"} •
                   Pending: ${pendingLineCount} item(s)
                 </span>
               </div>
 
               <div class="branch-order-list-meta">
                 <span class="badge ${getPurchaseOrderStatusBadgeClass(order.status)}">
-                  ${order.status || "Open"}
+                  ${order.status === "Draft" ? "Open" : order.status || "Open"}
                 </span>
               </div>
             </button>
@@ -489,6 +521,20 @@ function confirmPurchaseOrderReceiving(order) {
   }
 }
 
+function getPurchaseOrderPrintGroups(order) {
+  const supplierName = order.supplier || "Supplier / Store";
+  const groups = {};
+
+  (order.lines || []).forEach((line) => {
+    const groupName = line.supplier || line.supplierName || supplierName;
+
+    groups[groupName] = groups[groupName] || [];
+    groups[groupName].push(line);
+  });
+
+  return groups;
+}
+
 function printSelectedPurchaseOrder(order) {
   if (!order) {
     return;
@@ -501,19 +547,38 @@ function printSelectedPurchaseOrder(order) {
     return;
   }
 
-  const linesHtml = (order.lines || [])
-    .map(
-      (line, index) => `
-        <tr>
-          <td>${index + 1}</td>
-          <td>${line.itemName || "-"}</td>
-          <td>${line.section || "-"}</td>
-          <td>${getPurchaseOrderLineOrderQty(line)}</td>
-          <td>${line.unit || "-"}</td>
-          <td>${line.notes || ""}</td>
-        </tr>
-      `
-    )
+  const groups = getPurchaseOrderPrintGroups(order);
+
+  const groupsHtml = Object.entries(groups)
+    .map(([supplierName, lines]) => {
+      const rowsHtml = lines
+        .map(
+          (line, index) => `
+            <tr>
+              <td class="number-cell">${index + 1}.</td>
+              <td>${line.itemName || "-"}</td>
+              <td class="qty-cell">${getPurchaseOrderLineOrderQty(line)} ${line.unit || ""}</td>
+            </tr>
+          `
+        )
+        .join("");
+
+      return `
+        <section class="supplier-group">
+          <table>
+            <thead>
+              <tr>
+                <th colspan="2">${supplierName}</th>
+                <th>Qty to Buy</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </section>
+      `;
+    })
     .join("");
 
   printWindow.document.write(`
@@ -527,77 +592,75 @@ function printSelectedPurchaseOrder(order) {
             color: #111;
           }
 
-          h1 {
-            margin-bottom: 4px;
+          .print-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+            align-items: start;
           }
 
-          .meta {
-            margin-bottom: 18px;
-            line-height: 1.6;
+          h1 {
+            margin: 0 0 14px;
+            font-size: 28px;
+          }
+
+          .meta-line {
+            margin: 8px 0;
+            font-size: 14px;
+          }
+
+          .right-meta {
+            padding-top: 43px;
           }
 
           table {
             border-collapse: collapse;
             width: 100%;
+            margin-bottom: 22px;
           }
 
           th,
           td {
             border: 1px solid #999;
-            padding: 8px;
+            padding: 9px;
             text-align: left;
+            font-size: 14px;
           }
 
           th {
             background: #eee;
           }
 
-          .signature {
-            margin-top: 36px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
+          .number-cell {
+            width: 42px;
           }
 
-          .line {
-            border-top: 1px solid #111;
-            padding-top: 8px;
+          .qty-cell {
+            width: 160px;
+            font-weight: bold;
+          }
+
+          .supplier-group {
+            break-inside: avoid;
           }
         </style>
       </head>
 
       <body>
-        <h1>Shopping List / Purchase Order</h1>
+        <div class="print-header">
+          <div>
+            <h1>Shopping List</h1>
+            <div class="meta-line"><strong>PO Batch ID:</strong> ${order.purchaseOrderId || "-"}</div>
+            <div class="meta-line"><strong>Date:</strong> ${getPurchaseOrderDateKey(order) || getPurchaseOrderTodayDate()}</div>
+          </div>
 
-        <div class="meta">
-          <div><strong>PO:</strong> ${order.purchaseOrderId || "-"}</div>
-          <div><strong>Supplier / Store:</strong> ${order.supplier || "-"}</div>
-          <div><strong>Prepared By:</strong> ${order.preparedBy || "-"}</div>
-          <div><strong>Needed Date:</strong> ${order.expectedDate || "-"}</div>
-          <div><strong>Notes:</strong> ${order.notes || "-"}</div>
+          <div class="right-meta">
+            <div class="meta-line"><strong>Purchased by:</strong> ________________________</div>
+          </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Item</th>
-              <th>Section</th>
-              <th>Qty to Buy</th>
-              <th>Unit</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${linesHtml}
-          </tbody>
-        </table>
-
-        <div class="signature">
-          <div class="line">Prepared By</div>
-          <div class="line">Purchased By</div>
-        </div>
+        ${groupsHtml}
 
         <script>
           window.print();
@@ -869,6 +932,24 @@ function getPurchaseOrdersContent() {
         </div>
 
         <div class="filter-bar branch-order-search-bar">
+          <label>
+            From
+            <input
+              id="purchase-order-date-from"
+              type="date"
+              value="${window.DMC_PURCHASE_ORDERS_DATE_FROM}"
+            />
+          </label>
+
+          <label>
+            To
+            <input
+              id="purchase-order-date-to"
+              type="date"
+              value="${window.DMC_PURCHASE_ORDERS_DATE_TO}"
+            />
+          </label>
+
           <label class="filter-search">
             Search
             <input
@@ -878,9 +959,15 @@ function getPurchaseOrdersContent() {
               value="${window.DMC_PURCHASE_ORDERS_SEARCH}"
             />
           </label>
+
+          <button class="ghost-button" id="clear-purchase-order-filters">
+            Clear
+          </button>
         </div>
 
-        ${renderPurchaseOrderList()}
+        <div style="max-height: 620px; overflow-y: auto; padding-right: 4px;">
+          ${renderPurchaseOrderList()}
+        </div>
       </section>
 
       ${renderSelectedPurchaseOrder()}
@@ -896,6 +983,9 @@ function refreshPurchaseOrdersPage() {
 function setupPurchaseOrdersEvents() {
   const statusFilter = document.getElementById("purchase-order-status-filter");
   const searchInput = document.getElementById("purchase-order-search");
+  const dateFromInput = document.getElementById("purchase-order-date-from");
+  const dateToInput = document.getElementById("purchase-order-date-to");
+  const clearFiltersButton = document.getElementById("clear-purchase-order-filters");
   const selectedOrder = getSelectedPurchaseOrder();
 
   if (statusFilter) {
@@ -909,6 +999,33 @@ function setupPurchaseOrdersEvents() {
   if (searchInput) {
     searchInput.addEventListener("change", () => {
       window.DMC_PURCHASE_ORDERS_SEARCH = searchInput.value;
+      window.DMC_PURCHASE_ORDERS_SELECTED_ID = "";
+      refreshPurchaseOrdersPage();
+    });
+  }
+
+  if (dateFromInput) {
+    dateFromInput.addEventListener("change", () => {
+      window.DMC_PURCHASE_ORDERS_DATE_FROM = dateFromInput.value;
+      window.DMC_PURCHASE_ORDERS_SELECTED_ID = "";
+      refreshPurchaseOrdersPage();
+    });
+  }
+
+  if (dateToInput) {
+    dateToInput.addEventListener("change", () => {
+      window.DMC_PURCHASE_ORDERS_DATE_TO = dateToInput.value;
+      window.DMC_PURCHASE_ORDERS_SELECTED_ID = "";
+      refreshPurchaseOrdersPage();
+    });
+  }
+
+  if (clearFiltersButton) {
+    clearFiltersButton.addEventListener("click", () => {
+      window.DMC_PURCHASE_ORDERS_STATUS_FILTER = "all";
+      window.DMC_PURCHASE_ORDERS_SEARCH = "";
+      window.DMC_PURCHASE_ORDERS_DATE_FROM = "";
+      window.DMC_PURCHASE_ORDERS_DATE_TO = "";
       window.DMC_PURCHASE_ORDERS_SELECTED_ID = "";
       refreshPurchaseOrdersPage();
     });
