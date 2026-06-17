@@ -8,7 +8,7 @@ const DMC_DELIVERY_ISSUES_REASON_SYNC_KEY =
 
 const DMC_DELIVERY_STOCK_ACTIONS = {
   NONE: "No Stock Movement",
-  ADD_BACK_TO_COMMISSARY: "Add Back to Commissary Stock"
+  TRANS_BACK_TO_WAREHOUSE: "Trans Back to Warehouse Stock"
 };
 
 const DMC_DEFAULT_DELIVERY_ISSUE_REASONS = [
@@ -16,7 +16,7 @@ const DMC_DEFAULT_DELIVERY_ISSUE_REASONS = [
     id: "returned-usable-stock",
     name: "Returned to Usable Stock",
     category: "Recovered Stock",
-    stockAction: DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY,
+    stockAction: DMC_DELIVERY_STOCK_ACTIONS.TRANS_BACK_TO_WAREHOUSE,
     active: true
   },
   {
@@ -50,7 +50,7 @@ const DMC_DEFAULT_DELIVERY_ISSUE_REASONS = [
   {
     id: "packing-error",
     name: "Packing Error",
-    category: "Commissary Error",
+    category: "Warehouse Error",
     stockAction: DMC_DELIVERY_STOCK_ACTIONS.NONE,
     active: true
   },
@@ -81,9 +81,8 @@ window.DMC_DELIVERY_ISSUES_SELECTED_ID =
 
 window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT =
   window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT || {
-    status: "Under Review",
-    resolution: "",
-    resolutionNotes: ""
+    transBack: false,
+    deliveryNotes: ""
   };
 
 function getStoredDeliveryIssues() {
@@ -394,22 +393,26 @@ function buildDeliveryIssueLedgerEntry(issue, reasonConfig) {
     batchId: issue.issueId,
     deliveryIssueId: issue.issueId,
     orderId: issue.orderId || "",
-    department: "Commissary",
+    department: "Warehouse",
+    location: "Warehouse",
+    destination: "Warehouse",
     section: issue.section || "",
     itemId: issue.itemId || "",
     itemName: issue.itemName || "",
     movementType: "Transfer In",
+    movementField: "transferIn",
+    stockEffect: "add",
     quantity,
     unit: issue.unit || "",
     source: "Delivery Issue Resolution",
-    notes: `Returned to usable commissary stock from delivery issue ${issue.issueId}. Resolution: ${reasonConfig.name}. Original order: ${issue.orderId || "-"}.`
+    notes: `Trans back to Warehouse stock from delivery issue ${issue.issueId}. Original order: ${issue.orderId || "-"}. Notes: ${issue.resolutionNotes || "-"}.`
   };
 }
 
 function writeDeliveryIssueStockReturnToLedger(issue, reasonConfig) {
   if (
     reasonConfig.stockAction !==
-    DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
+    DMC_DELIVERY_STOCK_ACTIONS.TRANS_BACK_TO_WAREHOUSE
   ) {
     return false;
   }
@@ -523,17 +526,14 @@ function renderDeliveryIssueResolutionPanel(issue) {
 
   const isResolved = issue.status === "Resolved";
   const draft = window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT;
-  const selectedReasonConfig = getDeliveryIssueReasonConfig(draft.resolution);
-  const savedReasonConfig = getDeliveryIssueReasonConfig(issue.resolution);
 
   return `
     <div class="branch-order-section delivery-issue-resolution-panel">
       <div class="panel-header">
         <div>
-          <h4>Resolution Panel</h4>
+          <h4>Variance Review</h4>
           <p>
-            Resolution reasons are now controlled from Settings. Only “Add Back
-            to Commissary Stock” affects inventory.
+            Check Trans Back only if the item is still okay and should return to Warehouse Stock.
           </p>
         </div>
 
@@ -546,62 +546,39 @@ function renderDeliveryIssueResolutionPanel(issue) {
         isResolved
           ? `
             <div class="instruction-box">
-              <strong>Resolved:</strong>
+              <strong>Reviewed:</strong>
               <span>
-                Resolution: ${issue.resolution || "-"}.
-                Category: ${
-                  issue.resolutionCategory ||
-                  savedReasonConfig.category ||
-                  "-"
-                }.
-                Stock Action: ${
-                  issue.stockAction ||
-                  savedReasonConfig.stockAction ||
-                  DMC_DELIVERY_STOCK_ACTIONS.NONE
-                }.
+                Trans Back: ${issue.transBackToWarehouse ? "Yes" : "No"}.
                 Notes: ${issue.resolutionNotes || "-"}
               </span>
             </div>
           `
           : `
             <div class="delivery-issue-resolution-grid">
-              <label>
-                Status
-                <select id="delivery-issue-status-update">
-                  <option value="Under Review" ${
-                    draft.status === "Under Review" ? "selected" : ""
-                  }>Under Review</option>
-                  <option value="Resolved" ${
-                    draft.status === "Resolved" ? "selected" : ""
-                  }>Resolved</option>
-                </select>
+              <label
+                class="form-full"
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  min-height: 42px;
+                "
+              >
+                <input
+                  id="delivery-issue-trans-back"
+                  type="checkbox"
+                  ${draft.transBack ? "checked" : ""}
+                />
+                <span>Trans Back to Warehouse Stock</span>
               </label>
-
-              <label>
-                Resolution
-                <select id="delivery-issue-resolution">
-                  ${renderDeliveryIssueResolutionOptions(draft.resolution)}
-                </select>
-              </label>
-
-              <div class="instruction-box form-full">
-                <strong>Stock Action:</strong>
-                <span>
-                  ${
-                    draft.resolution
-                      ? `${selectedReasonConfig.stockAction} — ${selectedReasonConfig.category}`
-                      : "Select a resolution to see if it affects stock."
-                  }
-                </span>
-              </div>
 
               <label class="form-full">
-                Resolution Notes
+                Delivery Notes / Reason
                 <textarea
-                  id="delivery-issue-resolution-notes"
-                  rows="3"
-                  placeholder="Manager notes, investigation result, action taken..."
-                >${draft.resolutionNotes || ""}</textarea>
+                  id="delivery-issue-delivery-notes"
+                  rows="4"
+                  placeholder="Reason, manager note, investigation result, action taken..."
+                >${draft.deliveryNotes || ""}</textarea>
               </label>
             </div>
 
@@ -689,7 +666,7 @@ function renderSelectedDeliveryIssue() {
       <div class="branch-order-section">
         <h4>Delivery Notes</h4>
         <div class="instruction-box">
-          <strong>Commissary Notes:</strong>
+          <strong>Warehouse Notes:</strong>
           <span>${issue.deliveryNotes || "-"}</span>
         </div>
       </div>
@@ -764,14 +741,12 @@ function refreshDeliveryIssuesPage() {
 }
 
 function saveDeliveryIssueResolutionDraftFromInputs() {
-  const statusInput = document.getElementById("delivery-issue-status-update");
-  const resolutionInput = document.getElementById("delivery-issue-resolution");
-  const notesInput = document.getElementById("delivery-issue-resolution-notes");
+  const transBackInput = document.getElementById("delivery-issue-trans-back");
+  const notesInput = document.getElementById("delivery-issue-delivery-notes");
 
   window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT = {
-    status: statusInput?.value || "Under Review",
-    resolution: resolutionInput?.value || "",
-    resolutionNotes: notesInput?.value || ""
+    transBack: Boolean(transBackInput?.checked),
+    deliveryNotes: notesInput?.value || ""
   };
 }
 
@@ -783,74 +758,99 @@ function saveSelectedDeliveryIssueReview(issue) {
   saveDeliveryIssueResolutionDraftFromInputs();
 
   const draft = window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT;
-  const reasonConfig = getDeliveryIssueReasonConfig(draft.resolution);
 
-  if (draft.status === "Resolved" && !draft.resolution) {
-    alert("Please select a resolution before marking this issue resolved.");
-    return;
-  }
-
-  const shouldAddBackToStock =
-    draft.status === "Resolved" &&
-    reasonConfig.stockAction ===
-      DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY;
-
-  const confirmed = confirm(
-    shouldAddBackToStock
-      ? `Save review for ${issue.issueId} and add ${getDeliveryIssueReturnQuantity(
-          issue
-        )} ${issue.unit || ""} back to Commissary Stock through the Ledger?`
-      : `Save review for ${issue.issueId}?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  const ledgerEntryCreated = shouldAddBackToStock
-    ? writeDeliveryIssueStockReturnToLedger(issue, reasonConfig)
-    : false;
-
-  const issues = getStoredDeliveryIssues();
-
-  const updatedIssues = issues.map((storedIssue) => {
-    if (storedIssue.issueId !== issue.issueId) {
-      return storedIssue;
-    }
-
-    return {
-      ...storedIssue,
-      status: draft.status,
-      resolution: draft.resolution,
-      resolutionCategory: reasonConfig.category,
-      stockAction: reasonConfig.stockAction,
-      stockActionApplied:
-        reasonConfig.stockAction ===
-        DMC_DELIVERY_STOCK_ACTIONS.ADD_BACK_TO_COMMISSARY
-          ? true
-          : false,
-      ledgerEntryCreated,
-      resolutionNotes: draft.resolutionNotes,
-      resolvedAt: draft.status === "Resolved" ? new Date().toISOString() : ""
-    };
-  });
-
-  saveDeliveryIssues(updatedIssues);
-
-  window.DMC_DELIVERY_ISSUES_SELECTED_ID = issue.issueId;
-  window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT = {
-    status: "Under Review",
-    resolution: "",
-    resolutionNotes: ""
+  const reasonConfig = {
+    name: draft.transBack ? "Trans Back to Warehouse Stock" : "No Stock Movement",
+    category: draft.transBack ? "Recovered Stock" : "Recorded Only",
+    stockAction: draft.transBack
+      ? DMC_DELIVERY_STOCK_ACTIONS.TRANS_BACK_TO_WAREHOUSE
+      : DMC_DELIVERY_STOCK_ACTIONS.NONE
   };
 
-  alert(
-    shouldAddBackToStock
-      ? "Review saved. Returned usable stock was added back to Commissary through the Ledger."
-      : "Review saved. This resolution was recorded only and did not change stock."
-  );
+  const saveReview = () => {
+    const ledgerEntryCreated = draft.transBack
+      ? writeDeliveryIssueStockReturnToLedger(
+          {
+            ...issue,
+            resolutionNotes: draft.deliveryNotes
+          },
+          reasonConfig
+        )
+      : false;
 
-  refreshDeliveryIssuesPage();
+    const issues = getStoredDeliveryIssues();
+
+    const updatedIssues = issues.map((storedIssue) => {
+      if (storedIssue.issueId !== issue.issueId) {
+        return storedIssue;
+      }
+
+      return {
+        ...storedIssue,
+        status: "Resolved",
+        resolution: reasonConfig.name,
+        resolutionCategory: reasonConfig.category,
+        stockAction: reasonConfig.stockAction,
+        transBackToWarehouse: draft.transBack,
+        stockActionApplied: draft.transBack,
+        ledgerEntryCreated,
+        resolutionNotes: draft.deliveryNotes,
+        resolvedAt: new Date().toISOString()
+      };
+    });
+
+    saveDeliveryIssues(updatedIssues);
+
+    window.DMC_DELIVERY_ISSUES_SELECTED_ID = issue.issueId;
+    window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT = {
+      transBack: false,
+      deliveryNotes: ""
+    };
+
+    if (typeof window.DMC_SHOW_MODAL === "function") {
+      window.DMC_SHOW_MODAL({
+        type: "success",
+        title: "Review Saved",
+        message: draft.transBack
+          ? "Review saved. Item was trans back into Warehouse stock through the Ledger."
+          : "Review saved. No stock movement was created.",
+        confirmLabel: "Continue"
+      });
+    } else {
+      alert(
+        draft.transBack
+          ? "Review saved. Item was trans back into Warehouse stock through the Ledger."
+          : "Review saved. No stock movement was created."
+      );
+    }
+
+    refreshDeliveryIssuesPage();
+  };
+
+  if (typeof window.DMC_CONFIRM_MODAL === "function") {
+    window.DMC_CONFIRM_MODAL({
+      type: "success",
+      title: "Save Variance Review?",
+      message: draft.transBack
+        ? `Save review and trans back ${getDeliveryIssueReturnQuantity(issue)} ${
+            issue.unit || ""
+          } to Warehouse stock?`
+        : `Save review for ${issue.issueId} with no stock movement?`,
+      confirmLabel: "Save Review",
+      cancelLabel: "Cancel",
+      onConfirm: saveReview
+    });
+  } else if (
+    confirm(
+      draft.transBack
+        ? `Save review and trans back ${getDeliveryIssueReturnQuantity(issue)} ${
+            issue.unit || ""
+          } to Warehouse stock?`
+        : `Save review for ${issue.issueId} with no stock movement?`
+    )
+  ) {
+    saveReview();
+  }
 }
 
 function setupDeliveryIssuesEvents() {
@@ -879,9 +879,8 @@ function setupDeliveryIssuesEvents() {
         button.dataset.selectDeliveryIssue;
 
       window.DMC_DELIVERY_ISSUE_RESOLUTION_DRAFT = {
-        status: "Under Review",
-        resolution: "",
-        resolutionNotes: ""
+        transBack: false,
+        deliveryNotes: ""
       };
 
       refreshDeliveryIssuesPage();
@@ -890,18 +889,21 @@ function setupDeliveryIssuesEvents() {
 
   const selectedIssue = getSelectedDeliveryIssue();
 
-  const statusInput = document.getElementById("delivery-issue-status-update");
-  const resolutionInput = document.getElementById("delivery-issue-resolution");
-  const notesInput = document.getElementById("delivery-issue-resolution-notes");
+  const transBackInput = document.getElementById("delivery-issue-trans-back");
+  const notesInput = document.getElementById("delivery-issue-delivery-notes");
 
-  [statusInput, resolutionInput, notesInput].forEach((input) => {
-    if (input) {
-      input.addEventListener("change", () => {
-        saveDeliveryIssueResolutionDraftFromInputs();
-        refreshDeliveryIssuesPage();
-      });
-    }
-  });
+  if (transBackInput) {
+    transBackInput.addEventListener("change", () => {
+      saveDeliveryIssueResolutionDraftFromInputs();
+      refreshDeliveryIssuesPage();
+    });
+  }
+
+  if (notesInput) {
+    notesInput.addEventListener("input", () => {
+      saveDeliveryIssueResolutionDraftFromInputs();
+    });
+  }
 
   const saveButton = document.getElementById("save-delivery-issue-review");
 
@@ -913,10 +915,10 @@ function setupDeliveryIssuesEvents() {
 }
 
 window.DMC_PAGES["delivery-issues"] = {
-  eyebrow: "Commissary",
+  eyebrow: "Warehouse",
   title: "Delivery Issues",
   description:
-    "Review delivery variances before deciding whether items are waste, returned stock, missing, or input error.",
+    "Review branch delivery variances and trans back usable items into Warehouse stock when needed.",
   getContent: getDeliveryIssuesContent,
   content: getDeliveryIssuesContent(),
   afterRender: setupDeliveryIssuesEvents
