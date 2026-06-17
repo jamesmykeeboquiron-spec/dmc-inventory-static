@@ -630,8 +630,8 @@ function printSelectedPurchaseOrder(order) {
 
           .supplier-header {
             display: grid;
-            grid-template-columns: 1fr 120px;
-            gap: 10px;
+            grid-template-columns: 1fr 70px;
+            gap: 6px;
             border-bottom: 1px solid #222;
             padding-bottom: 3px;
             margin-bottom: 4px;
@@ -645,8 +645,8 @@ function printSelectedPurchaseOrder(order) {
 
           .item-row {
             display: grid;
-            grid-template-columns: 1fr 120px;
-            gap: 10px;
+            grid-template-columns: 1fr 70px;
+            gap: 6px;
             padding: 1px 0;
             font-size: 12px;
           }
@@ -947,41 +947,65 @@ function getPurchaseOrdersContent() {
           </select>
         </div>
 
-        <div class="filter-bar branch-order-search-bar">
-          <label>
+        <div
+          class="purchase-order-filter-panel"
+          style="
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+            position: relative;
+            z-index: 2;
+          "
+        >
+          <label style="display: flex; flex-direction: column; gap: 5px;">
             From
             <input
               id="purchase-order-date-from"
               type="date"
               value="${window.DMC_PURCHASE_ORDERS_DATE_FROM}"
+              style="width: 100%; min-height: 38px; position: relative; z-index: 3;"
             />
           </label>
 
-          <label>
+          <label style="display: flex; flex-direction: column; gap: 5px;">
             To
             <input
               id="purchase-order-date-to"
               type="date"
               value="${window.DMC_PURCHASE_ORDERS_DATE_TO}"
+              style="width: 100%; min-height: 38px; position: relative; z-index: 3;"
             />
           </label>
 
-          <label class="filter-search">
+          <label
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 5px;
+              grid-column: 1 / -1;
+            "
+          >
             Search
             <input
               id="purchase-order-search"
               type="text"
               placeholder="Search PO, supplier, manager, item..."
               value="${window.DMC_PURCHASE_ORDERS_SEARCH}"
+              style="width: 100%; min-height: 38px; position: relative; z-index: 3;"
             />
           </label>
 
-          <button class="ghost-button" id="clear-purchase-order-filters">
-            Clear
+          <button
+            class="ghost-button"
+            id="clear-purchase-order-filters"
+            style="grid-column: 1 / -1; min-height: 38px; position: relative; z-index: 3;"
+          >
+            Clear Filters
           </button>
         </div>
 
-        <div style="max-height: 620px; overflow-y: auto; padding-right: 4px;">
+        <div style="max-height: 620px; overflow-y: auto; padding-right: 4px; position: relative; z-index: 1;">
           ${renderPurchaseOrderList()}
         </div>
       </section>
@@ -1013,6 +1037,10 @@ function setupPurchaseOrdersEvents() {
   }
 
   if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_PURCHASE_ORDERS_SEARCH = searchInput.value;
+    });
+
     searchInput.addEventListener("change", () => {
       window.DMC_PURCHASE_ORDERS_SEARCH = searchInput.value;
       window.DMC_PURCHASE_ORDERS_SELECTED_ID = "";
