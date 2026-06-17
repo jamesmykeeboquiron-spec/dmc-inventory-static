@@ -691,7 +691,13 @@ function renderSelectedWarehouseOrder() {
         <button
           class="primary-button"
           id="start-fulfillment-order"
-          style="background: #2563eb; border-color: #2563eb;"
+          style="
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(96, 165, 250, 0.72));
+            border: 1px solid rgba(147, 197, 253, 0.75);
+            color: #eff6ff;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(10px);
+          "
           ${canStartFulfillment(order) ? "" : "disabled"}
         >
           Start Preparing
@@ -700,7 +706,13 @@ function renderSelectedWarehouseOrder() {
         <button
           class="primary-button"
           id="mark-order-on-the-way"
-          style="background: #16a34a; border-color: #16a34a;"
+          style="
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.96), rgba(74, 222, 128, 0.72));
+            border: 1px solid rgba(134, 239, 172, 0.75);
+            color: #f0fdf4;
+            box-shadow: 0 10px 24px rgba(22, 163, 74, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(10px);
+          "
           ${canMarkOnTheWay(order) ? "" : "disabled"}
         >
           Send to Branch
@@ -709,7 +721,13 @@ function renderSelectedWarehouseOrder() {
         <button
           class="ghost-button danger"
           id="reject-branch-order"
-          style="border-color: #dc2626; color: #fecaca;"
+          style="
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.88), rgba(248, 113, 113, 0.56));
+            border: 1px solid rgba(252, 165, 165, 0.75);
+            color: #fff1f2;
+            box-shadow: 0 10px 24px rgba(220, 38, 38, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+          "
           ${canRejectOrder(order) ? "" : "disabled"}
         >
           Reject Order
