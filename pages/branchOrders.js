@@ -1,7 +1,7 @@
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_BRANCH_ORDERS_STORAGE_KEY = "dmc_branch_orders";
-const DMC_WAREHOUSE_ORDER_LOG_KEY = "dmc_warehouse_log_entries";
+const DMC_WAREHOUSE_ORDER_LEDGER_KEY = "dmc_inventory_ledger_entries";
 const DMC_WAREHOUSE_ORDER_MASTER_LIST_KEY = "dmc_master_list_items";
 
 window.DMC_BRANCH_ORDERS_SELECTED_STATUS =
@@ -11,6 +11,12 @@ window.DMC_BRANCH_ORDERS_SELECTED_SOURCE =
   window.DMC_BRANCH_ORDERS_SELECTED_SOURCE || "all";
 
 window.DMC_BRANCH_ORDERS_SEARCH = window.DMC_BRANCH_ORDERS_SEARCH || "";
+
+window.DMC_BRANCH_ORDERS_DATE_FROM =
+  window.DMC_BRANCH_ORDERS_DATE_FROM || getWarehouseOrderTodayDate();
+
+window.DMC_BRANCH_ORDERS_DATE_TO =
+  window.DMC_BRANCH_ORDERS_DATE_TO || getWarehouseOrderTodayDate();
 
 window.DMC_BRANCH_ORDERS_SELECTED_ID =
   window.DMC_BRANCH_ORDERS_SELECTED_ID || "";
@@ -36,28 +42,28 @@ function saveWarehouseOrders(orders) {
   localStorage.setItem(DMC_BRANCH_ORDERS_STORAGE_KEY, JSON.stringify(orders));
 }
 
-function getStoredWarehouseLogEntriesForOrders() {
-  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_ORDER_LOG_KEY);
+function getStoredWarehouseLedgerEntriesForOrders() {
+  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_ORDER_LEDGER_KEY);
 
   if (!storedEntries) {
-    return [];
+    return window.DMC_DATA?.ledger || [];
   }
 
   try {
     const parsedEntries = JSON.parse(storedEntries);
 
     if (!Array.isArray(parsedEntries)) {
-      return [];
+      return window.DMC_DATA?.ledger || [];
     }
 
     return parsedEntries;
   } catch {
-    return [];
+    return window.DMC_DATA?.ledger || [];
   }
 }
 
-function saveWarehouseLogEntriesFromOrders(entries) {
-  localStorage.setItem(DMC_WAREHOUSE_ORDER_LOG_KEY, JSON.stringify(entries));
+function saveWarehouseLedgerEntriesFromOrders(entries) {
+  localStorage.setItem(DMC_WAREHOUSE_ORDER_LEDGER_KEY, JSON.stringify(entries));
 }
 
 function getWarehouseOrderMasterListItems() {
@@ -197,6 +203,16 @@ function getWarehouseOrderTimestampValue(order) {
   return 0;
 }
 
+function getWarehouseOrderDateKey(order) {
+  const value =
+    order.orderDate ||
+    order.statusHistory?.[0]?.timestamp ||
+    order.fulfillment?.sentAt ||
+    "";
+
+  return value ? String(value).slice(0, 10) : "";
+}
+
 function getOrderSource(order) {
   return order.source || order.requestSource || order.branch || "DMC-Iriga Branch";
 }
@@ -214,11 +230,19 @@ function getFilteredWarehouseOrders() {
     .toLowerCase()
     .trim();
 
+  const dateFrom = String(window.DMC_BRANCH_ORDERS_DATE_FROM || "");
+  const dateTo = String(window.DMC_BRANCH_ORDERS_DATE_TO || "");
+
   return getSortedWarehouseOrders().filter((order) => {
     const orderSource = getOrderSource(order);
+    const orderDate = getWarehouseOrderDateKey(order);
 
     const matchesStatus = status === "all" || order.status === status;
     const matchesSource = source === "all" || orderSource === source;
+
+    const matchesDate =
+      (!dateFrom || !orderDate || orderDate >= dateFrom) &&
+      (!dateTo || !orderDate || orderDate <= dateTo);
 
     const matchesSearch =
       !searchValue ||
@@ -239,7 +263,7 @@ function getFilteredWarehouseOrders() {
           String(line.section || "").toLowerCase().includes(searchValue)
       );
 
-    return matchesStatus && matchesSource && matchesSearch;
+    return matchesStatus && matchesSource && matchesDate && matchesSearch;
   });
 }
 
@@ -273,9 +297,13 @@ function getWarehouseOrdersSummary() {
   return {
     total: orders.length,
     submitted: orders.filter((order) => order.status === "Submitted").length,
+    preparing: orders.filter(
+      (order) =>
+        order.status === "Preparing" ||
+        order.status === "Accepted" ||
+        order.status === "Being Fulfilled"
+    ).length,
     urgent: orders.filter((order) => order.urgent).length,
-    fulfilling: orders.filter((order) => order.status === "Being Fulfilled")
-      .length,
     onTheWay: orders.filter((order) => order.status === "On the Way").length
   };
 }
@@ -283,8 +311,10 @@ function getWarehouseOrdersSummary() {
 function getOrderStatusBadgeClass(status) {
   if (status === "Submitted") return "warning-badge";
   if (status === "Accepted") return "info-badge";
-  if (status === "Being Fulfilled") return "success";
-  if (status === "On the Way") return "info-badge";
+  if (status === "Being Fulfilled") return "info-badge";
+  if (status === "Preparing") return "info-badge";
+  if (status === "On the Way") return "success";
+  if (status === "Completed") return "success";
   if (status === "Rejected") return "danger-badge";
   if (status === "Variance") return "danger-badge";
   return "";
@@ -295,8 +325,7 @@ function renderWarehouseOrderStatusOptions() {
 
   const statuses = [
     "Submitted",
-    "Accepted",
-    "Being Fulfilled",
+    "Preparing",
     "On the Way",
     "Completed",
     "Variance",
@@ -345,7 +374,7 @@ function calculateWarehouseStockForItem(itemId) {
 
   const openingStock = Number(masterItem?.openingStock || 0);
 
-  return getStoredWarehouseLogEntriesForOrders()
+  return getStoredWarehouseLedgerEntriesForOrders()
     .filter((entry) => String(entry.itemId || "") === String(itemId || ""))
     .reduce((total, entry) => {
       const quantity = Number(entry.quantity || 0);
@@ -401,15 +430,15 @@ function canAcceptOrder(order) {
 }
 
 function canStartFulfillment(order) {
-  return order && order.status === "Accepted";
-}
-
-function canRejectOrder(order) {
   return order && ["Submitted", "Accepted"].includes(order.status);
 }
 
+function canRejectOrder(order) {
+  return order && ["Submitted", "Accepted", "Preparing", "Being Fulfilled"].includes(order.status);
+}
+
 function canMarkOnTheWay(order) {
-  return order && order.status === "Being Fulfilled";
+  return order && ["Submitted", "Accepted", "Preparing", "Being Fulfilled"].includes(order.status);
 }
 
 function renderWarehouseOrderList() {
@@ -513,7 +542,7 @@ function renderFulfillmentLines(order) {
             <th>Item Name</th>
             <th>Requested</th>
             <th>Warehouse Stock</th>
-            <th>Fulfill Qty</th>
+            <th>Qty to Send</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -622,8 +651,8 @@ function renderSelectedWarehouseOrder() {
       <div class="branch-order-section">
         <div class="fulfillment-panel-header">
           <div>
-            <h4>Fulfillment Check</h4>
-            <p>Requested items and Warehouse available stock.</p>
+            <h4>Prepare Branch Order</h4>
+            <p>Check warehouse stock, enter quantity to send, then send to branch.</p>
           </div>
 
           <span class="badge">Warehouse Stock Linked</span>
@@ -661,34 +690,29 @@ function renderSelectedWarehouseOrder() {
       <div class="form-actions branch-order-actions">
         <button
           class="primary-button"
-          id="accept-branch-order"
-          ${canAcceptOrder(order) ? "" : "disabled"}
-        >
-          Accept Order
-        </button>
-
-        <button
-          class="ghost-button"
           id="start-fulfillment-order"
+          style="background: #2563eb; border-color: #2563eb;"
           ${canStartFulfillment(order) ? "" : "disabled"}
         >
-          Start Fulfillment
+          Start Preparing
         </button>
 
         <button
           class="primary-button"
           id="mark-order-on-the-way"
+          style="background: #16a34a; border-color: #16a34a;"
           ${canMarkOnTheWay(order) ? "" : "disabled"}
         >
-          Mark On the Way
+          Send to Branch
         </button>
 
         <button
           class="ghost-button danger"
           id="reject-branch-order"
+          style="border-color: #dc2626; color: #fecaca;"
           ${canRejectOrder(order) ? "" : "disabled"}
         >
-          Reject
+          Reject Order
         </button>
       </div>
     </section>
@@ -696,41 +720,45 @@ function renderSelectedWarehouseOrder() {
 }
 
 function getBranchOrdersContent() {
-  const summary = getWarehouseOrdersSummary();
-
   return `
-    <section class="grid">
-      <div class="card">
-        <p>Total Orders</p>
-        <strong>${summary.total}</strong>
-      </div>
-
-      <div class="card">
-        <p>Submitted</p>
-        <strong>${summary.submitted}</strong>
-      </div>
-
-      <div class="card">
-        <p>Urgent</p>
-        <strong>${summary.urgent}</strong>
-      </div>
-
-      <div class="card">
-        <p>On the Way</p>
-        <strong>${summary.onTheWay}</strong>
-      </div>
-    </section>
-
     <section class="branch-orders-layout">
       <section class="panel branch-order-list-panel">
         <div class="panel-header">
           <div>
-            <h3>Warehouse Order Queue</h3>
-            <p>Branch and Commissary requests waiting for Warehouse review.</p>
+            <h3>Branch Order Queue</h3>
+            <p>Branch requests waiting for Warehouse review and fulfillment.</p>
           </div>
         </div>
 
-        <div class="warehouse-order-filter-grid">
+        <div
+          class="warehouse-order-filter-grid"
+          style="
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 2;
+          "
+        >
+          <label>
+            From
+            <input
+              id="branch-order-date-from"
+              type="date"
+              value="${window.DMC_BRANCH_ORDERS_DATE_FROM}"
+            />
+          </label>
+
+          <label>
+            To
+            <input
+              id="branch-order-date-to"
+              type="date"
+              value="${window.DMC_BRANCH_ORDERS_DATE_TO}"
+            />
+          </label>
+
           <label>
             Source
             <select id="branch-order-source-filter">
@@ -744,10 +772,8 @@ function getBranchOrdersContent() {
               ${renderWarehouseOrderStatusOptions()}
             </select>
           </label>
-        </div>
 
-        <div class="filter-bar branch-order-search-bar">
-          <label class="filter-search">
+          <label style="grid-column: 1 / -1;">
             Search
             <input
               id="branch-order-search"
@@ -756,9 +782,15 @@ function getBranchOrdersContent() {
               value="${window.DMC_BRANCH_ORDERS_SEARCH}"
             />
           </label>
+
+          <button class="ghost-button" id="clear-branch-order-filters" style="grid-column: 1 / -1;">
+            Clear Filters
+          </button>
         </div>
 
-        ${renderWarehouseOrderList()}
+        <div style="max-height: 620px; overflow-y: auto; padding-right: 4px;">
+          ${renderWarehouseOrderList()}
+        </div>
       </section>
 
       ${renderSelectedWarehouseOrder()}
@@ -825,7 +857,7 @@ function saveFulfillmentDraftFromInputs(order) {
 }
 
 function hasWarehouseTransferOutAlreadyLogged(orderId) {
-  return getStoredWarehouseLogEntriesForOrders().some(
+  return getStoredWarehouseLedgerEntriesForOrders().some(
     (entry) =>
       entry.batchId === orderId &&
       entry.location === "Warehouse" &&
@@ -855,7 +887,9 @@ function buildWarehouseTransferOutEntries(order, fulfillmentDraft) {
         submittedAtDisplay,
         batchId: order.orderId,
         location: "Warehouse",
-        department: line.department || order.department || "",
+        department: "Warehouse",
+        originalDepartment: line.department || order.department || "",
+        section: line.section || "",
         itemId: line.itemId || "",
         itemName: line.itemName || "",
         movementType: "Transfer Out",
@@ -880,19 +914,22 @@ function writeWarehouseTransferOutToLog(order, fulfillmentDraft) {
     return;
   }
 
-  const currentLogEntries = getStoredWarehouseLogEntriesForOrders();
+  const currentLogEntries = getStoredWarehouseLedgerEntriesForOrders();
   const transferOutEntries = buildWarehouseTransferOutEntries(
     order,
     fulfillmentDraft
   );
 
-  saveWarehouseLogEntriesFromOrders([...currentLogEntries, ...transferOutEntries]);
+  saveWarehouseLedgerEntriesFromOrders([...currentLogEntries, ...transferOutEntries]);
 }
 
 function setupBranchOrdersEvents() {
   const statusFilter = document.getElementById("branch-order-status-filter");
   const sourceFilter = document.getElementById("branch-order-source-filter");
   const searchInput = document.getElementById("branch-order-search");
+  const dateFromInput = document.getElementById("branch-order-date-from");
+  const dateToInput = document.getElementById("branch-order-date-to");
+  const clearFiltersButton = document.getElementById("clear-branch-order-filters");
 
   if (statusFilter) {
     statusFilter.addEventListener("change", () => {
@@ -913,6 +950,34 @@ function setupBranchOrdersEvents() {
   if (searchInput) {
     searchInput.addEventListener("input", () => {
       window.DMC_BRANCH_ORDERS_SEARCH = searchInput.value;
+      window.DMC_BRANCH_ORDERS_SELECTED_ID = "";
+      refreshBranchOrdersPage();
+    });
+  }
+
+  if (dateFromInput) {
+    dateFromInput.addEventListener("change", () => {
+      window.DMC_BRANCH_ORDERS_DATE_FROM = dateFromInput.value;
+      window.DMC_BRANCH_ORDERS_SELECTED_ID = "";
+      refreshBranchOrdersPage();
+    });
+  }
+
+  if (dateToInput) {
+    dateToInput.addEventListener("change", () => {
+      window.DMC_BRANCH_ORDERS_DATE_TO = dateToInput.value;
+      window.DMC_BRANCH_ORDERS_SELECTED_ID = "";
+      refreshBranchOrdersPage();
+    });
+  }
+
+  if (clearFiltersButton) {
+    clearFiltersButton.addEventListener("click", () => {
+      window.DMC_BRANCH_ORDERS_SELECTED_STATUS = "all";
+      window.DMC_BRANCH_ORDERS_SELECTED_SOURCE = "all";
+      window.DMC_BRANCH_ORDERS_SEARCH = "";
+      window.DMC_BRANCH_ORDERS_DATE_FROM = "";
+      window.DMC_BRANCH_ORDERS_DATE_TO = "";
       window.DMC_BRANCH_ORDERS_SELECTED_ID = "";
       refreshBranchOrdersPage();
     });
@@ -948,27 +1013,16 @@ function setupBranchOrdersEvents() {
     }
   });
 
-  const acceptButton = document.getElementById("accept-branch-order");
   const fulfillmentButton = document.getElementById("start-fulfillment-order");
   const rejectButton = document.getElementById("reject-branch-order");
   const markOnTheWayButton = document.getElementById("mark-order-on-the-way");
-
-  if (acceptButton && selectedOrder) {
-    acceptButton.addEventListener("click", () => {
-      updateBranchOrderStatus(
-        selectedOrder.orderId,
-        "Accepted",
-        "Warehouse accepted the order request."
-      );
-    });
-  }
 
   if (fulfillmentButton && selectedOrder) {
     fulfillmentButton.addEventListener("click", () => {
       updateBranchOrderStatus(
         selectedOrder.orderId,
-        "Being Fulfilled",
-        "Warehouse started fulfilling the order."
+        "Preparing",
+        "Warehouse started preparing the order."
       );
     });
   }
@@ -1011,7 +1065,7 @@ function setupBranchOrdersEvents() {
       }
 
       const confirmed = confirm(
-        `Mark order ${selectedOrder.orderId} as On the Way? This will deduct Warehouse Stock.`
+        `Send order ${selectedOrder.orderId} to Branch? This will deduct Warehouse Stock and move it to Incoming Deliveries.`
       );
 
       if (!confirmed) {
@@ -1023,7 +1077,7 @@ function setupBranchOrdersEvents() {
       updateBranchOrderStatus(
         selectedOrder.orderId,
         "On the Way",
-        "Warehouse marked the order as On the Way. Warehouse Transfer Out was logged.",
+        "Warehouse sent the order to Branch. Warehouse Transfer Out was logged to the Ledger.",
         {
           fulfillment: {
             ...draft,
@@ -1039,7 +1093,7 @@ window.DMC_PAGES["branch-orders"] = {
   eyebrow: "Warehouse",
   title: "Branch Orders",
   description:
-    "Warehouse order queue for branch and commissary requests.",
+    "Warehouse order queue for branch requests.",
   getContent: getBranchOrdersContent,
   content: getBranchOrdersContent(),
   afterRender: setupBranchOrdersEvents
