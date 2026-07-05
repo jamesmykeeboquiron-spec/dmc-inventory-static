@@ -2,6 +2,8 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_PLACE_ORDER_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_PLACE_ORDER_STORAGE_KEY = "dmc_branch_orders";
+const DMC_PLACE_ORDER_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_PLACE_ORDER_BRANCH_MINIMUMS_KEY = "dmc_branch_stock_minimums";
 
 window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT =
   window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT || "Bar";
@@ -151,6 +153,149 @@ function saveBranchOrders(orders) {
   localStorage.setItem(DMC_PLACE_ORDER_STORAGE_KEY, JSON.stringify(orders));
 }
 
+
+function getPlaceOrderLedgerEntries() {
+  const storedEntries = localStorage.getItem(DMC_PLACE_ORDER_LEDGER_KEY);
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    const parsedEntries = JSON.parse(storedEntries);
+
+    return Array.isArray(parsedEntries)
+      ? parsedEntries
+      : window.DMC_DATA?.ledger || [];
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function getPlaceOrderBranchMinimums() {
+  const storedMinimums = localStorage.getItem(
+    DMC_PLACE_ORDER_BRANCH_MINIMUMS_KEY
+  );
+
+  if (!storedMinimums) {
+    return {};
+  }
+
+  try {
+    const parsedMinimums = JSON.parse(storedMinimums);
+
+    return parsedMinimums && typeof parsedMinimums === "object"
+      ? parsedMinimums
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function isPlaceOrderBranchItem(item) {
+  const areas = item.operatingAreas || item.assignedAreas || item.locations || [];
+  const areaText = Array.isArray(areas)
+    ? areas.join(" ").toLowerCase()
+    : String(areas || "").toLowerCase();
+
+  const explicitArea = String(
+    item.operatingArea || item.location || item.area || ""
+  ).toLowerCase();
+
+  return (
+    item.active !== false &&
+    (
+      item.branch === true ||
+      item.isBranch === true ||
+      areaText.includes("branch") ||
+      explicitArea.includes("branch")
+    )
+  );
+}
+
+function calculatePlaceOrderBranchStock(item) {
+  const itemId = String(item.itemId || "");
+  const openingStock = Number(item.openingStock || 0);
+
+  return getPlaceOrderLedgerEntries()
+    .filter((entry) => String(entry.itemId || "") === itemId)
+    .filter((entry) => {
+      const locationText = String(
+        entry.location ||
+          entry.destination ||
+          entry.source ||
+          entry.department ||
+          ""
+      ).toLowerCase();
+
+      return locationText.includes("branch") || locationText.includes("iriga");
+    })
+    .reduce((total, entry) => {
+      const quantity = Number(entry.quantity || 0);
+
+      if (Number.isNaN(quantity)) {
+        return total;
+      }
+
+      if (entry.stockEffect === "add") {
+        return total + quantity;
+      }
+
+      if (entry.stockEffect === "deduct") {
+        return total - quantity;
+      }
+
+      return total;
+    }, Number.isNaN(openingStock) ? 0 : openingStock);
+}
+
+function getPlaceOrderBranchStockItems() {
+  return getPlaceOrderMasterListItems()
+    .filter(isPlaceOrderBranchItem)
+    .map((item) => {
+      const currentStock = calculatePlaceOrderBranchStock(item);
+      const minimums = getPlaceOrderBranchMinimums();
+      const itemId = String(item.itemId || "");
+      const minimumStock =
+        itemId && minimums[itemId] !== undefined
+          ? Number(minimums[itemId])
+          : Number(item.minimumStock || 0);
+
+      return {
+        ...item,
+        currentStock: Number.isNaN(currentStock) ? 0 : currentStock,
+        minimumStock: Number.isNaN(minimumStock) ? 0 : minimumStock
+      };
+    });
+}
+
+function getPlaceOrderBranchStockStatus(item) {
+  const currentStock = Number(item.currentStock || 0);
+  const minimumStock = Number(item.minimumStock || 0);
+
+  if (currentStock <= 0) {
+    return "Critical";
+  }
+
+  if (minimumStock > 0 && currentStock < minimumStock) {
+    return "Low";
+  }
+
+  return "Good";
+}
+
+function getPlaceOrderStockBadgeClass(status) {
+  if (status === "Critical") {
+    return "danger-badge";
+  }
+
+  if (status === "Low") {
+    return "warning-badge";
+  }
+
+  return "success";
+}
+
 function showPlaceOrderModal({ type, title, message, confirmLabel }) {
   if (typeof window.DMC_SHOW_MODAL === "function") {
     window.DMC_SHOW_MODAL({
@@ -191,29 +336,26 @@ function showPlaceOrderConfirm({
 }
 
 function getPlaceOrderDepartments() {
-  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+  const departments = [
+    ...new Set(
+      getPlaceOrderBranchStockItems()
+        .map((item) => item.department)
+        .filter(Boolean)
+    )
+  ].sort();
 
-  if (storedSettings) {
-    try {
-      const settings = JSON.parse(storedSettings);
-
-      return (settings.departments || []).filter(
-        (department) => department.name !== "Commissary"
-      );
-    } catch {
-      return [
-        { id: "bar", name: "Bar" },
-        { id: "kitchen", name: "Kitchen" },
-        { id: "dining", name: "Dining" }
-      ];
-    }
+  if (departments.length === 0) {
+    return [
+      { id: "bar", name: "Bar" },
+      { id: "kitchen", name: "Kitchen" },
+      { id: "dining", name: "Dining" }
+    ];
   }
 
-  return [
-    { id: "bar", name: "Bar" },
-    { id: "kitchen", name: "Kitchen" },
-    { id: "dining", name: "Dining" }
-  ];
+  return departments.map((department) => ({
+    id: String(department).toLowerCase().replaceAll(" ", "-"),
+    name: department
+  }));
 }
 
 function renderPlaceOrderDepartmentOptions() {
@@ -238,7 +380,7 @@ function getItemsForPlaceOrder() {
     .toLowerCase()
     .trim();
 
-  return getPlaceOrderMasterListItems().filter((item) => {
+  return getPlaceOrderBranchStockItems().filter((item) => {
     const matchesDepartment =
       String(item.department || "").toLowerCase() ===
       String(selectedDepartment || "").toLowerCase();
@@ -260,7 +402,7 @@ function getSelectedPlaceOrderItem() {
   const items = getItemsForPlaceOrder();
 
   if (window.DMC_PLACE_ORDER_SELECTED_ITEM_ID) {
-    const selectedItem = getPlaceOrderMasterListItems().find(
+    const selectedItem = getPlaceOrderBranchStockItems().find(
       (item) => item.itemId === window.DMC_PLACE_ORDER_SELECTED_ITEM_ID
     );
 
@@ -286,7 +428,7 @@ function renderPlaceOrderItemOptions() {
         <option value="${item.itemId}" ${
         selectedItem?.itemId === item.itemId ? "selected" : ""
       }>
-          ${item.itemId} — ${item.officialItemName}
+          ${item.officialItemName || item.itemName || item.name || "Unnamed Item"}
         </option>
       `
     )
@@ -323,7 +465,7 @@ function renderOrderCart() {
     return `
       <div class="order-cart-empty">
         <p>Cart is empty</p>
-        <span>Pick items and add them to this Warehouse order.</span>
+        <span>Pick branch stock items and add them to this order.</span>
       </div>
     `;
   }
@@ -355,39 +497,15 @@ function renderOrderCart() {
 
 function getPlaceOrderContent() {
   const selectedDepartment = window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT;
-  const filteredItems = getItemsForPlaceOrder();
   const selectedItem = getSelectedPlaceOrderItem();
-  const submittedOrders = getStoredBranchOrders();
 
   return `
-    <section class="grid">
-      <div class="card">
-        <p>${selectedDepartment} Items Found</p>
-        <strong>${filteredItems.length}</strong>
-      </div>
-
-      <div class="card">
-        <p>Cart Items</p>
-        <strong>${getCartItemCount()}</strong>
-      </div>
-
-      <div class="card">
-        <p>Total Requested</p>
-        <strong>${getCartRequestedTotal()}</strong>
-      </div>
-
-      <div class="card">
-        <p>Submitted Orders</p>
-        <strong>${submittedOrders.length}</strong>
-      </div>
-    </section>
-
     <section class="place-order-layout">
       <div class="panel place-order-builder">
         <div class="panel-header">
           <div>
-            <h3>Add Item to Warehouse Order</h3>
-            <p>Select an item, enter quantity, then add it to the order cart.</p>
+            <h3>Create Branch Order</h3>
+            <p>Choose a branch stock item, check stock left, then add it to the order cart.</p>
           </div>
         </div>
 
@@ -400,7 +518,7 @@ function getPlaceOrderContent() {
           </label>
 
           <label>
-            Search Item
+            Search Branch Stock
             <input
               id="place-order-search"
               type="text"
@@ -410,7 +528,7 @@ function getPlaceOrderContent() {
           </label>
 
           <label class="form-full">
-            Select Item
+            Select Branch Item
             <select id="place-order-item-select">
               ${renderPlaceOrderItemOptions()}
             </select>
@@ -421,8 +539,18 @@ function getPlaceOrderContent() {
               selectedItem
                 ? `
                   <p class="eyebrow">Selected Item</p>
-                  <h4>${selectedItem.officialItemName}</h4>
-                  <span>${selectedItem.itemId} • ${selectedItem.section || "-"} • ${selectedItem.unit || "-"}</span>
+                  <h4>${selectedItem.officialItemName || selectedItem.itemName || selectedItem.name}</h4>
+                  <span>
+                    Branch Stock Left:
+                    <strong>${selectedItem.currentStock}</strong>
+                    ${selectedItem.unit || ""}
+                  </span>
+                  <span>
+                    Minimum: ${selectedItem.minimumStock || 0} ${selectedItem.unit || ""} •
+                    <span class="badge ${getPlaceOrderStockBadgeClass(getPlaceOrderBranchStockStatus(selectedItem))}">
+                      ${getPlaceOrderBranchStockStatus(selectedItem)}
+                    </span>
+                  </span>
                 `
                 : `
                   <p class="eyebrow">Selected Item</p>
@@ -451,7 +579,17 @@ function getPlaceOrderContent() {
             </select>
           </label>
 
-          <button class="primary-button form-full" id="add-item-to-order">
+          <button
+            class="primary-button form-full"
+            id="add-item-to-order"
+            style="
+              background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(96, 165, 250, 0.72));
+              border: 1px solid rgba(147, 197, 253, 0.75);
+              color: #eff6ff;
+              box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+              backdrop-filter: blur(10px);
+            "
+          >
             + Add to Order
           </button>
         </div>
@@ -460,8 +598,8 @@ function getPlaceOrderContent() {
       <div class="panel place-order-cart">
         <div class="panel-header">
           <div>
-            <h3>Warehouse Order Cart</h3>
-            <p>${getCartItemCount()} items ready to submit to Warehouse.</p>
+            <h3>Branch Order Cart</h3>
+            <p>${getCartItemCount()} items ready to request from Warehouse.</p>
           </div>
 
           <span class="badge">${getCartItemCount()} Items</span>
@@ -495,7 +633,17 @@ function getPlaceOrderContent() {
               Clear Cart
             </button>
 
-            <button class="primary-button" id="submit-branch-order">
+            <button
+              class="primary-button"
+              id="submit-branch-order"
+              style="
+                background: linear-gradient(135deg, rgba(22, 163, 74, 0.96), rgba(74, 222, 128, 0.72));
+                border: 1px solid rgba(134, 239, 172, 0.75);
+                color: #f0fdf4;
+                box-shadow: 0 10px 24px rgba(22, 163, 74, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+                backdrop-filter: blur(10px);
+              "
+            >
               Submit Order to Warehouse
             </button>
           </div>
@@ -604,11 +752,13 @@ function setupPlaceOrderEvents() {
 
       const cartLine = {
         itemId: selectedItem.itemId,
-        itemName: selectedItem.officialItemName,
+        itemName: selectedItem.officialItemName || selectedItem.itemName || selectedItem.name || "Unnamed Item",
         section: selectedItem.section,
         department: selectedItem.department,
         requestedQty,
         unit: selectedItem.unit,
+        currentBranchStock: selectedItem.currentStock,
+        branchMinimumStock: selectedItem.minimumStock,
         notes: ""
       };
 
