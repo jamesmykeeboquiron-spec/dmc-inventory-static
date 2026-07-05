@@ -7120,3 +7120,79 @@ input[type="date"]:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================
+   Global Sidebar Action Badges
+================================ */
+
+.nav-link {
+  position: relative;
+}
+
+.nav-notification-bubble {
+  margin-left: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.55), transparent 26%),
+    linear-gradient(135deg, #ff5c5c, #ff9a3c);
+  color: #fff7ed;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  border: 1px solid rgba(255, 210, 160, 0.75);
+  box-shadow:
+    0 0 14px rgba(255, 92, 92, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.nav-notification-bubble.warning {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.5), transparent 26%),
+    linear-gradient(135deg, #f59e0b, #f97316);
+}
+
+.nav-notification-bubble.info {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.5), transparent 26%),
+    linear-gradient(135deg, #2563eb, #38bdf8);
+}
+
+.nav-notification-bubble.success {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.5), transparent 26%),
+    linear-gradient(135deg, #16a34a, #4ade80);
+}
+
+.nav-notification-bubble.pulse {
+  animation: dmcNotificationPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dmcNotificationPulse {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 0 10px rgba(255, 92, 92, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+
+  50% {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 20px rgba(255, 92, 92, 0.64),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 10px rgba(255, 92, 92, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+}
+
