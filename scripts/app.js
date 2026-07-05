@@ -491,6 +491,100 @@ function initializeSidebarSections() {
   });
 }
 
+
+function readDmcLocalStorageArray(key) {
+  const storedValue = localStorage.getItem(key);
+
+  if (!storedValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue);
+
+    return Array.isArray(parsedValue) ? parsedValue : [];
+  } catch {
+    return [];
+  }
+}
+
+function getDmcSidebarBadgeCount(pageId) {
+  const branchOrders = readDmcLocalStorageArray("dmc_branch_orders");
+  const deliveryIssues = readDmcLocalStorageArray("dmc_delivery_issues");
+  const purchaseOrders = readDmcLocalStorageArray("dmc_purchase_orders");
+
+  const badgeRules = {
+    "incoming-deliveries": () =>
+      branchOrders.filter((order) => order.status === "On the Way").length,
+
+    "branch-orders": () =>
+      branchOrders.filter((order) =>
+        ["Submitted", "Preparing", "Accepted", "Being Fulfilled"].includes(
+          order.status
+        )
+      ).length,
+
+    "delivery-issues": () =>
+      deliveryIssues.filter((issue) =>
+        ["Open", "Under Review"].includes(issue.status || "Open")
+      ).length,
+
+    "purchase-orders": () =>
+      purchaseOrders.filter((order) =>
+        ["Draft", "Submitted", "Partially Received"].includes(
+          order.status || "Draft"
+        )
+      ).length
+  };
+
+  const badgeRule = badgeRules[pageId];
+
+  if (!badgeRule) {
+    return 0;
+  }
+
+  return badgeRule();
+}
+
+function getDmcSidebarBadgeTone(pageId) {
+  const tones = {
+    "incoming-deliveries": "warning",
+    "branch-orders": "info",
+    "delivery-issues": "warning",
+    "purchase-orders": "info"
+  };
+
+  return tones[pageId] || "warning";
+}
+
+function renderSidebarNotificationBubbles() {
+  document
+    .querySelectorAll(".nav-notification-bubble")
+    .forEach((bubble) => bubble.remove());
+
+  document.querySelectorAll(".nav-link[data-page]").forEach((link) => {
+    const pageId = link.dataset.page;
+    const count = getDmcSidebarBadgeCount(pageId);
+
+    if (count <= 0) {
+      return;
+    }
+
+    const bubble = document.createElement("span");
+    const tone = getDmcSidebarBadgeTone(pageId);
+
+    bubble.className = `nav-notification-bubble ${tone} pulse`;
+    bubble.textContent = count > 99 ? "99+" : String(count);
+    bubble.setAttribute(
+      "aria-label",
+      `${count} action${count === 1 ? "" : "s"} needing attention`
+    );
+
+    link.appendChild(bubble);
+  });
+}
+
+
 function renderPage(pageId) {
   const pages = getPages();
   const page = pages[pageId];
@@ -527,6 +621,8 @@ function renderPage(pageId) {
     activeLink.classList.add("active");
     openActiveSidebarSection(activeLink);
   }
+
+  renderSidebarNotificationBubbles();
 
   renderGlobalModalOnly();
 }
