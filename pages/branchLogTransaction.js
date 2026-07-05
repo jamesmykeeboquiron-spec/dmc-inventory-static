@@ -74,6 +74,8 @@ function entryBelongsToBranchLog(entry) {
     location.includes("branch") ||
     destination.includes("dmc-iriga") ||
     destination.includes("branch") ||
+    source.includes("dmc-iriga") ||
+    source.includes("branch") ||
     source.includes("incoming delivery receipt") ||
     source.includes("branch daily input") ||
     source.includes("branch daily input closing count") ||
@@ -98,6 +100,7 @@ function getBranchLogDepartments() {
 function getBranchLogMovementTypes() {
   const preferredOrder = [
     "Transfer In",
+    "Transfer Out",
     "Remaining Count",
     "Usage",
     "Waste",
@@ -284,6 +287,20 @@ function getBranchBatchSourceLabel(batch) {
     return "Daily Input Batch";
   }
 
+  const hasTransferOut = batch.entries.some(
+    (entry) => entry.movementType === "Transfer Out"
+  );
+
+  const destination = String(firstEntry.destination || "").toLowerCase();
+
+  if (hasTransferOut && destination.includes("commissary")) {
+    return "Transfer to Commissary Batch";
+  }
+
+  if (hasTransferOut) {
+    return "Branch Transfer Out Batch";
+  }
+
   return "Branch Movement Batch";
 }
 
@@ -396,6 +413,7 @@ function getBranchLogGroupedItemRows(batch) {
       itemName: entry.itemName || "-",
       unit: entry.unit || "-",
       transferIn: 0,
+      transferOut: 0,
       remaining: "",
       usage: 0,
       waste: 0,
@@ -407,6 +425,10 @@ function getBranchLogGroupedItemRows(batch) {
 
     if (entry.movementType === "Transfer In" || entry.stockEffect === "add") {
       row.transferIn += quantity;
+    }
+
+    if (entry.movementType === "Transfer Out") {
+      row.transferOut += quantity;
     }
 
     if (entry.movementType === "Remaining Count" || entry.stockEffect === "set") {
@@ -509,6 +531,7 @@ function renderBranchBatchLineTable(batch) {
             <th>Item ID</th>
             <th>Item Name</th>
             <th>Trans In</th>
+            <th>Trans Out</th>
             <th>Remaining</th>
             <th>Usage</th>
             <th>Waste</th>
@@ -529,6 +552,7 @@ function renderBranchBatchLineTable(batch) {
                   <td>${row.itemId || "-"}</td>
                   <td>${row.itemName || "-"}</td>
                   <td>${row.transferIn || "-"}</td>
+                  <td>${row.transferOut || "-"}</td>
                   <td>${row.remaining === "" ? "-" : row.remaining}</td>
                   <td>${row.usage || "-"}</td>
                   <td>${row.waste || "-"}</td>
@@ -653,7 +677,7 @@ function getBranchLogTransactionContent() {
             <h3>Branch Log Transaction</h3>
             <p>
               Read-only history of Branch Daily Input, incoming deliveries,
-              remaining counts, usage, waste, and branch notes.
+              remaining counts, usage, waste, transfer outs, and branch notes.
             </p>
           </div>
 
@@ -848,7 +872,7 @@ window.DMC_PAGES["branch-log-transaction"] = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Log Transaction",
   description:
-    "Read-only batch history of Branch Daily Input, receiving, usage, waste, and closing counts.",
+    "Read-only batch history of Branch Daily Input, receiving, transfer outs, usage, waste, and closing counts.",
   getContent: getBranchLogTransactionContent,
   content: getBranchLogTransactionContent(),
   afterRender: setupBranchLogTransactionEvents
