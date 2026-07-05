@@ -2,7 +2,6 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_PLACE_ORDER_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_PLACE_ORDER_STORAGE_KEY = "dmc_branch_orders";
-const DMC_PLACE_ORDER_LEDGER_KEY = "dmc_inventory_ledger_entries";
 const DMC_PLACE_ORDER_BRANCH_MINIMUMS_KEY = "dmc_branch_stock_minimums";
 
 window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT =
@@ -154,22 +153,21 @@ function saveBranchOrders(orders) {
 }
 
 
-function getPlaceOrderLedgerEntries() {
-  const storedEntries = localStorage.getItem(DMC_PLACE_ORDER_LEDGER_KEY);
+function getPlaceOrderCurrentBranchStock(item) {
+  const possibleValues = [
+    item.currentStock,
+    item.branchStock,
+    item.stockOnHand,
+    item.stockLeft,
+    item.quantityOnHand,
+    item.quantity,
+    item.onHand
+  ];
 
-  if (!storedEntries) {
-    return window.DMC_DATA?.ledger || [];
-  }
+  const foundValue = possibleValues.find((value) => value !== undefined && value !== null && value !== "");
+  const parsedValue = Number(foundValue || 0);
 
-  try {
-    const parsedEntries = JSON.parse(storedEntries);
-
-    return Array.isArray(parsedEntries)
-      ? parsedEntries
-      : window.DMC_DATA?.ledger || [];
-  } catch {
-    return window.DMC_DATA?.ledger || [];
-  }
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
 }
 
 function getPlaceOrderBranchMinimums() {
@@ -213,47 +211,11 @@ function isPlaceOrderBranchItem(item) {
   );
 }
 
-function calculatePlaceOrderBranchStock(item) {
-  const itemId = String(item.itemId || "");
-  const openingStock = Number(item.openingStock || 0);
-
-  return getPlaceOrderLedgerEntries()
-    .filter((entry) => String(entry.itemId || "") === itemId)
-    .filter((entry) => {
-      const locationText = String(
-        entry.location ||
-          entry.destination ||
-          entry.source ||
-          entry.department ||
-          ""
-      ).toLowerCase();
-
-      return locationText.includes("branch") || locationText.includes("iriga");
-    })
-    .reduce((total, entry) => {
-      const quantity = Number(entry.quantity || 0);
-
-      if (Number.isNaN(quantity)) {
-        return total;
-      }
-
-      if (entry.stockEffect === "add") {
-        return total + quantity;
-      }
-
-      if (entry.stockEffect === "deduct") {
-        return total - quantity;
-      }
-
-      return total;
-    }, Number.isNaN(openingStock) ? 0 : openingStock);
-}
-
 function getPlaceOrderBranchStockItems() {
   return getPlaceOrderMasterListItems()
     .filter(isPlaceOrderBranchItem)
     .map((item) => {
-      const currentStock = calculatePlaceOrderBranchStock(item);
+      const currentStock = getPlaceOrderCurrentBranchStock(item);
       const minimums = getPlaceOrderBranchMinimums();
       const itemId = String(item.itemId || "");
       const minimumStock =
