@@ -407,33 +407,138 @@ function getStartingStockForReportItem(itemId) {
   return Number.isNaN(parsedValue) ? 0 : parsedValue;
 }
 
-function getCurrentBranchStockForReportItem(itemId) {
-  const item = getReportMasterListItems().find(
-    (masterItem) => String(masterItem.itemId || "") === String(itemId || "")
-  );
+function reportEntryBelongsToBranchStock(entry) {
+  const location = String(entry.location || entry.branch || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
 
-  if (!item) {
-    return 0;
+  if (
+    location.includes("warehouse") ||
+    source.includes("warehouse daily input")
+  ) {
+    return false;
   }
 
-  const possibleValues = [
-    item.currentStock,
-    item.branchCurrentStock,
-    item.branchStock,
-    item.stockOnHand,
-    item.stockLeft,
-    item.quantityOnHand,
-    item.quantity,
-    item.onHand
-  ];
+  return (
+    location.includes("dmc-iriga") ||
+    location.includes("branch") ||
+    destination.includes("dmc-iriga") ||
+    destination.includes("branch") ||
+    source.includes("incoming delivery receipt") ||
+    source.includes("branch daily input") ||
+    !entry.location
+  );
+}
 
-  const foundValue = possibleValues.find(
-    (value) => value !== undefined && value !== null && value !== ""
+function getReportBranchLedgerEntriesOnly() {
+  return getReportLedgerEntries().filter(reportEntryBelongsToBranchStock);
+}
+
+function getReportBranchLedgerEntriesForItem(itemId) {
+  return getReportBranchLedgerEntriesOnly().filter(
+    (entry) => String(entry.itemId || "") === String(itemId || "")
+  );
+}
+
+function getReportBranchEntryTime(entry) {
+  return String(entry.submittedAt || entry.date || "");
+}
+
+function getReportBranchEntryStockEffect(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
+  }
+
+  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Usage" ||
+    entry.movementType === "Waste" ||
+    entry.movementType === "Transfer Out"
+  ) {
+    return "deduct";
+  }
+
+  if (entry.movementType === "Remaining Count") {
+    return "set";
+  }
+
+  return "report";
+}
+
+function getReportLatestRemainingCountForItem(itemId) {
+  const remainingEntries = getReportBranchLedgerEntriesForItem(itemId).filter(
+    (entry) =>
+      entry.movementType === "Remaining Count" || entry.stockEffect === "set"
   );
 
-  const parsedValue = Number(foundValue || 0);
+  if (remainingEntries.length === 0) {
+    return null;
+  }
 
-  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+  return [...remainingEntries].sort((a, b) => {
+    return getReportBranchEntryTime(b).localeCompare(
+      getReportBranchEntryTime(a)
+    );
+  })[0];
+}
+
+function getCurrentBranchStockForReportItem(itemId) {
+  const entries = getReportBranchLedgerEntriesForItem(itemId);
+  const latestRemainingCount = getReportLatestRemainingCountForItem(itemId);
+
+  if (latestRemainingCount) {
+    const latestRemainingTime = getReportBranchEntryTime(latestRemainingCount);
+    const startingFromRemaining = Number(latestRemainingCount.quantity || 0);
+
+    return entries
+      .filter((entry) => {
+        if (entry === latestRemainingCount) {
+          return false;
+        }
+
+        return getReportBranchEntryTime(entry) > latestRemainingTime;
+      })
+      .reduce((total, entry) => {
+        const quantity = Number(entry.quantity || 0);
+        const stockEffect = getReportBranchEntryStockEffect(entry);
+
+        if (stockEffect === "add") {
+          return total + quantity;
+        }
+
+        if (stockEffect === "deduct") {
+          return total - quantity;
+        }
+
+        if (stockEffect === "set") {
+          return quantity;
+        }
+
+        return total;
+      }, Number.isNaN(startingFromRemaining) ? 0 : startingFromRemaining);
+  }
+
+  return entries.reduce((total, entry) => {
+    const quantity = Number(entry.quantity || 0);
+    const stockEffect = getReportBranchEntryStockEffect(entry);
+
+    if (stockEffect === "add") {
+      return total + quantity;
+    }
+
+    if (stockEffect === "deduct") {
+      return total - quantity;
+    }
+
+    if (stockEffect === "set") {
+      return quantity;
+    }
+
+    return total;
+  }, 0);
 }
 
 function getAuditCountKey(itemId) {
@@ -677,7 +782,7 @@ function getReportsContent() {
         <div>
           <h3>Monthly Physical Audit</h3>
           <p>
-            Select a department and date range. System Ending comes from the current Branch Stock value. Movement totals come from the Ledger for reference. Physical Count is entered during audit. Submit the audit first, then review variance items for adjustment.
+            Select a department and date range. System Ending uses the same current-stock calculation as Branch Stock. Movement totals come from the Ledger for reference. Physical Count is entered during audit. Submit the audit first, then review variance items for adjustment.
           </p>
         </div>
 
@@ -710,7 +815,7 @@ function getReportsContent() {
       <div class="instruction-box">
         <strong>Audit Note:</strong>
         <span>
-          System Ending now follows the current Branch Stock value. Movement totals remain visible for review, but they do not rebuild the current stock number.
+          System Ending uses the same Branch Stock logic: latest Remaining Count is the stock truth, then later branch movements update it.
         </span>
       </div>
 
