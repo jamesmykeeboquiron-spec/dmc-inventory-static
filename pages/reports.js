@@ -407,6 +407,35 @@ function getStartingStockForReportItem(itemId) {
   return Number.isNaN(parsedValue) ? 0 : parsedValue;
 }
 
+function getCurrentBranchStockForReportItem(itemId) {
+  const item = getReportMasterListItems().find(
+    (masterItem) => String(masterItem.itemId || "") === String(itemId || "")
+  );
+
+  if (!item) {
+    return 0;
+  }
+
+  const possibleValues = [
+    item.currentStock,
+    item.branchCurrentStock,
+    item.branchStock,
+    item.stockOnHand,
+    item.stockLeft,
+    item.quantityOnHand,
+    item.quantity,
+    item.onHand
+  ];
+
+  const foundValue = possibleValues.find(
+    (value) => value !== undefined && value !== null && value !== ""
+  );
+
+  const parsedValue = Number(foundValue || 0);
+
+  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+}
+
 function getAuditCountKey(itemId) {
   const filters = window.DMC_REPORT_FILTERS;
 
@@ -508,14 +537,7 @@ function buildAuditRows() {
   });
 
   return Object.values(rowsByItemId).map((row) => {
-    const systemEnding =
-      row.startingStock +
-      row.received +
-      row.transferIn -
-      row.usage -
-      row.waste -
-      row.transferOut +
-      row.adjustment;
+    const systemEnding = getCurrentBranchStockForReportItem(row.itemId);
 
     const physicalCount = getPhysicalCountValue(row.itemId);
     const hasPhysicalCount = String(physicalCount).trim() !== "";
@@ -655,8 +677,7 @@ function getReportsContent() {
         <div>
           <h3>Monthly Physical Audit</h3>
           <p>
-            Select a department and date range. Starting Stock comes from Branch Stock.
-            Movement totals come from the Ledger. Physical Count is entered during audit. Submit the audit first, then review variance items for adjustment.
+            Select a department and date range. System Ending comes from the current Branch Stock value. Movement totals come from the Ledger for reference. Physical Count is entered during audit. Submit the audit first, then review variance items for adjustment.
           </p>
         </div>
 
@@ -689,7 +710,7 @@ function getReportsContent() {
       <div class="instruction-box">
         <strong>Audit Note:</strong>
         <span>
-          Starting Stock comes from the Branch Stock page. System Ending is calculated from Starting Stock plus Ledger movement totals.
+          System Ending now follows the current Branch Stock value. Movement totals remain visible for review, but they do not rebuild the current stock number.
         </span>
       </div>
 
