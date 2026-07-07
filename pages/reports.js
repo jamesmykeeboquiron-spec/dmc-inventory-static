@@ -14,9 +14,6 @@ window.DMC_REPORT_FILTERS = window.DMC_REPORT_FILTERS || {
   selectedAuditId: ""
 };
 
-window.DMC_BRANCH_AUDIT_ADJUSTMENT_NOTES =
-  window.DMC_BRANCH_AUDIT_ADJUSTMENT_NOTES || {};
-
 function getTodayReportDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -161,144 +158,6 @@ function getSelectedSubmittedAudit() {
   return getSubmittedAuditForCurrentFilter() || audits[0] || null;
 }
 
-function getBranchAuditAdjustmentKey(auditId, itemId) {
-  return `${auditId}|${itemId}`;
-}
-
-function getBranchAuditAdjustmentNotes(auditId, itemId) {
-  return (
-    window.DMC_BRANCH_AUDIT_ADJUSTMENT_NOTES[
-      getBranchAuditAdjustmentKey(auditId, itemId)
-    ] || ""
-  );
-}
-
-function saveBranchAuditAdjustmentNote(auditId, itemId, note) {
-  window.DMC_BRANCH_AUDIT_ADJUSTMENT_NOTES[
-    getBranchAuditAdjustmentKey(auditId, itemId)
-  ] = note;
-}
-
-function getExistingAdjustmentAuditKeys() {
-  return new Set(
-    getReportLedgerEntries()
-      .filter((entry) => entry.source === "Branch Monthly Audit Adjustment")
-      .map((entry) => `${entry.auditId || ""}|${entry.itemId || ""}`)
-  );
-}
-
-function createBranchAuditAdjustmentEntry(audit, auditRow, note) {
-  const variance = Number(auditRow.variance || 0);
-  const quantity = Math.abs(variance);
-
-  if (!quantity) {
-    return null;
-  }
-
-  return {
-    date: getTodayReportDate(),
-    submittedAt: new Date().toISOString(),
-    batchId: `${audit.auditId}-ADJ`,
-    auditId: audit.auditId,
-    location: "DMC-Iriga Branch",
-    department: audit.department,
-    section: auditRow.section || "",
-    itemId: auditRow.itemId || "",
-    itemName: auditRow.itemName || "",
-    movementType: "Adjustment",
-    movementField: "adjustment",
-    stockEffect: variance > 0 ? "add" : "deduct",
-    quantity,
-    unit: auditRow.unit || "",
-    source: "Branch Monthly Audit Adjustment",
-    destination: "DMC-Iriga Branch",
-    managerReviewedBy: audit.submittedBy || "Branch Manager",
-    notes: `Monthly audit adjustment from system stock ${auditRow.systemEnding} to physical count ${auditRow.physicalCount}. Variance: ${auditRow.variance}. ${note || ""}`.trim()
-  };
-}
-
-function postBranchAuditAdjustment(auditId, itemId) {
-  const audits = getStoredBranchMonthlyAudits();
-  const audit = audits.find((storedAudit) => storedAudit.auditId === auditId);
-
-  if (!audit) return;
-
-  const auditRow = (audit.rows || []).find((row) => row.itemId === itemId);
-
-  if (!auditRow || Number(auditRow.variance || 0) === 0) return;
-
-  const note = getBranchAuditAdjustmentNotes(auditId, itemId);
-
-  if (!String(note || "").trim()) {
-    alert("Please add an adjustment note/reason before posting adjustment.");
-    return;
-  }
-
-  const adjustmentKey = `${auditId}|${itemId}`;
-
-  if (getExistingAdjustmentAuditKeys().has(adjustmentKey)) {
-    alert("Adjustment for this audit item was already posted.");
-    return;
-  }
-
-  const adjustmentEntry = createBranchAuditAdjustmentEntry(audit, auditRow, note);
-
-  if (!adjustmentEntry) return;
-
-  const saveAdjustment = () => {
-    localStorage.setItem(
-      DMC_REPORT_LEDGER_STORAGE_KEY,
-      JSON.stringify([...getReportLedgerEntries(), adjustmentEntry])
-    );
-
-    const updatedAudits = audits.map((storedAudit) => {
-      if (storedAudit.auditId !== auditId) return storedAudit;
-
-      return {
-        ...storedAudit,
-        rows: (storedAudit.rows || []).map((row) => {
-          if (row.itemId !== itemId) return row;
-
-          return {
-            ...row,
-            adjustmentPosted: true,
-            adjustmentPostedAt: new Date().toISOString(),
-            adjustmentNote: note
-          };
-        }),
-        adjustedAt: new Date().toISOString()
-      };
-    });
-
-    saveBranchMonthlyAudits(updatedAudits);
-
-    if (typeof window.DMC_SHOW_MODAL === "function") {
-      window.DMC_SHOW_MODAL({
-        type: "success",
-        title: "Adjustment Posted",
-        message:
-          "Adjustment was posted to the Ledger. Branch Stock will now reflect the physical audit correction.",
-        confirmLabel: "Continue"
-      });
-    }
-
-    refreshReportsPage();
-  };
-
-  if (typeof window.DMC_CONFIRM_MODAL === "function") {
-    window.DMC_CONFIRM_MODAL({
-      type: "warning",
-      title: "Post Stock Adjustment?",
-      message: `Post adjustment for ${auditRow.itemName}? This will change Branch Stock through the Ledger.`,
-      confirmLabel: "Post Adjustment",
-      cancelLabel: "Cancel",
-      onConfirm: saveAdjustment
-    });
-  } else if (confirm(`Post adjustment for ${auditRow.itemName}?`)) {
-    saveAdjustment();
-  }
-}
-
 function submitCurrentBranchMonthlyAudit() {
   const rows = buildAuditRows();
   const missingCounts = rows.filter(
@@ -353,7 +212,7 @@ function submitCurrentBranchMonthlyAudit() {
         type: "success",
         title: "Monthly Audit Submitted",
         message:
-          "Audit has been saved. Variance items are now available for review and adjustment.",
+          "Audit has been saved. Variance items are now available for review in the Submitted Audits section.",
         confirmLabel: "Continue"
       });
     }
@@ -366,7 +225,7 @@ function submitCurrentBranchMonthlyAudit() {
       type: "success",
       title: "Submit Monthly Audit?",
       message:
-        "After submission, the audit will be saved as the official monthly record. Variance adjustments can be posted after submission.",
+        "After submission, the audit will be saved as the official monthly record. Stock adjustments will be handled later from the restricted Submitted Audits / Audit Review page.",
       confirmLabel: "Submit Audit",
       cancelLabel: "Cancel",
       onConfirm: saveAudit
@@ -782,7 +641,7 @@ function getReportsContent() {
         <div>
           <h3>Monthly Physical Audit</h3>
           <p>
-            Select a department and date range. System Ending uses the same current-stock calculation as Branch Stock. Movement totals come from the Ledger for reference. Physical Count is entered during audit. Submit the audit first, then review variance items for adjustment.
+            Select a department and date range. System Ending uses the same current-stock calculation as Branch Stock. Movement totals come from the Ledger for reference. Physical Count is entered during audit. Submit the audit to save a locked monthly record for later owner review.
           </p>
         </div>
 
@@ -879,7 +738,7 @@ function formatReportDateTime(value) {
   });
 }
 
-function renderSubmittedAuditRows(audit, rows, showAdjustmentControls) {
+function renderSubmittedAuditRows(audit, rows) {
   if (!rows || rows.length === 0) {
     return `<p class="submit-preview-empty">No items in this section.</p>`;
   }
@@ -894,13 +753,11 @@ function renderSubmittedAuditRows(audit, rows, showAdjustmentControls) {
             <th>Physical</th>
             <th>Variance</th>
             <th>Status</th>
-            ${showAdjustmentControls ? "<th>Adjustment</th>" : ""}
           </tr>
         </thead>
         <tbody>
           ${rows
             .map((row) => {
-              const noteValue = getBranchAuditAdjustmentNotes(audit.auditId, row.itemId);
               return `
                 <tr>
                   <td>
@@ -911,36 +768,6 @@ function renderSubmittedAuditRows(audit, rows, showAdjustmentControls) {
                   <td>${row.physicalCount}</td>
                   <td class="${Number(row.variance) === 0 ? "" : "danger-text"}">${row.variance}</td>
                   <td><span class="badge ${getReportStatusBadgeClass(row.status)}">${row.status}</span></td>
-                  ${
-                    showAdjustmentControls
-                      ? `
-                        <td>
-                          ${
-                            row.adjustmentPosted === true
-                              ? `<span class="badge success">Adjusted</span>`
-                              : `
-                                <input
-                                  class="audit-adjustment-note"
-                                  data-adjustment-note-audit="${audit.auditId}"
-                                  data-adjustment-note-item="${row.itemId}"
-                                  type="text"
-                                  placeholder="Reason / note..."
-                                  value="${noteValue}"
-                                  style="min-width: 180px; margin-bottom: 8px;"
-                                />
-                                <button
-                                  class="tiny-button"
-                                  data-post-audit-adjustment="${audit.auditId}"
-                                  data-post-audit-item="${row.itemId}"
-                                >
-                                  Adjust Current Stock
-                                </button>
-                              `
-                          }
-                        </td>
-                      `
-                      : ""
-                  }
                 </tr>
               `;
             })
@@ -981,7 +808,7 @@ function renderSubmittedAuditReviewSection() {
         <div class="panel-header">
           <div>
             <h3>Submitted Audits</h3>
-            <p>Select a submitted Branch audit to review variance and adjustments.</p>
+            <p>Select a submitted Branch audit to review saved variance items.</p>
           </div>
           <span class="badge">${audits.length} Saved</span>
         </div>
@@ -1031,8 +858,8 @@ function renderSubmittedAuditReviewSection() {
                 <div><span>Needs Checking</span><strong>${selectedAudit.checkCount || 0}</strong></div>
                 <div><span>Submitted</span><strong>${formatReportDateTime(selectedAudit.submittedAt)}</strong></div>
               </div>
-              <div class="branch-order-section"><h4>Needs Checking</h4>${renderSubmittedAuditRows(selectedAudit, needsCheckingRows, true)}</div>
-              <div class="branch-order-section"><h4>OK Items</h4>${renderSubmittedAuditRows(selectedAudit, okRows, false)}</div>
+              <div class="branch-order-section"><h4>Needs Checking</h4>${renderSubmittedAuditRows(selectedAudit, needsCheckingRows)}</div>
+              <div class="branch-order-section"><h4>OK Items</h4>${renderSubmittedAuditRows(selectedAudit, okRows)}</div>
             `
             : `<div class="order-list-empty"><p>No audit selected.</p><span>Select a submitted audit from the left panel.</span></div>`
         }
@@ -1138,25 +965,6 @@ function setupReportsEvents() {
     });
   });
 
-  document.querySelectorAll("[data-adjustment-note-audit]").forEach((input) => {
-    input.addEventListener("input", () => {
-      saveBranchAuditAdjustmentNote(
-        input.dataset.adjustmentNoteAudit,
-        input.dataset.adjustmentNoteItem,
-        input.value
-      );
-    });
-  });
-
-  document.querySelectorAll("[data-post-audit-adjustment]").forEach((button) => {
-    button.addEventListener("click", () => {
-      postBranchAuditAdjustment(
-        button.dataset.postAuditAdjustment,
-        button.dataset.postAuditItem
-      );
-    });
-  });
-
   setupAuditCountEvents();
 }
 
@@ -1164,7 +972,7 @@ window.DMC_PAGES.reports = {
   eyebrow: "DMC-Iriga Branch",
   title: "Branch Reports",
   description:
-    "Monthly physical audit powered by Starting Stock and Ledger history.",
+    "Monthly physical audit powered by current Branch Stock and Ledger history.",
   getContent: getReportsContent,
   content: getReportsContent(),
   afterRender: setupReportsEvents
