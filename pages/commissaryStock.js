@@ -552,6 +552,31 @@ function renderCommissarySummaryCards() {
   `;
 }
 
+function renderCommissaryOutOfStockAlert() {
+  const outOfStockItems = getCommissaryStockRows().filter(
+    (item) => getCommissaryStockStatus(item) === "Out of Stock"
+  );
+
+  if (outOfStockItems.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="instruction-box">
+      <strong>
+        Stock Alert
+        <span class="nav-notification-bubble pulse" style="margin-left: 8px;">
+          ${outOfStockItems.length > 99 ? "99+" : outOfStockItems.length}
+        </span>
+      </strong>
+      <span>
+        ${outOfStockItems.length} commissary item${outOfStockItems.length === 1 ? "" : "s"} currently at 0 stock.
+        Use the Status filter and choose Out of Stock to review them.
+      </span>
+    </div>
+  `;
+}
+
 function renderCommissaryStockBubble(item) {
   const currentStock = Number(item.currentStock || 0);
   const status = getCommissaryStockStatus(item);
@@ -622,7 +647,6 @@ function renderCommissaryStockRows() {
           <td>${item.itemId || "-"}</td>
           <td>
             <strong>${item.itemName || "-"}</strong>
-            ${renderCommissaryMovementSummary(item)}
           </td>
           <td>${item.section || "-"}</td>
           <td>${item.unit || "-"}</td>
@@ -655,8 +679,14 @@ function getCommissaryStockContent() {
           </p>
         </div>
 
-        <span class="badge">Commissary Stock</span>
+        ${
+          getCommissaryStockRows().some((item) => getCommissaryStockStatus(item) === "Out of Stock")
+            ? `<span class="badge danger-badge">0 Stock Alert</span>`
+            : `<span class="badge">Commissary Stock</span>`
+        }
       </div>
+
+      ${renderCommissaryOutOfStockAlert()}
 
       <div class="warehouse-stock-filter-shell">
         <div class="warehouse-stock-filter-grid">
