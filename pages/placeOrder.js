@@ -2,6 +2,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_PLACE_ORDER_MASTER_LIST_KEY = "dmc_master_list_items";
 const DMC_PLACE_ORDER_STORAGE_KEY = "dmc_branch_orders";
+const DMC_PLACE_ORDER_LEDGER_KEY = "dmc_inventory_ledger_entries";
 const DMC_PLACE_ORDER_BRANCH_MINIMUMS_KEY = "dmc_branch_stock_minimums";
 
 window.DMC_PLACE_ORDER_SELECTED_DEPARTMENT =
@@ -153,21 +154,157 @@ function saveBranchOrders(orders) {
 }
 
 
+function getPlaceOrderLedgerEntries() {
+  const storedEntries = localStorage.getItem(DMC_PLACE_ORDER_LEDGER_KEY);
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    const parsedEntries = JSON.parse(storedEntries);
+
+    return Array.isArray(parsedEntries) ? parsedEntries : [];
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function entryBelongsToPlaceOrderBranchStock(entry) {
+  const location = String(entry.location || entry.branch || "").toLowerCase();
+  const source = String(entry.source || "").toLowerCase();
+  const destination = String(entry.destination || "").toLowerCase();
+
+  if (
+    location.includes("warehouse") ||
+    source.includes("warehouse daily input")
+  ) {
+    return false;
+  }
+
+  return (
+    location.includes("dmc-iriga") ||
+    location.includes("branch") ||
+    destination.includes("dmc-iriga") ||
+    destination.includes("branch") ||
+    source.includes("incoming delivery receipt") ||
+    source.includes("branch daily input") ||
+    !entry.location
+  );
+}
+
+function getPlaceOrderBranchLedgerEntriesOnly() {
+  return getPlaceOrderLedgerEntries().filter(entryBelongsToPlaceOrderBranchStock);
+}
+
+function getPlaceOrderBranchLedgerEntriesForItem(itemId) {
+  return getPlaceOrderBranchLedgerEntriesOnly().filter(
+    (entry) => String(entry.itemId || "") === String(itemId || "")
+  );
+}
+
+function getPlaceOrderBranchEntryTime(entry) {
+  return String(entry.submittedAt || entry.date || "");
+}
+
+function getPlaceOrderBranchEntryStockEffect(entry) {
+  if (entry.stockEffect) {
+    return entry.stockEffect;
+  }
+
+  if (entry.movementType === "Transfer In" || entry.movementType === "Received") {
+    return "add";
+  }
+
+  if (
+    entry.movementType === "Usage" ||
+    entry.movementType === "Waste" ||
+    entry.movementType === "Transfer Out"
+  ) {
+    return "deduct";
+  }
+
+  if (entry.movementType === "Remaining Count") {
+    return "set";
+  }
+
+  return "report";
+}
+
+function getPlaceOrderLatestRemainingCountForItem(itemId) {
+  const remainingEntries = getPlaceOrderBranchLedgerEntriesForItem(itemId).filter(
+    (entry) =>
+      entry.movementType === "Remaining Count" || entry.stockEffect === "set"
+  );
+
+  if (remainingEntries.length === 0) {
+    return null;
+  }
+
+  return [...remainingEntries].sort((a, b) => {
+    return getPlaceOrderBranchEntryTime(b).localeCompare(
+      getPlaceOrderBranchEntryTime(a)
+    );
+  })[0];
+}
+
 function getPlaceOrderCurrentBranchStock(item) {
-  const possibleValues = [
-    item.currentStock,
-    item.branchStock,
-    item.stockOnHand,
-    item.stockLeft,
-    item.quantityOnHand,
-    item.quantity,
-    item.onHand
-  ];
+  const entries = getPlaceOrderBranchLedgerEntriesForItem(item.itemId);
+  const latestRemainingCount = getPlaceOrderLatestRemainingCountForItem(
+    item.itemId
+  );
 
-  const foundValue = possibleValues.find((value) => value !== undefined && value !== null && value !== "");
-  const parsedValue = Number(foundValue || 0);
+  if (latestRemainingCount) {
+    const latestRemainingTime =
+      getPlaceOrderBranchEntryTime(latestRemainingCount);
+    const startingFromRemaining = Number(latestRemainingCount.quantity || 0);
 
-  return Number.isNaN(parsedValue) ? 0 : parsedValue;
+    return entries
+      .filter((entry) => {
+        if (entry === latestRemainingCount) {
+          return false;
+        }
+
+        return getPlaceOrderBranchEntryTime(entry) > latestRemainingTime;
+      })
+      .reduce((total, entry) => {
+        const quantity = Number(entry.quantity || 0);
+        const stockEffect = getPlaceOrderBranchEntryStockEffect(entry);
+
+        if (stockEffect === "add") {
+          return total + quantity;
+        }
+
+        if (stockEffect === "deduct") {
+          return total - quantity;
+        }
+
+        if (stockEffect === "set") {
+          return quantity;
+        }
+
+        return total;
+      }, Number.isNaN(startingFromRemaining) ? 0 : startingFromRemaining);
+  }
+
+  return entries.reduce((total, entry) => {
+    const quantity = Number(entry.quantity || 0);
+    const stockEffect = getPlaceOrderBranchEntryStockEffect(entry);
+
+    if (stockEffect === "add") {
+      return total + quantity;
+    }
+
+    if (stockEffect === "deduct") {
+      return total - quantity;
+    }
+
+    if (stockEffect === "set") {
+      return quantity;
+    }
+
+    return total;
+  }, 0);
 }
 
 function getPlaceOrderBranchMinimums() {
