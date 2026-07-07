@@ -33,6 +33,13 @@ const fallbackPages = {
       "Shows actual warehouse stock based on supplier receiving, transfers, waste, and adjustments."
   },
 
+  "warehouse-reports": {
+    eyebrow: "Warehouse",
+    title: "Warehouse Reports",
+    description:
+      "Monthly physical audit powered by current Warehouse Stock and Ledger history."
+  },
+
   "warehouse-daily-input": {
     eyebrow: "Warehouse",
     title: "Warehouse Daily Input",
@@ -59,6 +66,13 @@ const fallbackPages = {
     title: "Commissary Stock",
     description:
       "Tracks stock available inside the commissary production center."
+  },
+
+  "commissary-reports": {
+    eyebrow: "Commissary",
+    title: "Commissary Reports",
+    description:
+      "Monthly physical audit powered by current Commissary Stock and Ledger history."
   },
 
   "commissary-dashboard": {
