@@ -723,6 +723,8 @@ function getReportsContent() {
         </table>
       </div>
     </section>
+
+    ${renderSubmittedAuditReviewSection()}
   `;
 }
 
