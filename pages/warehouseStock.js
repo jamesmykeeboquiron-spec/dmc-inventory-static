@@ -606,6 +606,31 @@ function renderWarehouseSummaryCards() {
   `;
 }
 
+function renderWarehouseOutOfStockAlert() {
+  const outOfStockItems = getWarehouseStockRows().filter(
+    (item) => getWarehouseStockStatus(item) === "Out of Stock"
+  );
+
+  if (outOfStockItems.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="instruction-box">
+      <strong>
+        Stock Alert
+        <span class="nav-notification-bubble pulse" style="margin-left: 8px;">
+          ${outOfStockItems.length > 99 ? "99+" : outOfStockItems.length}
+        </span>
+      </strong>
+      <span>
+        ${outOfStockItems.length} warehouse item${outOfStockItems.length === 1 ? "" : "s"} currently at 0 stock.
+        Use the Status filter and choose Out of Stock to review them.
+      </span>
+    </div>
+  `;
+}
+
 function renderWarehouseDepartmentOptions() {
   const currentDepartment = window.DMC_WAREHOUSE_STOCK_FILTERS.department;
 
@@ -731,7 +756,6 @@ function renderWarehouseStockRows() {
           <td>${item.itemId || "-"}</td>
           <td>
             <strong>${item.officialItemName || "-"}</strong>
-            ${renderWarehouseMovementSummary(item)}
           </td>
           <td>${item.unit || "-"}</td>
           <td>${renderWarehouseStockLevel(item)}</td>
@@ -768,8 +792,14 @@ function renderWarehouseStockPanel() {
           </p>
         </div>
 
-        <span class="badge">Current Stock</span>
+        ${
+          getWarehouseStockRows().some((item) => getWarehouseStockStatus(item) === "Out of Stock")
+            ? `<span class="badge danger-badge">0 Stock Alert</span>`
+            : `<span class="badge">Current Stock</span>`
+        }
       </div>
+
+      ${renderWarehouseOutOfStockAlert()}
 
       <div class="warehouse-stock-filter-shell">
         <div class="warehouse-stock-filter-grid">
