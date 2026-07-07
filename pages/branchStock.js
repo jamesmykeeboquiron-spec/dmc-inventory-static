@@ -562,6 +562,31 @@ function renderBranchSummaryCards() {
   `;
 }
 
+function renderBranchOutOfStockAlert() {
+  const outOfStockItems = getBranchStockRows().filter(
+    (item) => getBranchStockStatus(item) === "Out of Stock"
+  );
+
+  if (outOfStockItems.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="instruction-box">
+      <strong>
+        Stock Alert
+        <span class="nav-notification-bubble pulse" style="margin-left: 8px;">
+          ${outOfStockItems.length > 99 ? "99+" : outOfStockItems.length}
+        </span>
+      </strong>
+      <span>
+        ${outOfStockItems.length} branch item${outOfStockItems.length === 1 ? "" : "s"} currently at 0 stock.
+        Use the Status filter and choose Out of Stock to review them.
+      </span>
+    </div>
+  `;
+}
+
 function renderBranchDepartmentOptions() {
   const currentDepartment = window.DMC_BRANCH_STOCK_FILTERS.department;
 
@@ -688,7 +713,6 @@ function renderBranchStockRows() {
           <td>${item.itemId || "-"}</td>
           <td>
             <strong>${item.officialItemName || "-"}</strong>
-            ${renderBranchMovementSummary(item)}
           </td>
           <td>${item.unit || "-"}</td>
           <td>${renderBranchStockLevel(item)}</td>
@@ -725,8 +749,14 @@ function renderBranchStockPanel() {
           </p>
         </div>
 
-        <span class="badge">Current Stock</span>
+        ${
+          getBranchStockRows().some((item) => getBranchStockStatus(item) === "Out of Stock")
+            ? `<span class="badge danger-badge">0 Stock Alert</span>`
+            : `<span class="badge">Current Stock</span>`
+        }
       </div>
+
+      ${renderBranchOutOfStockAlert()}
 
       <div class="warehouse-stock-filter-shell">
         <div class="warehouse-stock-filter-grid">
