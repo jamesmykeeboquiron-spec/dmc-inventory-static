@@ -409,7 +409,10 @@ function hasCommissaryTransferInAlreadyLogged(orderId) {
     (entry) =>
       entry.batchId === orderId &&
       entry.movementType === "Transfer In" &&
-      entry.source === "Incoming Delivery Receipt"
+      (
+        entry.source === "Commissary Incoming Delivery Receipt" ||
+        entry.movementField === "receivedFromWarehouse"
+      )
   );
 }
 
@@ -438,7 +441,7 @@ function buildCommissaryTransferInLedgerEntries(order, receivingDraft) {
         submittedAt,
         submittedAtDisplay,
         batchId: order.orderId,
-        location: order.source || "Commissary",
+        location: "Commissary",
         department: order.department || "Commissary",
         section: line.section || "",
         itemId: line.itemId || "",
@@ -449,7 +452,7 @@ function buildCommissaryTransferInLedgerEntries(order, receivingDraft) {
         quantity: usableQty,
         unit: line.unit || "",
         source: "Commissary Incoming Delivery Receipt",
-        destination: order.source || "Commissary",
+        destination: "Commissary",
         notes: `Received from Warehouse by ${
           receivingDraft.receivedBy || "commissary receiver"
         }. Order ${order.orderId}. Condition: ${condition}.`
@@ -464,14 +467,14 @@ function writeCommissaryTransferInToLedger(order, receivingDraft) {
   }
 
   const currentLedgerEntries = getStoredLedgerEntriesForCommissaryIncomingDeliveries();
-  const branchTransferInEntries = buildCommissaryTransferInLedgerEntries(
+  const commissaryTransferInEntries = buildCommissaryTransferInLedgerEntries(
     order,
     receivingDraft
   );
 
   saveLedgerEntriesFromCommissaryIncomingDeliveries([
     ...currentLedgerEntries,
-    ...branchTransferInEntries
+    ...commissaryTransferInEntries
   ]);
 }
 
