@@ -1,0 +1,1126 @@
+window.DMC_PAGES = window.DMC_PAGES || {};
+
+const DMC_COMMISSARY_ORDERS_STORAGE_KEY = "dmc_commissary_orders";
+const DMC_WAREHOUSE_ORDER_LEDGER_KEY = "dmc_inventory_ledger_entries";
+const DMC_WAREHOUSE_ORDER_MASTER_LIST_KEY = "dmc_master_list_items";
+
+window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS =
+  window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS || "all";
+
+window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE =
+  window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE || "all";
+
+window.DMC_COMMISSARY_ORDERS_SEARCH = window.DMC_COMMISSARY_ORDERS_SEARCH || "";
+
+window.DMC_COMMISSARY_ORDERS_DATE_FROM =
+  window.DMC_COMMISSARY_ORDERS_DATE_FROM || getWarehouseOrderTodayDate();
+
+window.DMC_COMMISSARY_ORDERS_DATE_TO =
+  window.DMC_COMMISSARY_ORDERS_DATE_TO || getWarehouseOrderTodayDate();
+
+window.DMC_COMMISSARY_ORDERS_SELECTED_ID =
+  window.DMC_COMMISSARY_ORDERS_SELECTED_ID || "";
+
+window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT =
+  window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT || {};
+
+function getStoredWarehouseOrders() {
+  const storedOrders = localStorage.getItem(DMC_COMMISSARY_ORDERS_STORAGE_KEY);
+
+  if (!storedOrders) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(storedOrders);
+  } catch {
+    return [];
+  }
+}
+
+function saveWarehouseOrders(orders) {
+  localStorage.setItem(DMC_COMMISSARY_ORDERS_STORAGE_KEY, JSON.stringify(orders));
+}
+
+function getStoredWarehouseLedgerEntriesForOrders() {
+  const storedEntries = localStorage.getItem(DMC_WAREHOUSE_ORDER_LEDGER_KEY);
+
+  if (!storedEntries) {
+    return window.DMC_DATA?.ledger || [];
+  }
+
+  try {
+    const parsedEntries = JSON.parse(storedEntries);
+
+    if (!Array.isArray(parsedEntries)) {
+      return window.DMC_DATA?.ledger || [];
+    }
+
+    return parsedEntries;
+  } catch {
+    return window.DMC_DATA?.ledger || [];
+  }
+}
+
+function saveWarehouseLedgerEntriesFromOrders(entries) {
+  localStorage.setItem(DMC_WAREHOUSE_ORDER_LEDGER_KEY, JSON.stringify(entries));
+}
+
+function getWarehouseOrderMasterListItems() {
+  const storedItems = localStorage.getItem(DMC_WAREHOUSE_ORDER_MASTER_LIST_KEY);
+
+  if (!storedItems) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(storedItems);
+  } catch {
+    return [];
+  }
+}
+
+function getWarehouseOrderSettings() {
+  const storedSettings = localStorage.getItem("dmc_inventory_settings");
+
+  if (!storedSettings) {
+    return {
+      staffNames: [],
+      staff: [],
+      staffMembers: []
+    };
+  }
+
+  try {
+    return JSON.parse(storedSettings);
+  } catch {
+    return {
+      staffNames: [],
+      staff: [],
+      staffMembers: []
+    };
+  }
+}
+
+function getSettingName(option) {
+  if (typeof option === "string") {
+    return option;
+  }
+
+  return option?.name || "";
+}
+
+function getStaffNamesForWarehouseOrders() {
+  const settings = getWarehouseOrderSettings();
+  const staff = settings.staffNames || settings.staff || settings.staffMembers || [];
+
+  return staff.map(getSettingName).filter(Boolean);
+}
+
+function renderStaffOptions(currentValue) {
+  const staffNames = getStaffNamesForWarehouseOrders();
+
+  if (staffNames.length === 0) {
+    return `
+      <option value="" ${!currentValue ? "selected" : ""}>Select staff</option>
+      <option value="Warehouse Staff" ${
+        currentValue === "Warehouse Staff" ? "selected" : ""
+      }>Warehouse Staff</option>
+      <option value="Admin Staff" ${
+        currentValue === "Admin Staff" ? "selected" : ""
+      }>Admin Staff</option>
+    `;
+  }
+
+  return `
+    <option value="" ${!currentValue ? "selected" : ""}>Select staff</option>
+    ${staffNames
+      .map(
+        (staff) => `
+          <option value="${staff}" ${
+          currentValue === staff ? "selected" : ""
+        }>
+            ${staff}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function getWarehouseOrderTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getWarehouseOrderTimestamp() {
+  return new Date().toISOString();
+}
+
+function getWarehouseOrderReadableTimestamp() {
+  const now = new Date();
+
+  return now.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatWarehouseOrderDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getWarehouseOrderTimestampValue(order) {
+  const historyTime =
+    order.statusHistory?.[order.statusHistory.length - 1]?.timestamp;
+
+  if (historyTime) {
+    return new Date(historyTime).getTime();
+  }
+
+  if (order.orderDate) {
+    return new Date(order.orderDate).getTime();
+  }
+
+  return 0;
+}
+
+function getWarehouseOrderDateKey(order) {
+  const value =
+    order.orderDate ||
+    order.statusHistory?.[0]?.timestamp ||
+    order.fulfillment?.sentAt ||
+    "";
+
+  return value ? String(value).slice(0, 10) : "";
+}
+
+function getOrderSource(order) {
+  return order.source || order.requestSource || order.branch || "DMC-Iriga Branch";
+}
+
+function getSortedWarehouseOrders() {
+  return [...getStoredWarehouseOrders()].sort(
+    (a, b) => getWarehouseOrderTimestampValue(b) - getWarehouseOrderTimestampValue(a)
+  );
+}
+
+function getFilteredWarehouseOrders() {
+  const status = window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS;
+  const source = window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE;
+  const searchValue = String(window.DMC_COMMISSARY_ORDERS_SEARCH || "")
+    .toLowerCase()
+    .trim();
+
+  const dateFrom = String(window.DMC_COMMISSARY_ORDERS_DATE_FROM || "");
+  const dateTo = String(window.DMC_COMMISSARY_ORDERS_DATE_TO || "");
+
+  return getSortedWarehouseOrders().filter((order) => {
+    const orderSource = getOrderSource(order);
+
+    const isCommissaryOrder =
+      String(orderSource || "").toLowerCase().includes("commissary") ||
+      String(order.department || "").toLowerCase() === "commissary";
+
+    if (!isCommissaryOrder) {
+      return false;
+    }
+    const orderDate = getWarehouseOrderDateKey(order);
+
+    const matchesStatus = status === "all" || order.status === status;
+    const matchesSource = source === "all" || orderSource === source;
+
+    const matchesDate =
+      (!dateFrom || !orderDate || orderDate >= dateFrom) &&
+      (!dateTo || !orderDate || orderDate <= dateTo);
+
+    const matchesSearch =
+      !searchValue ||
+      String(order.orderId || "").toLowerCase().includes(searchValue) ||
+      String(orderSource || "").toLowerCase().includes(searchValue) ||
+      String(order.branch || "").toLowerCase().includes(searchValue) ||
+      String(order.department || "").toLowerCase().includes(searchValue) ||
+      String(order.status || "").toLowerCase().includes(searchValue) ||
+      String(order.notes || "").toLowerCase().includes(searchValue) ||
+      String(order.requestedBy || "").toLowerCase().includes(searchValue) ||
+      String(order.fulfillment?.preparedBy || "")
+        .toLowerCase()
+        .includes(searchValue) ||
+      (order.lines || []).some(
+        (line) =>
+          String(line.itemId || "").toLowerCase().includes(searchValue) ||
+          String(line.itemName || "").toLowerCase().includes(searchValue) ||
+          String(line.section || "").toLowerCase().includes(searchValue)
+      );
+
+    return matchesStatus && matchesSource && matchesDate && matchesSearch;
+  });
+}
+
+function getSelectedWarehouseOrder() {
+  const orders = getFilteredWarehouseOrders();
+
+  if (window.DMC_COMMISSARY_ORDERS_SELECTED_ID) {
+    const selectedOrder = orders.find(
+      (order) => order.orderId === window.DMC_COMMISSARY_ORDERS_SELECTED_ID
+    );
+
+    if (selectedOrder) {
+      return selectedOrder;
+    }
+  }
+
+  return orders[0] || null;
+}
+
+function getWarehouseOrderSources() {
+  return [
+    ...new Set(getStoredWarehouseOrders().map((order) => getOrderSource(order)))
+  ]
+    .filter(Boolean)
+    .sort();
+}
+
+function getWarehouseOrdersSummary() {
+  const orders = getStoredWarehouseOrders();
+
+  return {
+    total: orders.length,
+    submitted: orders.filter((order) => order.status === "Submitted").length,
+    preparing: orders.filter(
+      (order) =>
+        order.status === "Preparing" ||
+        order.status === "Accepted" ||
+        order.status === "Being Fulfilled"
+    ).length,
+    urgent: orders.filter((order) => order.urgent).length,
+    onTheWay: orders.filter((order) => order.status === "On the Way").length
+  };
+}
+
+function getOrderStatusBadgeClass(status) {
+  if (status === "Submitted") return "warning-badge";
+  if (status === "Accepted") return "info-badge";
+  if (status === "Being Fulfilled") return "info-badge";
+  if (status === "Preparing") return "info-badge";
+  if (status === "On the Way") return "success";
+  if (status === "Completed") return "success";
+  if (status === "Rejected") return "danger-badge";
+  if (status === "Variance") return "danger-badge";
+  return "";
+}
+
+function renderWarehouseOrderStatusOptions() {
+  const selectedStatus = window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS;
+
+  const statuses = [
+    "Submitted",
+    "Preparing",
+    "On the Way",
+    "Completed",
+    "Variance",
+    "Rejected"
+  ];
+
+  return `
+    <option value="all" ${selectedStatus === "all" ? "selected" : ""}>
+      All Orders
+    </option>
+    ${statuses
+      .map(
+        (status) => `
+          <option value="${status}" ${selectedStatus === status ? "selected" : ""}>
+            ${status}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderWarehouseOrderSourceOptions() {
+  const selectedSource = window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE;
+
+  return `
+    <option value="all" ${selectedSource === "all" ? "selected" : ""}>
+      All Sources
+    </option>
+    ${getWarehouseOrderSources()
+      .map(
+        (source) => `
+          <option value="${source}" ${selectedSource === source ? "selected" : ""}>
+            ${source}
+          </option>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function calculateWarehouseStockForItem(itemId) {
+  const masterItem = getWarehouseOrderMasterListItems().find(
+    (item) => String(item.itemId || "") === String(itemId || "")
+  );
+
+  const openingStock = Number(masterItem?.openingStock || 0);
+
+  return getStoredWarehouseLedgerEntriesForOrders()
+    .filter((entry) => String(entry.itemId || "") === String(itemId || ""))
+    .reduce((total, entry) => {
+      const quantity = Number(entry.quantity || 0);
+
+      if (entry.stockEffect === "add") {
+        return total + quantity;
+      }
+
+      if (entry.stockEffect === "deduct") {
+        return total - quantity;
+      }
+
+      return total;
+    }, openingStock);
+}
+
+function getFulfillmentDraft(order) {
+  if (!order) {
+    return {
+      lines: {},
+      preparedBy: "",
+      deliveryNotes: ""
+    };
+  }
+
+  const existingFulfillment = order.fulfillment || {};
+
+  if (!window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT[order.orderId]) {
+    const lineDrafts = {};
+
+    (order.lines || []).forEach((line) => {
+      lineDrafts[line.itemId] = {
+        sentQty:
+          existingFulfillment.lines?.[line.itemId]?.sentQty ??
+          line.requestedQty ??
+          "",
+        notes: existingFulfillment.lines?.[line.itemId]?.notes || ""
+      };
+    });
+
+    window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT[order.orderId] = {
+      lines: lineDrafts,
+      preparedBy: existingFulfillment.preparedBy || "",
+      deliveryNotes: existingFulfillment.deliveryNotes || ""
+    };
+  }
+
+  return window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT[order.orderId];
+}
+
+function canAcceptOrder(order) {
+  return order && order.status === "Submitted";
+}
+
+function canStartFulfillment(order) {
+  return order && ["Submitted", "Accepted"].includes(order.status);
+}
+
+function canRejectOrder(order) {
+  return order && ["Submitted", "Accepted", "Preparing", "Being Fulfilled"].includes(order.status);
+}
+
+function canMarkOnTheWay(order) {
+  return order && ["Submitted", "Accepted", "Preparing", "Being Fulfilled"].includes(order.status);
+}
+
+function renderWarehouseOrderList() {
+  const orders = getFilteredWarehouseOrders();
+  const selectedOrder = getSelectedWarehouseOrder();
+
+  if (orders.length === 0) {
+    return `
+      <div class="order-list-empty">
+        <p>No warehouse orders found.</p>
+        <span>Commissary requests will appear here.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="branch-order-list">
+      ${orders
+        .map((order) => {
+          const source = "Commissary";
+
+          return `
+            <button
+              class="branch-order-list-item ${
+                selectedOrder?.orderId === order.orderId ? "active" : ""
+              }"
+              data-select-commissary-order="${order.orderId}"
+            >
+              <div>
+                <strong>${order.orderId}</strong>
+                <p>${source} • ${order.department || "-"}</p>
+                <span>${order.orderDate || "-"} • ${(order.lines || []).length} item(s)</span>
+              </div>
+
+              <div class="branch-order-list-meta">
+                ${
+                  order.urgent
+                    ? `<span class="badge danger-badge">Urgent</span>`
+                    : ""
+                }
+                <span class="badge ${getOrderStatusBadgeClass(order.status)}">
+                  ${order.status || "Submitted"}
+                </span>
+              </div>
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderStatusHistory(order) {
+  if (!order || !order.statusHistory || order.statusHistory.length === 0) {
+    return `
+      <p class="submit-preview-empty">
+        No status history yet.
+      </p>
+    `;
+  }
+
+  return `
+    <div class="status-history-list">
+      ${order.statusHistory
+        .map(
+          (event) => `
+            <div class="status-history-item">
+              <span class="badge ${getOrderStatusBadgeClass(event.status)}">
+                ${event.status}
+              </span>
+              <div>
+                <strong>${formatWarehouseOrderDateTime(event.timestamp)}</strong>
+                <p>${event.note || "-"}</p>
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderFulfillmentLines(order) {
+  const draft = getFulfillmentDraft(order);
+  const isLocked = order.status === "On the Way" || order.status === "Completed";
+
+  if (!order || !order.lines || order.lines.length === 0) {
+    return `
+      <p class="submit-preview-empty">
+        No order lines found for this order.
+      </p>
+    `;
+  }
+
+  return `
+    <div class="warehouse-order-fulfillment-table-wrap">
+      <table class="warehouse-order-fulfillment-table">
+        <thead>
+          <tr>
+            <th>Item ID</th>
+            <th>Item Name</th>
+            <th>Requested</th>
+            <th>Warehouse Stock</th>
+            <th>Qty to Send</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${(order.lines || [])
+            .map((line) => {
+              const availableStock = calculateWarehouseStockForItem(line.itemId);
+              const requestedQty = Number(line.requestedQty || 0);
+              const enough = availableStock >= requestedQty;
+              const lineDraft = draft.lines[line.itemId] || {};
+
+              return `
+                <tr>
+                  <td>${line.itemId || "-"}</td>
+                  <td>${line.itemName || "-"}</td>
+                  <td>${requestedQty} ${line.unit || ""}</td>
+                  <td class="${enough ? "positive-text" : "negative-text"}">
+                    <strong>${availableStock} ${line.unit || ""}</strong>
+                  </td>
+                  <td>
+                    <input
+                      class="fulfillment-input"
+                      data-fulfillment-qty="${line.itemId}"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value="${lineDraft.sentQty ?? ""}"
+                      ${isLocked ? "disabled" : ""}
+                    />
+                  </td>
+                  <td>
+                    ${
+                      enough
+                        ? `<span class="badge success">Enough</span>`
+                        : `<span class="badge danger-badge">Short</span>`
+                    }
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSelectedWarehouseOrder() {
+  const order = getSelectedWarehouseOrder();
+
+  if (!order) {
+    return `
+      <section class="panel branch-order-detail">
+        <div class="order-list-empty">
+          <p>No order selected.</p>
+          <span>Select a submitted order from the list.</span>
+        </div>
+      </section>
+    `;
+  }
+
+  const source = "Commissary";
+  const draft = getFulfillmentDraft(order);
+  const isLocked = order.status === "On the Way" || order.status === "Completed";
+
+  return `
+    <section class="panel branch-order-detail">
+      <div class="panel-header">
+        <div>
+          <h3>${order.orderId}</h3>
+          <p>
+            ${source} • ${order.department || "-"} • ${order.orderDate || "-"}
+          </p>
+        </div>
+
+        <div class="branch-order-list-meta">
+          ${
+            order.urgent
+              ? `<span class="badge danger-badge">Urgent</span>`
+              : ""
+          }
+          <span class="badge ${getOrderStatusBadgeClass(order.status)}">
+            ${order.status || "Submitted"}
+          </span>
+        </div>
+      </div>
+
+      <div class="branch-order-info-grid warehouse-order-info-grid">
+        <div>
+          <p class="eyebrow">Requested By</p>
+          <strong>${order.requestedBy || "Commissary Manager"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Order Notes</p>
+          <strong>${order.notes || "-"}</strong>
+        </div>
+
+        <div>
+          <p class="eyebrow">Destination</p>
+          <strong>${source || "-"}</strong>
+        </div>
+      </div>
+
+      <div class="branch-order-section">
+        <div class="fulfillment-panel-header">
+          <div>
+            <h4>Prepare Commissary Order</h4>
+            <p>Check Warehouse Stock, enter quantity to send, then send to Commissary.</p>
+          </div>
+
+          <span class="badge">Warehouse Stock Linked</span>
+        </div>
+
+        ${renderFulfillmentLines(order)}
+      </div>
+
+      <div class="branch-order-section fulfillment-panel">
+        <div class="fulfillment-meta-grid warehouse-fulfillment-meta-grid">
+          <label>
+            Prepared By
+            <select id="fulfillment-prepared-by" ${isLocked ? "disabled" : ""}>
+              ${renderStaffOptions(draft.preparedBy || "")}
+            </select>
+          </label>
+
+          <label class="form-full">
+            Delivery Notes
+            <textarea
+              id="fulfillment-delivery-notes"
+              rows="3"
+              placeholder="Delivery notes, packing notes, special handling..."
+              ${isLocked ? "disabled" : ""}
+            >${draft.deliveryNotes || ""}</textarea>
+          </label>
+        </div>
+      </div>
+
+      <div class="branch-order-section">
+        <h4>Status History</h4>
+        ${renderStatusHistory(order)}
+      </div>
+
+      <div class="form-actions branch-order-actions">
+        <button
+          class="primary-button"
+          id="start-fulfillment-order"
+          style="
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(96, 165, 250, 0.72));
+            border: 1px solid rgba(147, 197, 253, 0.75);
+            color: #eff6ff;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(10px);
+          "
+          ${canStartFulfillment(order) ? "" : "disabled"}
+        >
+          Start Preparing
+        </button>
+
+        <button
+          class="primary-button"
+          id="mark-order-on-the-way"
+          style="
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.96), rgba(74, 222, 128, 0.72));
+            border: 1px solid rgba(134, 239, 172, 0.75);
+            color: #f0fdf4;
+            box-shadow: 0 10px 24px rgba(22, 163, 74, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(10px);
+          "
+          ${canMarkOnTheWay(order) ? "" : "disabled"}
+        >
+          Send to Commissary
+        </button>
+
+        <button
+          class="ghost-button danger"
+          id="reject-branch-order"
+          style="
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.88), rgba(248, 113, 113, 0.56));
+            border: 1px solid rgba(252, 165, 165, 0.75);
+            color: #fff1f2;
+            box-shadow: 0 10px 24px rgba(220, 38, 38, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+          "
+          ${canRejectOrder(order) ? "" : "disabled"}
+        >
+          Reject Order
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function getCommissaryOrdersContent() {
+  return `
+    <section class="branch-orders-layout">
+      <section class="panel branch-order-list-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Commissary Order Queue</h3>
+            <p>Commissary requests waiting for Warehouse review and fulfillment.</p>
+          </div>
+        </div>
+
+        <div
+          class="warehouse-order-filter-grid"
+          style="
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 2;
+          "
+        >
+          <label>
+            From
+            <input
+              id="branch-order-date-from"
+              type="date"
+              value="${window.DMC_COMMISSARY_ORDERS_DATE_FROM}"
+            />
+          </label>
+
+          <label>
+            To
+            <input
+              id="branch-order-date-to"
+              type="date"
+              value="${window.DMC_COMMISSARY_ORDERS_DATE_TO}"
+            />
+          </label>
+
+          <label>
+            Source
+            <select id="branch-order-source-filter">
+              ${renderWarehouseOrderSourceOptions()}
+            </select>
+          </label>
+
+          <label>
+            Status
+            <select id="branch-order-status-filter">
+              ${renderWarehouseOrderStatusOptions()}
+            </select>
+          </label>
+
+          <label style="grid-column: 1 / -1;">
+            Search
+            <input
+              id="branch-order-search"
+              type="text"
+              placeholder="Search order, source, item, status..."
+              value="${window.DMC_COMMISSARY_ORDERS_SEARCH}"
+            />
+          </label>
+
+          <button class="ghost-button" id="clear-branch-order-filters" style="grid-column: 1 / -1;">
+            Clear Filters
+          </button>
+        </div>
+
+        <div style="max-height: 620px; overflow-y: auto; padding-right: 4px;">
+          ${renderWarehouseOrderList()}
+        </div>
+      </section>
+
+      ${renderSelectedWarehouseOrder()}
+    </section>
+  `;
+}
+
+function refreshCommissaryOrdersPage() {
+  window.DMC_PAGES["warehouse-commissary-orders"].content = getCommissaryOrdersContent();
+  renderPage("warehouse-commissary-orders");
+}
+
+function updateCommissaryOrderStatus(orderId, nextStatus, note, extraUpdates = {}) {
+  const orders = getStoredWarehouseOrders();
+
+  const updatedOrders = orders.map((order) => {
+    if (order.orderId !== orderId) {
+      return order;
+    }
+
+    return {
+      ...order,
+      ...extraUpdates,
+      status: nextStatus,
+      statusHistory: [
+        ...(order.statusHistory || []),
+        {
+          status: nextStatus,
+          timestamp: new Date().toISOString(),
+          note
+        }
+      ]
+    };
+  });
+
+  saveWarehouseOrders(updatedOrders);
+  window.DMC_COMMISSARY_ORDERS_SELECTED_ID = orderId;
+  refreshCommissaryOrdersPage();
+}
+
+function saveFulfillmentDraftFromInputs(order) {
+  if (!order) {
+    return;
+  }
+
+  const draft = getFulfillmentDraft(order);
+
+  document.querySelectorAll("[data-fulfillment-qty]").forEach((input) => {
+    const itemId = input.dataset.fulfillmentQty;
+
+    draft.lines[itemId] = draft.lines[itemId] || {};
+    draft.lines[itemId].sentQty = input.value;
+  });
+
+  const preparedByInput = document.getElementById("fulfillment-prepared-by");
+  const deliveryNotesInput = document.getElementById(
+    "fulfillment-delivery-notes"
+  );
+
+  draft.preparedBy = preparedByInput?.value || "";
+  draft.deliveryNotes = deliveryNotesInput?.value || "";
+
+  window.DMC_COMMISSARY_ORDER_FULFILLMENT_DRAFT[order.orderId] = draft;
+}
+
+function hasWarehouseTransferOutAlreadyLogged(orderId) {
+  return getStoredWarehouseLedgerEntriesForOrders().some(
+    (entry) =>
+      entry.batchId === orderId &&
+      entry.location === "Warehouse" &&
+      entry.movementType === "Transfer Out" &&
+      entry.source === "Warehouse Order Fulfillment"
+  );
+}
+
+function buildWarehouseTransferOutEntries(order, fulfillmentDraft) {
+  const submittedAt = getWarehouseOrderTimestamp();
+  const submittedAtDisplay = getWarehouseOrderReadableTimestamp();
+  const source = "Commissary";
+
+  return (order.lines || [])
+    .map((line) => {
+      const sentQty = Number(
+        fulfillmentDraft.lines?.[line.itemId]?.sentQty || 0
+      );
+
+      if (Number.isNaN(sentQty) || sentQty <= 0) {
+        return null;
+      }
+
+      return {
+        date: getWarehouseOrderTodayDate(),
+        submittedAt,
+        submittedAtDisplay,
+        batchId: order.orderId,
+        location: "Warehouse",
+        department: "Warehouse",
+        originalDepartment: line.department || order.department || "",
+        section: line.section || "",
+        itemId: line.itemId || "",
+        itemName: line.itemName || "",
+        movementType: "Transfer Out",
+        movementField: "transferOut",
+        stockEffect: "deduct",
+        quantity: sentQty,
+        unit: line.unit || "",
+        managerReviewedBy: order.requestedBy || "",
+        preparedBy: fulfillmentDraft.preparedBy || "",
+        source: "Warehouse Order Fulfillment",
+        destination: "Commissary",
+        notes: `Order ${order.orderId} sent to ${source}. ${
+          fulfillmentDraft.deliveryNotes || ""
+        }`.trim()
+      };
+    })
+    .filter(Boolean);
+}
+
+function writeWarehouseTransferOutToLog(order, fulfillmentDraft) {
+  if (hasWarehouseTransferOutAlreadyLogged(order.orderId)) {
+    return;
+  }
+
+  const currentLogEntries = getStoredWarehouseLedgerEntriesForOrders();
+  const transferOutEntries = buildWarehouseTransferOutEntries(
+    order,
+    fulfillmentDraft
+  );
+
+  saveWarehouseLedgerEntriesFromOrders([...currentLogEntries, ...transferOutEntries]);
+}
+
+function setupCommissaryOrdersEvents() {
+  const statusFilter = document.getElementById("branch-order-status-filter");
+  const sourceFilter = document.getElementById("branch-order-source-filter");
+  const searchInput = document.getElementById("branch-order-search");
+  const dateFromInput = document.getElementById("branch-order-date-from");
+  const dateToInput = document.getElementById("branch-order-date-to");
+  const clearFiltersButton = document.getElementById("clear-branch-order-filters");
+
+  if (statusFilter) {
+    statusFilter.addEventListener("change", () => {
+      window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS = statusFilter.value;
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  if (sourceFilter) {
+    sourceFilter.addEventListener("change", () => {
+      window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE = sourceFilter.value;
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      window.DMC_COMMISSARY_ORDERS_SEARCH = searchInput.value;
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  if (dateFromInput) {
+    dateFromInput.addEventListener("change", () => {
+      window.DMC_COMMISSARY_ORDERS_DATE_FROM = dateFromInput.value;
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  if (dateToInput) {
+    dateToInput.addEventListener("change", () => {
+      window.DMC_COMMISSARY_ORDERS_DATE_TO = dateToInput.value;
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  if (clearFiltersButton) {
+    clearFiltersButton.addEventListener("click", () => {
+      window.DMC_COMMISSARY_ORDERS_SELECTED_STATUS = "all";
+      window.DMC_COMMISSARY_ORDERS_SELECTED_SOURCE = "all";
+      window.DMC_COMMISSARY_ORDERS_SEARCH = "";
+      window.DMC_COMMISSARY_ORDERS_DATE_FROM = "";
+      window.DMC_COMMISSARY_ORDERS_DATE_TO = "";
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID = "";
+      refreshCommissaryOrdersPage();
+    });
+  }
+
+  document.querySelectorAll("[data-select-commissary-order]").forEach((button) => {
+    button.addEventListener("click", () => {
+      window.DMC_COMMISSARY_ORDERS_SELECTED_ID =
+        button.dataset.selectCommissaryOrder;
+
+      refreshCommissaryOrdersPage();
+    });
+  });
+
+  const selectedOrder = getSelectedWarehouseOrder();
+
+  document.querySelectorAll("[data-fulfillment-qty]").forEach((input) => {
+    input.addEventListener("input", () => {
+      saveFulfillmentDraftFromInputs(selectedOrder);
+    });
+  });
+
+  const preparedByInput = document.getElementById("fulfillment-prepared-by");
+  const deliveryNotesInput = document.getElementById(
+    "fulfillment-delivery-notes"
+  );
+
+  [preparedByInput, deliveryNotesInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("change", () => {
+        saveFulfillmentDraftFromInputs(selectedOrder);
+      });
+    }
+  });
+
+  const fulfillmentButton = document.getElementById("start-fulfillment-order");
+  const rejectButton = document.getElementById("reject-branch-order");
+  const markOnTheWayButton = document.getElementById("mark-order-on-the-way");
+
+  if (fulfillmentButton && selectedOrder) {
+    fulfillmentButton.addEventListener("click", () => {
+      updateCommissaryOrderStatus(
+        selectedOrder.orderId,
+        "Preparing",
+        "Warehouse started preparing the Commissary order."
+      );
+    });
+  }
+
+  if (rejectButton && selectedOrder) {
+    rejectButton.addEventListener("click", () => {
+      const confirmed = confirm(`Reject order ${selectedOrder.orderId}?`);
+
+      if (!confirmed) {
+        return;
+      }
+
+      updateCommissaryOrderStatus(
+        selectedOrder.orderId,
+        "Rejected",
+        "Warehouse rejected the Commissary order request."
+      );
+    });
+  }
+
+  if (markOnTheWayButton && selectedOrder) {
+    markOnTheWayButton.addEventListener("click", () => {
+      saveFulfillmentDraftFromInputs(selectedOrder);
+
+      const draft = getFulfillmentDraft(selectedOrder);
+
+      const hasMissingSentQty = (selectedOrder.lines || []).some((line) => {
+        const sentQty = Number(draft.lines[line.itemId]?.sentQty || 0);
+        return Number.isNaN(sentQty) || sentQty <= 0;
+      });
+
+      if (hasMissingSentQty) {
+        alert("Please enter fulfill quantity greater than 0 for every item.");
+        return;
+      }
+
+      if (!draft.preparedBy.trim()) {
+        alert("Please select Prepared By.");
+        return;
+      }
+
+      const confirmed = confirm(
+        `Send order ${selectedOrder.orderId} to Commissary? This will deduct Warehouse Stock and move it to Commissary Incoming Deliveries.`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      writeWarehouseTransferOutToLog(selectedOrder, draft);
+
+      updateCommissaryOrderStatus(
+        selectedOrder.orderId,
+        "On the Way",
+        "Warehouse sent the order to Commissary. Warehouse Transfer Out was logged to the Ledger.",
+        {
+          fulfillment: {
+            ...draft,
+            sentAt: new Date().toISOString()
+          }
+        }
+      );
+    });
+  }
+}
+
+window.DMC_PAGES["warehouse-commissary-orders"] = {
+  eyebrow: "Warehouse",
+  title: "Commissary Orders",
+  description:
+    "Warehouse approval and fulfillment queue for Commissary requests.",
+  getContent: getCommissaryOrdersContent,
+  content: getCommissaryOrdersContent(),
+  afterRender: setupCommissaryOrdersEvents
+};
