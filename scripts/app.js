@@ -89,6 +89,14 @@ const fallbackPages = {
       "Allows the commissary to order raw materials or needed stock from the warehouse."
   },
 
+
+  "commissary-incoming-deliveries": {
+    eyebrow: "Commissary",
+    title: "Incoming Deliveries",
+    description:
+      "Confirm Warehouse deliveries to Commissary and update Commissary Stock."
+  },
+
   "commissary-log-transaction": {
     eyebrow: "Commissary",
     title: "Commissary Log Transaction",
