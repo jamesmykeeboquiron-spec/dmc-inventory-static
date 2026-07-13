@@ -1,3 +1,4 @@
+(() => {
 window.DMC_PAGES = window.DMC_PAGES || {};
 
 const DMC_COMMISSARY_ORDERS_STORAGE_KEY = "dmc_commissary_orders";
@@ -1124,3 +1125,4 @@ window.DMC_PAGES["warehouse-commissary-orders"] = {
   content: getCommissaryOrdersContent(),
   afterRender: setupCommissaryOrdersEvents
 };
+})();
