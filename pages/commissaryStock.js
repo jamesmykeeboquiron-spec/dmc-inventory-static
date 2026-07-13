@@ -104,7 +104,8 @@ function entryBelongsToCommissaryStock(entry) {
     department.includes("commissary") ||
     source.includes("commissary") ||
     destination.includes("commissary") ||
-    movementField === "receivedFromBranch"
+    movementField === "receivedFromBranch" ||
+    movementField === "receivedFromWarehouse"
   );
 }
 
