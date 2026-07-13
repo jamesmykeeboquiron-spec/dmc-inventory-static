@@ -117,6 +117,13 @@ const fallbackPages = {
       "Shows branch and commissary requests waiting for warehouse review, preparation, and fulfillment."
   },
 
+  "warehouse-commissary-orders": {
+    eyebrow: "Warehouse",
+    title: "Commissary Orders",
+    description:
+      "Warehouse approval and fulfillment queue for Commissary requests."
+  },
+
   "incoming-from-commissary": {
     eyebrow: "Warehouse",
     title: "Incoming from Commissary",
