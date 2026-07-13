@@ -95,17 +95,34 @@ function entryBelongsToCommissaryStock(entry) {
       destination.includes("commissary") &&
       stockEffect === "deduct");
 
-  if (isBranchSendingToCommissary) {
+  const isWarehouseSendingToCommissary =
+    stockEffect === "deduct" &&
+    destination.includes("commissary") &&
+    (
+      location.includes("warehouse") ||
+      department.includes("warehouse") ||
+      source.includes("warehouse") ||
+      movementField === "warehouseTransferOut"
+    );
+
+  if (isBranchSendingToCommissary || isWarehouseSendingToCommissary) {
     return false;
   }
 
+  const isConfirmedWarehouseReceipt =
+    movementField === "receivedFromWarehouse" &&
+    stockEffect === "add";
+
+  const isConfirmedBranchReceipt =
+    movementField === "receivedFromBranch" &&
+    stockEffect === "add";
+
   return (
+    isConfirmedWarehouseReceipt ||
+    isConfirmedBranchReceipt ||
     location.includes("commissary") ||
     department.includes("commissary") ||
-    source.includes("commissary") ||
-    destination.includes("commissary") ||
-    movementField === "receivedFromBranch" ||
-    movementField === "receivedFromWarehouse"
+    source.includes("commissary")
   );
 }
 
