@@ -85,24 +85,41 @@ function itemBelongsToBranchStock(item) {
 
 function entryBelongsToBranchStock(entry) {
   const location = String(entry.location || entry.branch || "").toLowerCase();
+  const department = String(entry.department || "").toLowerCase();
   const source = String(entry.source || "").toLowerCase();
   const destination = String(entry.destination || "").toLowerCase();
+  const movementField = String(entry.movementField || "");
+  const stockEffect = String(entry.stockEffect || "").toLowerCase();
 
-  if (
+  const belongsToCommissary =
+    location.includes("commissary") ||
+    department.includes("commissary") ||
+    destination.includes("commissary") ||
+    source.includes("commissary") ||
+    movementField === "receivedFromWarehouse" ||
+    movementField === "receivedFromBranch";
+
+  const belongsToWarehouse =
     location.includes("warehouse") ||
-    source.includes("warehouse daily input")
-  ) {
+    department.includes("warehouse") ||
+    source.includes("warehouse daily input");
+
+  if (belongsToCommissary || belongsToWarehouse) {
     return false;
   }
+
+  const isConfirmedBranchReceipt =
+    source === "incoming delivery receipt" &&
+    stockEffect === "add";
 
   return (
     location.includes("dmc-iriga") ||
     location.includes("branch") ||
+    department.includes("branch") ||
     destination.includes("dmc-iriga") ||
     destination.includes("branch") ||
-    source.includes("incoming delivery receipt") ||
     source.includes("branch daily input") ||
-    !entry.location
+    isConfirmedBranchReceipt
   );
 }
 
