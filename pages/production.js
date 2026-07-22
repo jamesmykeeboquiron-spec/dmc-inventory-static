@@ -670,7 +670,6 @@ window.DMC_PAGES = window.DMC_PAGES || {};
   }
 
   function refreshProductionStandardsPage() {
-    window.DMC_PAGES.production.content = getProductionStandardsContent();
     renderPage("production");
   }
 
@@ -1016,7 +1015,8 @@ window.DMC_PAGES = window.DMC_PAGES || {};
     title: "Production Standards",
     description:
       "Define primary raw-material standards, expected yield, and supporting recipe ingredients.",
+    getContent: getProductionStandardsContent,
     content: getProductionStandardsContent(),
-    setup: setupProductionStandardsEvents
+    afterRender: setupProductionStandardsEvents
   };
 })();
