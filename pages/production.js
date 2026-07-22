@@ -288,139 +288,158 @@ window.DMC_PAGES = window.DMC_PAGES || {};
           <div>
             <h3>${editingStandard ? "Edit" : "Add"} Production Standard</h3>
             <p>
-              Define the permanent relationship between one primary raw material
-              quantity and its expected finished-product yield.
+              Set a simple rule showing how much main raw material should produce
+              a specific amount of finished product.
             </p>
           </div>
         </div>
 
-        <div class="instruction-box">
-          <strong>Expected Yield Rule:</strong>
-          <span>
-            Expected yield is calculated from the Primary Raw Material only.
-            Supporting recipe ingredients are listed for reference and are not
-            deducted automatically.
-          </span>
-        </div>
-
-        <form id="production-standard-form" class="form-grid">
-          <label>
-            Finished Product Name
-            <input
-              id="production-product-name"
-              type="text"
-              required
-              value="${escapeHtml(editingStandard?.productName || "")}"
-            />
-          </label>
-
-          <label>
-            Department
-            <select id="production-department" required>
-              ${renderOptions(
-                departments,
-                editingStandard?.department || "",
-                "Select department"
-              )}
-            </select>
-          </label>
-
-          <label>
-            Section
-            <select id="production-section" required>
-              ${renderOptions(
-                sections,
-                editingStandard?.section || "",
-                "Select section"
-              )}
-            </select>
-          </label>
-
-          <label>
-            Finished Product Unit
-            <select id="production-yield-unit" required>
-              ${renderOptions(
-                units,
-                editingStandard?.yieldUnit || editingStandard?.baseUnit || "",
-                "Select yield unit"
-              )}
-            </select>
-          </label>
-
-          <label>
-            Primary Raw Material
-            <select id="production-primary-material" required>
-              <option value="">Select primary raw material</option>
-              ${renderItemOptions(
-                masterListItems,
-                editingStandard?.primaryRawMaterialId || ""
-              )}
-            </select>
-          </label>
-
-          <label>
-            Standard Raw Material Quantity
-            <input
-              id="production-standard-raw-quantity"
-              type="number"
-              min="0.0001"
-              step="any"
-              required
-              value="${escapeHtml(
-                editingStandard?.standardRawMaterialQty || ""
-              )}"
-            />
-          </label>
-
-          <label>
-            Raw Material Unit
-            <select id="production-raw-material-unit" required>
-              ${renderOptions(
-                units,
-                editingStandard?.rawMaterialUnit || "",
-                "Select raw-material unit"
-              )}
-            </select>
-          </label>
-
-          <label>
-            Expected Yield
-            <input
-              id="production-expected-yield"
-              type="number"
-              min="0.0001"
-              step="any"
-              required
-              value="${escapeHtml(editingStandard?.expectedYield || "")}"
-            />
-          </label>
-
-          <label>
-            Status
-            <select id="production-active-status">
-              <option value="true" ${
-                editingStandard?.active !== false ? "selected" : ""
-              }>Active</option>
-              <option value="false" ${
-                editingStandard?.active === false ? "selected" : ""
-              }>Inactive</option>
-            </select>
-          </label>
-
-          <label class="form-full">
-            Standard Notes
-            <textarea id="production-standard-notes" rows="3">${escapeHtml(
-              editingStandard?.notes || ""
-            )}</textarea>
-          </label>
-
-          <div class="form-full production-ingredients-section">
-            <div class="production-subsection-heading">
+        <form id="production-standard-form">
+          <section class="production-form-section">
+            <div class="production-section-heading">
+              <span class="production-step-number">1</span>
               <div>
-                <h4>Supporting Recipe Ingredients</h4>
+                <h4>Finished Product Details</h4>
+                <p>What finished product are we setting a standard for?</p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Finished Product Name
+                <input
+                  id="production-product-name"
+                  type="text"
+                  required
+                  placeholder="Example: Chicken Fingers"
+                  value="${escapeHtml(editingStandard?.productName || "")}"
+                />
+              </label>
+
+              <label>
+                Department
+                <select id="production-department" required>
+                  ${renderOptions(
+                    departments,
+                    editingStandard?.department || "",
+                    "Select department"
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Section
+                <select id="production-section" required>
+                  ${renderOptions(
+                    sections,
+                    editingStandard?.section || "",
+                    "Select section"
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Finished Product Unit
+                <select id="production-yield-unit" required>
+                  ${renderOptions(
+                    units,
+                    editingStandard?.yieldUnit || editingStandard?.baseUnit || "",
+                    "Example: Orders, Pieces, Trays"
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Status
+                <select id="production-active-status">
+                  <option value="true" ${
+                    editingStandard?.active !== false ? "selected" : ""
+                  }>Active</option>
+                  <option value="false" ${
+                    editingStandard?.active === false ? "selected" : ""
+                  }>Inactive</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="production-form-section">
+            <div class="production-section-heading">
+              <span class="production-step-number">2</span>
+              <div>
+                <h4>Main Raw Material Standard</h4>
                 <p>
-                  Optional reference list for seasoning, breading, packaging,
-                  and other recipe components.
+                  How much of the main raw material should produce how many
+                  finished products?
+                </p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-full">
+                Main Raw Material
+                <select id="production-primary-material" required>
+                  <option value="">Select main raw material</option>
+                  ${renderItemOptions(
+                    masterListItems,
+                    editingStandard?.primaryRawMaterialId || ""
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Amount Used as Standard
+                <input
+                  id="production-standard-raw-quantity"
+                  type="number"
+                  min="0.0001"
+                  step="any"
+                  required
+                  placeholder="Example: 1"
+                  value="${escapeHtml(
+                    editingStandard?.standardRawMaterialQty || ""
+                  )}"
+                />
+              </label>
+
+              <label>
+                Raw Material Unit
+                <select id="production-raw-material-unit" required>
+                  ${renderOptions(
+                    units,
+                    editingStandard?.rawMaterialUnit || "",
+                    "Example: kg, g, liters"
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Expected Output
+                <input
+                  id="production-expected-yield"
+                  type="number"
+                  min="0.0001"
+                  step="any"
+                  required
+                  placeholder="Example: 10"
+                  value="${escapeHtml(editingStandard?.expectedYield || "")}"
+                />
+              </label>
+            </div>
+
+            <div class="production-live-rule" id="production-live-rule">
+              Complete the fields above to preview the standard.
+            </div>
+          </section>
+
+          <section class="production-form-section">
+            <div class="production-section-heading">
+              <span class="production-step-number">3</span>
+              <div>
+                <h4>Supporting Ingredients</h4>
+                <p>
+                  Add other recipe ingredients for reference. These do not change
+                  the expected-yield calculation.
                 </p>
               </div>
             </div>
@@ -443,6 +462,7 @@ window.DMC_PAGES = window.DMC_PAGES || {};
                   type="number"
                   min="0"
                   step="any"
+                  placeholder="Example: 200"
                 />
               </label>
 
@@ -463,19 +483,57 @@ window.DMC_PAGES = window.DMC_PAGES || {};
                 </button>
               </div>
             </div>
-          </div>
 
-          <div class="form-actions form-full">
-            <button class="primary-button" type="submit">
-              ${editingStandard ? "Update" : "Save"} Production Standard
-            </button>
+            <div class="instruction-box production-reference-note">
+              <strong>Reference only:</strong>
+              <span>
+                Expected yield will still be based only on the Main Raw Material.
+              </span>
+            </div>
+          </section>
 
+          <section class="production-form-section">
+            <div class="production-section-heading">
+              <span class="production-step-number">4</span>
+              <div>
+                <h4>Notes and Review</h4>
+                <p>Review the standard before saving it.</p>
+              </div>
+            </div>
+
+            <label class="production-notes-label">
+              Standard Notes
+              <textarea
+                id="production-standard-notes"
+                rows="3"
+                placeholder="Optional preparation, portioning, or quality notes"
+              >${escapeHtml(editingStandard?.notes || "")}</textarea>
+            </label>
+
+            <div class="production-review-card">
+              <span>Standard Summary</span>
+              <strong id="production-review-summary">
+                Complete the standard fields above.
+              </strong>
+              <small id="production-review-details">
+                Supporting ingredients: ${state.ingredients.length} · Status: ${
+                  editingStandard?.active === false ? "Inactive" : "Active"
+                }
+              </small>
+            </div>
+          </section>
+
+          <div class="form-actions production-form-actions">
             <button
               class="ghost-button"
               id="production-cancel-standard"
               type="button"
             >
               Cancel
+            </button>
+
+            <button class="primary-button" type="submit">
+              ${editingStandard ? "Update" : "Save"} Production Standard
             </button>
           </div>
         </form>
@@ -654,6 +712,99 @@ window.DMC_PAGES = window.DMC_PAGES || {};
           display: block;
           margin-top: 5px;
           opacity: 0.65;
+        }
+
+        .production-standard-form-panel form {
+          display: grid;
+          gap: 16px;
+        }
+
+        .production-form-section {
+          padding: 18px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .production-section-heading {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .production-section-heading h4,
+        .production-section-heading p {
+          margin: 0;
+        }
+
+        .production-section-heading p {
+          margin-top: 5px;
+          opacity: 0.7;
+        }
+
+        .production-step-number {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 30px;
+          height: 30px;
+          border-radius: 999px;
+          border: 1px solid rgba(214, 174, 83, 0.55);
+          background: rgba(214, 174, 83, 0.12);
+          font-weight: 700;
+        }
+
+        .production-live-rule,
+        .production-review-card {
+          margin-top: 16px;
+          padding: 15px 16px;
+          border: 1px solid rgba(214, 174, 83, 0.35);
+          border-radius: 12px;
+          background: rgba(214, 174, 83, 0.08);
+        }
+
+        .production-live-rule {
+          font-weight: 600;
+          line-height: 1.5;
+        }
+
+        .production-review-card span,
+        .production-review-card strong,
+        .production-review-card small {
+          display: block;
+        }
+
+        .production-review-card span {
+          margin-bottom: 7px;
+          opacity: 0.7;
+        }
+
+        .production-review-card strong {
+          font-size: 17px;
+          line-height: 1.5;
+        }
+
+        .production-review-card small {
+          margin-top: 7px;
+          opacity: 0.7;
+        }
+
+        .production-reference-note {
+          margin-top: 14px;
+        }
+
+        .production-notes-label {
+          display: block;
+        }
+
+        .production-notes-label textarea {
+          width: 100%;
+          margin-top: 7px;
+        }
+
+        .production-form-actions {
+          justify-content: flex-end;
         }
 
         @media (max-width: 900px) {
@@ -968,6 +1119,68 @@ window.DMC_PAGES = window.DMC_PAGES || {};
     });
   }
 
+  function updateProductionStandardPreview() {
+    const productName = document
+      .getElementById("production-product-name")
+      ?.value.trim();
+    const primarySelect = document.getElementById(
+      "production-primary-material"
+    );
+    const primaryName = primarySelect?.selectedOptions?.[0]?.textContent
+      ?.replace(/\s*\([^)]*\)\s*$/, "")
+      .trim();
+    const rawQuantity = document.getElementById(
+      "production-standard-raw-quantity"
+    )?.value;
+    const rawUnit = document.getElementById(
+      "production-raw-material-unit"
+    )?.value;
+    const expectedYield = document.getElementById(
+      "production-expected-yield"
+    )?.value;
+    const yieldUnit = document.getElementById(
+      "production-yield-unit"
+    )?.value;
+    const status =
+      document.getElementById("production-active-status")?.value === "false"
+        ? "Inactive"
+        : "Active";
+
+    const isComplete =
+      productName &&
+      primarySelect?.value &&
+      rawQuantity &&
+      rawUnit &&
+      expectedYield &&
+      yieldUnit;
+
+    const summary = isComplete
+      ? `${rawQuantity} ${rawUnit} ${primaryName} should produce ${expectedYield} ${yieldUnit} of ${productName}.`
+      : "Complete the fields above to preview the standard.";
+
+    const liveRule = document.getElementById("production-live-rule");
+    const reviewSummary = document.getElementById(
+      "production-review-summary"
+    );
+    const reviewDetails = document.getElementById(
+      "production-review-details"
+    );
+
+    if (liveRule) {
+      liveRule.textContent = summary;
+    }
+
+    if (reviewSummary) {
+      reviewSummary.textContent = isComplete
+        ? summary
+        : "Complete the standard fields above.";
+    }
+
+    if (reviewDetails) {
+      reviewDetails.textContent = `Supporting ingredients: ${state.ingredients.length} · Status: ${status}`;
+    }
+  }
+
   function setupProductionStandardsEvents() {
     document
       .getElementById("production-open-standard-form")
@@ -1008,6 +1221,22 @@ window.DMC_PAGES = window.DMC_PAGES || {};
           removeStandard(button.dataset.removeProductionStandard);
         });
       });
+
+    [
+      "production-product-name",
+      "production-primary-material",
+      "production-standard-raw-quantity",
+      "production-raw-material-unit",
+      "production-expected-yield",
+      "production-yield-unit",
+      "production-active-status"
+    ].forEach((id) => {
+      const field = document.getElementById(id);
+      field?.addEventListener("input", updateProductionStandardPreview);
+      field?.addEventListener("change", updateProductionStandardPreview);
+    });
+
+    updateProductionStandardPreview();
   }
 
   window.DMC_PAGES.production = {
